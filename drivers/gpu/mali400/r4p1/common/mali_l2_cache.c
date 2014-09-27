@@ -65,7 +65,7 @@ typedef enum mali_l2_cache_status {
 	MALI400_L2_CACHE_STATUS_DATA_BUSY    = 0x02,
 } mali_l2_cache_status;
 
-#define MALI400_L2_MAX_READS_NOT_SET -1
+#define MALI400_L2_MAX_READS_NOT_SET 0x30
 
 static struct mali_l2_cache_core *
 		mali_global_l2s[MALI_MAX_NUMBER_OF_L2_CACHE_CORES] = { NULL, };
