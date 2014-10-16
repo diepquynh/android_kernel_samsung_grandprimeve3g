@@ -172,7 +172,13 @@ source "drivers/ipack/Kconfig"
 
 source "drivers/reset/Kconfig"
 
+<<<<<<< HEAD
 source "drivers/sipc/Kconfig"
+=======
+source "drivers/android/Kconfig"
+
+source "drivers/coresight/Kconfig"
+>>>>>>> 6d1e12f... staging: android: binder: move to the "real" part of the kernel
 
 source "drivers/sensor/Kconfig"
 
