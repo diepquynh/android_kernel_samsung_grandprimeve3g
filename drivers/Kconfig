@@ -181,4 +181,7 @@ source "drivers/iq/Kconfig"
 source "drivers/gator/Kconfig"
 
 source "drivers/cpuhotplug/Kconfig"
+
+source "drivers/android/Kconfig"
+
 endmenu
