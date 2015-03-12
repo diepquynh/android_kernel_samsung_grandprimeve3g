@@ -32,6 +32,13 @@ config IOSCHED_ROW
 	  according to queue priority.
 	  Most suitable for mobile devices.
 
+config IOSCHED_ZEN
+	tristate "Zen I/O scheduler"
+	default y
+	---help---
+	FCFS, dispatches are back-inserted, deadlines ensure fairness.
+        Should work best with devices where there is no travel delay.
+
 config IOSCHED_CFQ
 	tristate "CFQ I/O scheduler"
 	default y
@@ -155,6 +162,7 @@ config DEFAULT_IOSCHED
 	default "sioplus" if DEFAULT_SIOPLUS
 	default "noop" if DEFAULT_NOOP
 	default "bfq" if DEFAULT_BFQ
+	default "zen" if DEFAULT_ZEN
 
 endmenu
 
