@@ -30,6 +30,12 @@ static const unsigned max_num_devices = 32;
 extern u32 zram_compressed_size = 0;
 extern u32 zram_pages_stored = 0;
 
+/*
+ * Some arbitrary value. This is just to catch
+ * invalid value for num_devices module parameter.
+ */
+static const unsigned max_num_devices = 32;
+
 /*-- Configurable parameters */
 
 /*
