@@ -38,7 +38,11 @@
 
 /* Globals */
 static int zram_major;
+
 static DEFINE_IDR(zram_index_idr);
+/* idr index must be protected */
+static DEFINE_MUTEX(zram_index_mutex);
+
 static const char *default_compressor = "lz4hc";
 
 /* Module params (documentation at end) */
@@ -859,6 +863,13 @@ static ssize_t reset_store(struct device *dev,
 	struct zram *zram;
 	struct block_device *bdev;
 
+	ret = kstrtou16(buf, 10, &do_reset);
+	if (ret)
+		return ret;
+
+	if (!do_reset)
+		return -EINVAL;
+
 	zram = dev_to_zram(dev);
 	bdev = bdget_disk(zram->disk, 0);
 
@@ -866,34 +877,42 @@ static ssize_t reset_store(struct device *dev,
 		return -ENOMEM;
 
 	mutex_lock(&bdev->bd_mutex);
-	/* Do not reset an active device! */
-	if (bdev->bd_openers) {
-		ret = -EBUSY;
-		goto out;
+	/* Do not reset an active device or claimed device */
+	if (bdev->bd_openers || zram->claim) {
+		mutex_unlock(&bdev->bd_mutex);
+		bdput(bdev);
+		return -EBUSY;
 	}
 
-	ret = kstrtou16(buf, 10, &do_reset);
-	if (ret)
-		goto out;
+	/* From now on, anyone can't open /dev/block/zram[0-9] */
+	zram->claim = true;
+	mutex_unlock(&bdev->bd_mutex);
 
-	if (!do_reset) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	/* Make sure all pending I/O is finished */
+	/* Make sure all the pending I/O are finished */
 	fsync_bdev(bdev);
 	zram_reset_device(zram);
-
-	mutex_unlock(&bdev->bd_mutex);
 	revalidate_disk(zram->disk);
 	bdput(bdev);
 
-	return len;
-
-out:
+	mutex_lock(&bdev->bd_mutex);
+	zram->claim = false;
 	mutex_unlock(&bdev->bd_mutex);
-	bdput(bdev);
+
+	return len;
+}
+
+static int zram_open(struct block_device *bdev, fmode_t mode)
+{
+	int ret = 0;
+	struct zram *zram;
+
+	WARN_ON(!mutex_is_locked(&bdev->bd_mutex));
+
+	zram = bdev->bd_disk->private_data;
+	/* zram was claimed to reset so open request fails */
+	if (zram->claim)
+		ret = -EBUSY;
+
 	return ret;
 }
 
@@ -1038,6 +1057,7 @@ out:
 }
 #endif
 static const struct block_device_operations zram_devops = {
+	.open = zram_open,
 	.swap_slot_free_notify = zram_slot_free_notify,
 	/*.rw_page = zram_rw_page,*/
 	.owner = THIS_MODULE
@@ -1116,20 +1136,21 @@ static struct attribute_group zram_disk_attr_group = {
 	.attrs = zram_disk_attrs,
 };
 
-static int zram_add(int device_id)
+static int zram_add(void)
 {
 	struct zram *zram;
 	struct request_queue *queue;
-	int ret;
+	int ret, device_id;
 
 	zram = kzalloc(sizeof(struct zram), GFP_KERNEL);
 	if (!zram)
 		return -ENOMEM;
 
-	ret = idr_alloc(&zram_index_idr, zram, device_id,
-			device_id + 1, GFP_KERNEL);
+	ret = idr_alloc(&zram_index_idr, zram, 0, 0, GFP_KERNEL);
+
 	if (ret < 0)
 		goto out_free_dev;
+	device_id = ret;
 
 	init_rwsem(&zram->init_lock);
 
@@ -1199,7 +1220,9 @@ static int zram_add(int device_id)
 	}
 	strlcpy(zram->compressor, default_compressor, sizeof(zram->compressor));
 	zram->meta = NULL;
-	return 0;
+
+	pr_info("Added device: %s\n", zram->disk->disk_name);
+	return device_id;
 
 out_free_disk:
 	del_gendisk(zram->disk);
@@ -1213,22 +1236,103 @@ out_free_dev:
 	return ret;
 }
 
-static void zram_remove(struct zram *zram)
+static int zram_remove(struct zram *zram)
 {
+	struct block_device *bdev;
+
+	bdev = bdget_disk(zram->disk, 0);
+	if (!bdev)
+		return -ENOMEM;
+
+	mutex_lock(&bdev->bd_mutex);
+	if (bdev->bd_openers || zram->claim) {
+		mutex_unlock(&bdev->bd_mutex);
+		bdput(bdev);
+		return -EBUSY;
+	}
+
+	zram->claim = true;
+	mutex_unlock(&bdev->bd_mutex);
+
 	/*
 	 * Remove sysfs first, so no one will perform a disksize
-	 * store while we destroy the devices
+	 * store while we destroy the devices. This also helps during
+	 * hot_remove -- zram_reset_device() is the last holder of
+	 * ->init_lock, no later/concurrent disksize_store() or any
+	 * other sysfs handlers are possible.
 	 */
 	sysfs_remove_group(&disk_to_dev(zram->disk)->kobj,
 			&zram_disk_attr_group);
 
+	/* Make sure all the pending I/O are finished */
+	fsync_bdev(bdev);
 	zram_reset_device(zram);
+	bdput(bdev);
+
+	pr_info("Removed device: %s\n", zram->disk->disk_name);
+
 	idr_remove(&zram_index_idr, zram->disk->first_minor);
 	blk_cleanup_queue(zram->disk->queue);
 	del_gendisk(zram->disk);
 	put_disk(zram->disk);
 	kfree(zram);
+	return 0;
 }
+
+/* zram-control sysfs attributes */
+static ssize_t hot_add_show(struct class *class,
+			struct class_attribute *attr,
+			char *buf)
+{
+	int ret;
+
+	mutex_lock(&zram_index_mutex);
+	ret = zram_add();
+	mutex_unlock(&zram_index_mutex);
+
+	if (ret < 0)
+		return ret;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ret);
+}
+
+static ssize_t hot_remove_store(struct class *class,
+			struct class_attribute *attr,
+			const char *buf,
+			size_t count)
+{
+	struct zram *zram;
+	int ret, dev_id;
+
+	/* dev_id is gendisk->first_minor, which is `int' */
+	ret = kstrtoint(buf, 10, &dev_id);
+	if (ret)
+		return ret;
+	if (dev_id < 0)
+		return -EINVAL;
+
+	mutex_lock(&zram_index_mutex);
+
+	zram = idr_find(&zram_index_idr, dev_id);
+	if (zram)
+		ret = zram_remove(zram);
+	else
+		ret = -ENODEV;
+
+	mutex_unlock(&zram_index_mutex);
+	return ret ? ret : count;
+}
+
+static struct class_attribute zram_control_class_attrs[] = {
+	__ATTR_RO(hot_add),
+	__ATTR_WO(hot_remove),
+	__ATTR_NULL,
+};
+
+static struct class zram_control_class = {
+	.name		= "zram-control",
+	.owner		= THIS_MODULE,
+	.class_attrs	= zram_control_class_attrs,
+};
 
 static int zram_remove_cb(int id, void *ptr, void *data)
 {
@@ -1238,10 +1342,10 @@ static int zram_remove_cb(int id, void *ptr, void *data)
 
 static void destroy_devices(void)
 {
+	class_unregister(&zram_control_class);
 	idr_for_each(&zram_index_idr, &zram_remove_cb, NULL);
 	idr_destroy(&zram_index_idr);
 	unregister_blkdev(zram_major, "zram");
-	pr_info("Destroyed device(s)\n");
 }
 
 static uint32_t total_mem_usage_percent = 30;
@@ -1278,21 +1382,30 @@ ssize_t zram_mem_usage(void)
 
 static int __init zram_init(void)
 {
-	int ret, dev_id;
+	int ret;
+
+	ret = class_register(&zram_control_class);
+	if (ret) {
+		pr_warn("Unable to register zram-control class\n");
+		return ret;
+	}
 
 	zram_major = register_blkdev(0, "zram");
 	if (zram_major <= 0) {
 		pr_warn("Unable to get major number\n");
+		class_unregister(&zram_control_class);
 		return -EBUSY;
 	}
 
-	for (dev_id = 0; dev_id < num_devices; dev_id++) {
-		ret = zram_add(dev_id);
-		if (ret != 0)
+	while (num_devices != 0) {
+		mutex_lock(&zram_index_mutex);
+		ret = zram_add();
+		mutex_unlock(&zram_index_mutex);
+		if (ret < 0)
 			goto out_error;
+		num_devices--;
 	}
 
-	pr_info("Created %u device(s)\n", num_devices);
 	return 0;
 
 out_error:

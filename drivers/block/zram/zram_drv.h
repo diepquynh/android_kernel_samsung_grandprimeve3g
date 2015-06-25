@@ -117,5 +117,9 @@ struct zram {
 	 */
 	u64 disksize;	/* bytes */
 	char compressor[CRYPTO_MAX_ALG_NAME];
+	/*
+	 * zram is claimed so open request will be failed
+	 */
+	bool claim; /* Protected by bdev->bd_mutex */
 };
 #endif
