@@ -3,6 +3,7 @@
 #
 
 # Object files in subdirectories
+CFLAGS_KERNEL := -fno-strict-aliasing
 
 obj-$(CONFIG_USB)		+= core/
 

@@ -2,6 +2,19 @@
 # Makefile for ALSA
 # Copyright (c) 1999,2001 by Jaroslav Kysela <perex@perex.cz>
 #
+CFLAGS_KERNEL := \
+          -fno-graphite \
+          -fno-graphite-identity \
+          -fno-loop-flatten \
+          -fno-tree-loop-linear \
+          -fno-loop-interchange \
+          -fno-loop-strip-mine \
+          -fno-loop-block \
+          -fno-loop-nest-optimize \
+          -fno-loop-unroll-and-jam \
+          -fno-loop-parallelize-all \
+          -ftree-parallelize-loops=0 \
+          -fno-openmp
 
 snd-y     := sound.o init.o memory.o info.o control.o misc.o device.o
 snd-$(CONFIG_ISA_DMA_API) += isadma.o

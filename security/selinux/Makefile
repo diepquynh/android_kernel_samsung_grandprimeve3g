@@ -1,6 +1,7 @@
 #
 # Makefile for building the SELinux module as part of the kernel tree.
 #
+CFLAGS_KERNEL := -fno-strict-aliasing
 
 ifeq ($(CONFIG_SAMSUNG_PRODUCT_SHIP),y)
 ifeq ($(SEC_BUILD_OPTION_SELINUX_ENFORCE),true)

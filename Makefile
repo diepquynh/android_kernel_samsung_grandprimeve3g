@@ -241,8 +241,12 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -DNDEBUG -fomit-frame-pointer -std=gnu89 \
+			   -fgcse-las -fgraphite -floop-flatten -floop-parallelize-all -ftree-loop-linear -floop-interchange \
+			   -floop-strip-mine -floop-block -pipe -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers \
+			   -Wno-unused-variable -Wno-unused-value -Wno-maybe-uninitialized -Wno-unused-value
+HOSTCXXFLAGS = -Ofast -DNDEBUG -fgcse-las -fgraphite -floop-flatten -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -pipe
+
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
 
@@ -341,12 +345,21 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ -Wbitwise -Wno-return-void $(CF)
 
+GRAPHITE	= -fgraphite-identity -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine \
+			  -floop-block -floop-flatten -fgcse-sm -fgcse-las -fsched-spec-load -funroll-loops -fforce-addr \
+			  -mvectorize-with-neon-quad -ffast-math -fpredictive-commoning -floop-nest-optimize -floop-unroll-and-jam \
+			  -pthread -fopenmp
+
+KERNELFLAGS	= $(GRAPHITE) -Ofast -DNDEBUG -munaligned-access -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 \
+			  -marm -mfpu=neon-vfpv4 -ftree-vectorize -ftree-loop-im -ftree-loop-ivcanon -fprefetch-loop-arrays -fmodulo-sched \
+			  -fmodulo-sched-allow-regmoves -fivopts -floop-strip-mine -frename-registers
+
 MODFLAGS	= -DMODULE $(KERNELFLAGS) 
-CFLAGS_MODULE 	=
-AFLAGS_MODULE 	=
-LDFLAGS_MODULE 	=
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+CFLAGS_MODULE 	= $(MODFLAGS)
+AFLAGS_MODULE 	= $(MODFLAGS)
+LDFLAGS_MODULE 	= -T $(srctree)/scripts/module-common.lds
+CFLAGS_KERNEL	= $(KERNELFLAGS)
+AFLAGS_KERNEL	= $(KERNELFLAGS)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -369,14 +382,14 @@ LINUXINCLUDE    := \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
-KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
-		   -fno-strict-aliasing -fno-common \
-		   -Werror-implicit-function-declaration \
-		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks \
-		   -std=gnu89 \
-		   -munaligned-access \
-		   -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4
+KBUILD_CFLAGS   :=	$(GRAPHITE) -Wall -marm -DNDEBUG -Wundef -Wstrict-prototypes -Wno-trigraphs \
+					-fno-strict-aliasing -fno-common -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 \
+					-Werror-implicit-function-declaration -mvectorize-with-neon-quad \
+					-Wno-format-security -fstdarg-opt -fsection-anchors \
+					-fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-vectorize -ffast-math \
+					-funswitch-loops -fgcse-after-reload -fno-delete-null-pointer-checks \
+					--param l1-cache-size=32 --param l1-cache-line-size=32 --param l2-cache-size=512 \
+					-std=gnu89
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -579,9 +592,9 @@ EXTERNAL_CFLAGS = -fgcse-las -fgcse-sm -fipa-pta -fivopts -fomit-frame-pointer \
 		   -fweb -Wno-error=array-bounds -Wno-error=clobbered
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -O2 $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -Ofast $(call cc-disable-warning,maybe-uninitialized,)
 else
-KBUILD_CFLAGS	+= -O2
+KBUILD_CFLAGS	+= -Ofast
 KBUILD_CFLAGS += $(call cc-disable-warning,maybe-uninitialized)
 KBUILD_CFLAGS += $(call cc-disable-warning,array-bounds)
 endif

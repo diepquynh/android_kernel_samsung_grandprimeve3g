@@ -1,6 +1,7 @@
 #
 # Cryptographic API
 #
+CFLAGS_KERNEL := -fno-strict-aliasing
 
 obj-$(CONFIG_CRYPTO) += crypto.o
 crypto-y := api.o cipher.o compress.o

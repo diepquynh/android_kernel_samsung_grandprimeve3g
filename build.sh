@@ -96,7 +96,7 @@ function main() {
 	read -p "Please specify Toolchain path: " tcpath;
 	if [ "${tcpath}" == "" ]; then
 		echo -e "$red"
-		export CROSS_COMPILE=/home/remilia/toolchain/uber-6.0/bin/arm-eabi-;
+		export CROSS_COMPILE=/home/remilia/toolchain/sabermod-6.0/bin/arm-eabi-;
 		echo -e "No toolchain path found. Using default local one:$nocol ${CROSS_COMPILE}";
 	else
 		export CROSS_COMPILE=${tcpath};

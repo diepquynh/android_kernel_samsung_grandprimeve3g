@@ -177,6 +177,9 @@ ccflags-y += -DMALI_OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB=$(OS_MEMORY_KERNEL_BUFFER
 ccflags-y += -DUSING_GPU_UTILIZATION=$(USING_GPU_UTILIZATION)
 ccflags-y += -DMALI_ENABLE_CPU_CYCLES=$(MALI_ENABLE_CPU_CYCLES)
 
+# Optimization flags
+ccflags-y += -floop-nest-optimize -ftree-loop-distribution -faggressive-loop-optimizations
+
 ifeq ($(MALI_UPPER_HALF_SCHEDULING),1)
 	ccflags-y += -DMALI_UPPER_HALF_SCHEDULING
 endif
