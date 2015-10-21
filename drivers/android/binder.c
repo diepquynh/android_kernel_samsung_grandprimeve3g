@@ -509,7 +509,6 @@ static inline long copy_from_user_preempt_disabled(void *to, const void __user *
 ({						\
 	int __ret;				\
 	preempt_enable_no_resched();		\
-	barrier();				\
 	__ret = get_user(x, ptr);		\
 	preempt_disable();			\
 	__ret;					\
@@ -519,7 +518,6 @@ static inline long copy_from_user_preempt_disabled(void *to, const void __user *
 ({						\
 	int __ret;				\
 	preempt_enable_no_resched();		\
-	barrier();				\
 	__ret = put_user(x, ptr);		\
 	preempt_disable();			\
 	__ret;					\
@@ -2275,9 +2273,7 @@ static void binder_transaction(struct binder_proc *proc,
 	list_add_tail(&tcomplete->entry, &thread->todo);
 	if (target_wait) {
 		if (reply || !(t->flags & TF_ONE_WAY)) {
-			preempt_disable();
 			wake_up_interruptible_sync(target_wait);
-			sched_preempt_enable_no_resched();
 		} else {
 			wake_up_interruptible(target_wait);
 		}
