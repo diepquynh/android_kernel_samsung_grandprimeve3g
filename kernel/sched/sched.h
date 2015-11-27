@@ -1100,10 +1100,16 @@ static inline void inc_nr_running(struct rq *rq)
 {
 	rq->nr_running++;
 
-if (rq->nr_running >= 2) {
+	if (rq->nr_running >= 2) {
 #ifdef CONFIG_SMP
- if (!rq->rd->overload)
- rq->rd->overload = true;
+	if (!rq->rd->overload)
+		rq->rd->overload = true;
+#endif
+
+	if (rq->nr_running >= 2) {
+#ifdef CONFIG_SMP
+	if (!rq->rd->overload)
+		rq->rd->overload = true;
 #endif
 
 #ifdef CONFIG_NO_HZ_FULL
