@@ -71,3 +71,10 @@ config MSM_RUN_QUEUE_STATS
 	This information is exported to usespace via sysfs entries and userspace
 	algorithms uses info and decide when to turn on/off the cpu cores.
 
+config USES_MALI_MP2_GPU
+	bool "Enable hotplugging feature for Mali GPUs"
+	default n
+	help
+	  This option enables hotplugging features inside thunderplug 
+	  for Mali 400MP2 GPUs.
+

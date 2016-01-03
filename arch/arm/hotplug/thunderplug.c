@@ -43,6 +43,17 @@ struct notifier_block lcd_worker;
 
 #define DEF_SAMPLING_MS			(500)
 
+#ifdef CONFIG_USES_MALI_MP2_GPU
+#define GPU_HOTPLUG_ENABLED             (1)
+#define DEFAULT_MIN_GPU_LOAD_THRESHOLD  (65)
+
+extern void gpu_enable(int num);
+extern u32 _mali_ukk_utilization_gp_pp(void);
+extern u32 mali_executor_get_num_cores_enabled(void);
+static int gpu_hotplug_enabled = GPU_HOTPLUG_ENABLED;
+static int gpu_min_load_threshold = DEFAULT_MIN_GPU_LOAD_THRESHOLD;
+#endif
+
 static int sampling_time = DEF_SAMPLING_MS;
 static int load_threshold = CPU_LOAD_THRESHOLD;
 
@@ -283,6 +294,31 @@ static ssize_t __ref thunderplug_hp_enabled_store(struct kobject *kobj, struct k
 	return count;
 }
 
+#ifdef CONFIG_USES_MALI_MP2_GPU
+static ssize_t thunderplug_gpu_hp_enabled_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", gpu_hotplug_enabled);
+}
+
+static ssize_t __ref thunderplug_gpu_hp_enabled_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	switch(val)
+	{
+		case 0:
+		case 1:
+			gpu_hotplug_enabled = val;
+		break;
+		default:
+			pr_info("%s : invalid choice\n", THUNDERPLUG);
+		break;
+	}
+
+	return count;
+}
+#endif
+
 static ssize_t thunderplug_tb_enabled_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%d", touch_boost_enabled);
@@ -320,6 +356,40 @@ static ssize_t __ref thunderplug_load_store(struct kobject *kobj, struct kobj_at
 
 	return count;
 }
+
+#ifdef CONFIG_USES_MALI_MP2_GPU
+static ssize_t thunderplug_gpu_load_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", gpu_min_load_threshold);
+}
+
+static ssize_t __ref thunderplug_gpu_load_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	if(val > 10)
+		gpu_min_load_threshold = val;
+
+	return count;
+}
+
+static unsigned int get_gpu_load(void) {
+	int util, load;
+	util = (int) _mali_ukk_utilization_gp_pp();
+	load = (util * 100 ) / 256;
+	return load;
+}
+
+static int get_gpu_cores_enabled(void) {
+	int cores;
+	cores = (int) mali_executor_get_num_cores_enabled();
+	return cores;
+}
+
+static void enable_gpu_cores(int num) {
+	gpu_enable(num);
+}
+#endif
 
 static unsigned int get_curr_load(unsigned int cpu)
 {
@@ -415,6 +485,27 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	}
 	}
 
+#ifdef CONFIG_USES_MALI_MP2_GPU
+	if(gpu_hotplug_enabled) {
+		if(DEBUG)
+			pr_info("%s: current gpu load %d\n", THUNDERPLUG, get_gpu_load());
+		if(get_gpu_load() > gpu_min_load_threshold) {
+			if(get_gpu_cores_enabled() < 2) {
+				enable_gpu_cores(2);
+				if(DEBUG)
+					pr_info("%s: gpu1 onlined\n", THUNDERPLUG);
+			}
+		}
+		else {
+		if(get_gpu_cores_enabled() > 1) {
+				enable_gpu_cores(1);
+				if(DEBUG)
+					pr_info("%s: gpu1 offlined\n", THUNDERPLUG);
+			}
+		}
+	}
+#endif
+
 	if(tplug_hp_enabled != 0 && !isSuspended)
 		queue_delayed_work_on(0, tplug_wq, &tplug_work,
 			msecs_to_jiffies(sampling_time));
@@ -496,6 +587,17 @@ static struct kobj_attribute thunderplug_tb_enabled_attribute =
                0666,
                thunderplug_tb_enabled_show, thunderplug_tb_enabled_store);
 
+#ifdef CONFIG_USES_MALI_MP2_GPU
+static struct kobj_attribute thunderplug_gpu_hp_enabled_attribute =
+       __ATTR(gpu_hotplug_enabled,
+               0666,
+               thunderplug_gpu_hp_enabled_show, thunderplug_gpu_hp_enabled_store);
+static struct kobj_attribute thunderplug_gpu_load_attribute =
+       __ATTR(gpu_load_threshold,
+               0666,
+               thunderplug_gpu_load_show, thunderplug_gpu_load_store);
+#endif  // MALI_MP2_GPU
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
@@ -505,6 +607,10 @@ static struct attribute *thunderplug_attrs[] =
         &thunderplug_load_attribute.attr,
         &thunderplug_hp_enabled_attribute.attr,
         &thunderplug_tb_enabled_attribute.attr,
+#ifdef CONFIG_USES_MALI_MP2_GPU
+        &thunderplug_gpu_load_attribute.attr,
+        &thunderplug_gpu_hp_enabled_attribute.attr,
+#endif
         NULL,
     };
 
