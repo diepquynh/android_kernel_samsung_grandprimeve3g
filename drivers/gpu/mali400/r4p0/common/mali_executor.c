@@ -411,6 +411,9 @@ u32 mali_executor_get_num_cores_enabled(void)
 {
 	return num_physical_pp_cores_enabled;
 }
+#ifdef CONFIG_THUNDERPLUG_CONTROL
+EXPORT_SYMBOL(mali_executor_get_num_cores_enabled);
+#endif
 
 struct mali_pp_core *mali_executor_get_virtual_pp(void)
 {
@@ -1110,6 +1113,13 @@ mali_bool mali_executor_group_is_disabled(struct mali_group *group)
 
 	return ret;
 }
+
+#ifdef CONFIG_THUNDERPLUG_CONTROL
+void gpu_enable(int i) {
+	mali_executor_set_perf_level(i, MALI_TRUE);
+}
+EXPORT_SYMBOL_GPL(gpu_enable);
+#endif
 
 int mali_executor_set_perf_level(unsigned int target_core_nr, mali_bool override)
 {
