@@ -36,6 +36,7 @@
 #include <linux/syscore_ops.h>
 #include <linux/suspend.h>
 #include <linux/tick.h>
+#include <linux/err.h>
 
 #include <trace/events/power.h>
 
@@ -664,14 +665,14 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 }
 
 static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf) {
-	if(cpufreq_driver->volt_control) {
+	if(!IS_ERR_OR_NULL(cpufreq_driver->volt_control)) {
 		return cpufreq_driver->volt_control->get(buf);
 	}
 	return 0;
 }
 
 static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, const char *buf, size_t count) {
-	if(cpufreq_driver->volt_control) {
+	if(!IS_ERR_OR_NULL(cpufreq_driver->volt_control)) {
 		cpufreq_driver->volt_control->set(buf);
 	}
 	return count;
