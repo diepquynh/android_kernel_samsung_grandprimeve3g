@@ -8,7 +8,8 @@ EXTRA_CFLAGS += -DCONFIG_ALWAYS_ENFORCE=true
 endif
 endif
 
-obj-$(CONFIG_SECURITY_SELINUX) := selinux.o
+#obj-$(CONFIG_SECURITY_SELINUX) := selinux.o
+obj-y := selinux.o
 
 selinux-y := avc.o hooks.o selinuxfs.o netlink.o nlmsgtab.o netif.o \
 	     netnode.o netport.o exports.o \

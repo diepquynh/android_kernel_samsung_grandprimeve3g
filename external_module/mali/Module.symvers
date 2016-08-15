@@ -1,0 +1,5 @@
+0xb9ac0503	mali_set_user_setting	/home/a1/kernel_gpve/external_module/mali/mali	EXPORT_SYMBOL
+0x2a7049ed	mali_perf_set_num_pp_cores	/home/a1/kernel_gpve/external_module/mali/mali	EXPORT_SYMBOL
+0x0d8ccbae	mali_dev_resume	/home/a1/kernel_gpve/external_module/mali/mali	EXPORT_SYMBOL
+0x7c2fb465	mali_dev_pause	/home/a1/kernel_gpve/external_module/mali/mali	EXPORT_SYMBOL
+0xf8224b12	mali_get_user_setting	/home/a1/kernel_gpve/external_module/mali/mali	EXPORT_SYMBOL

@@ -7,7 +7,7 @@
 
 set -e -o pipefail
 
-export CROSS_COMPILE=../PLATFORM/prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin/arm-eabi-
+export CROSS_COMPILE=/home/a1/toolchain/gcc-4.8/bin/arm-eabi-
 export ARCH=arm
 
 PLATFORM=sc8830
@@ -36,7 +36,7 @@ function build_kernel() {
 
 function clean() {
 	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
-	make distclean
+	make mrproper
 }
 
 function main() {
