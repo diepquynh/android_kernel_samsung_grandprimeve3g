@@ -90,12 +90,12 @@ static char *zswap_compressor = ZSWAP_COMPRESSOR_DEFAULT;
 module_param_named(compressor, zswap_compressor, charp, 0444);
 
 /* The maximum percentage of memory that the compressed pool can occupy */
-static unsigned int zswap_max_pool_percent = 20;
+static unsigned int zswap_max_pool_percent = 95;
 module_param_named(max_pool_percent,
 			zswap_max_pool_percent, uint, 0644);
 
 /* Compressed storage to use */
-#define ZSWAP_ZPOOL_DEFAULT "zsmalloc"
+#define ZSWAP_ZPOOL_DEFAULT "zbud"
 static char *zswap_zpool_type = ZSWAP_ZPOOL_DEFAULT;
 module_param_named(zpool, zswap_zpool_type, charp, 0444);
 
