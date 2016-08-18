@@ -16,6 +16,7 @@ DEFCONFIG=grandprimeve3g-dt_defconfig
 KERNEL_PATH=$(pwd)
 MODULE_PATH=${KERNEL_PATH}/modules
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
+KERNEL_IMAGE_PATH=${KERNEL_PATH}/kernel_images
 
 JOBS=`grep processor /proc/cpuinfo | wc -l`
 
@@ -32,6 +33,7 @@ function build_kernel() {
 
 	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
 	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
+	find ${KERNEL_PATH} -name "*Image" -exec mv -f {} ${KERNEL_IMAGE_PATH} \;
 }
 
 function clean() {
