@@ -103,8 +103,27 @@ zImage-dtb
 zImage-dtb
 dt.img
 
-# shell script
+# scripts
 ~.sh
+scripts/*
 
-# defconfig
+# SELinux generated includes
+av_permissions.h
+flask.h
+
+# Others
 defconfig
+ashldi3.S
+hyp-stub.S
+lib1funcs.S
+piggy.gzip
+vmlinux
+vmlinux.lds
+vmlinux.lds
+hz.bc
+timeconst.h
+crc32table.h
+gen_crc32table
+gen_init_cpio
+initramfs_data.cpio
+firmware/*
