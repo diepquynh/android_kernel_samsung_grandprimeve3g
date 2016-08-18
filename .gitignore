@@ -105,3 +105,6 @@ dt.img
 
 # shell script
 ~.sh
+
+# defconfig
+defconfig

@@ -30,8 +30,8 @@ function build_kernel() {
 	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
 	mkdir -p ${MODULE_PATH}
 
-	find ${KERNEL_PATH}/drivers -name "*.ko" -exec cp -f {} ${MODULE_PATH} \;
-	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec cp -f {} ${MODULE_PATH} \;
+	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
+	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
 }
 
 function clean() {
@@ -40,7 +40,7 @@ function clean() {
 }
 
 function main() {
-	[ "${1}" = "Clean" ] && clean || build_kernel
+	[ "${1}" = "clean" ] && clean || build_kernel
 }
 
 main $@
