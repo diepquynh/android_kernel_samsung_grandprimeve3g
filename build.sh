@@ -30,6 +30,7 @@ function build_kernel() {
 
 	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
 	mkdir -p ${MODULE_PATH}
+	mkdir -p ${KERNEL_IMAGE_PATH}
 
 	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
 	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
@@ -38,6 +39,7 @@ function build_kernel() {
 
 function clean() {
 	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
+	[ -d ${KERNEL_IMAGE_PATH} ] && rm -rf ${KERNEL_IMAGE_PATH}
 	make mrproper
 }
 
