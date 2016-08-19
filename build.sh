@@ -14,9 +14,8 @@ PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
 
 KERNEL_PATH=$(pwd)
-MODULE_PATH=${KERNEL_PATH}/modules
+KERNEL_OUT=${KERNEL_PATH}/kernel_out
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
-KERNEL_IMAGE_PATH=${KERNEL_PATH}/kernel_images
 
 JOBS=`grep processor /proc/cpuinfo | wc -l`
 
@@ -28,18 +27,16 @@ function build_kernel() {
 	#make -C ${EXTERNAL_MODULE_PATH}/wifi KDIR=${KERNEL_PATH}
 	make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
 
-	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
-	mkdir -p ${MODULE_PATH}
-	mkdir -p ${KERNEL_IMAGE_PATH}
+	[ -d ${KERNEL_OUT} ] && rm -rf ${KERNEL_OUT}
+	mkdir -p ${KERNEL_OUT}
 
-	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
-	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${MODULE_PATH} \;
-	find ${KERNEL_PATH} -name "*Image" -exec mv -f {} ${KERNEL_IMAGE_PATH} \;
+	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_OUT} \;
+	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${KERNEL_OUT} \;
+	find ${KERNEL_PATH} -name "*Image" -exec mv -f {} ${KERNEL_OUT} \;
 }
 
 function clean() {
-	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}
-	[ -d ${KERNEL_IMAGE_PATH} ] && rm -rf ${KERNEL_IMAGE_PATH}
+	[ -d ${KERNEL_OUT} ] && rm -rf ${KERNEL_OUT}
 	make mrproper
 }
 
