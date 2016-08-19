@@ -143,9 +143,9 @@ struct scan_control {
 #endif
 
 /*
- * From 0 .. 100.  Higher means more swappy.
+ * From 0 .. Sammy hacked value (200 currently).  Higher means more swappy.
  */
-int vm_swappiness = 130;
+int vm_swappiness = 200;
 unsigned long vm_total_pages;	/* The total number of pages which the VM controls */
 
 #ifdef CONFIG_RUNTIME_COMPCACHE
