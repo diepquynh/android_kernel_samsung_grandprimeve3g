@@ -156,9 +156,9 @@ int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 			diff = abs(freq - target_freq);
 			if (diff < optimal.frequency ||
 			    (diff == optimal.frequency &&
-			     freq > table[optimal.driver_data].frequency)) {
+			     freq > table[optimal.index].frequency)) {
 				optimal.frequency = diff;
-				optimal.driver_data = i;
+				optimal.index = i;
 			}
 			break;
 		}
