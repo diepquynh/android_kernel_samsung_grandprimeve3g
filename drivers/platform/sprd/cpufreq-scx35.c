@@ -171,7 +171,7 @@ enum clocking_levels {
 	OC1,			/* overclock */
 	NOC, UC0=NOC, OC0=NOC,	/* no underclock or overclock */
 	UC1, UC2, UC3,		/* underclock */
-	MAX_UC=UC3,
+	MIN_CL=UC3, MAX_CL=OC1
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
@@ -579,7 +579,7 @@ ssize_t sprd_vdd_get(char *buf) {
 #define freq_table sprd_cpufreq_conf->freq_tbl[i].frequency
 #define voltage_table sprd_cpufreq_conf->vddarm_mv[i]
 
-	for (i = 0; i <= MAX_UC; i++) {
+	for (i = 0; i <= MIN_CL; i++) {
 		len += sprintf(buf + len, "%umhz: %lu mV\n", freq_table / 1000, voltage_table / 1000);
 	}
 	return len;
@@ -589,8 +589,8 @@ void sprd_vdd_set(const char *buf) {
 	int ret = -EINVAL;
 	int i = 0;
 	int j = 0;
-	int u[MAX_UC + 1];
-	while (j < MAX_UC + 1) {
+	int u[MIN_CL + 1];
+	while (j < MIN_CL + 1) {
 		int consumed;
 		int val;
 		ret = sscanf(buf, "%d%n", &val, &consumed);
