@@ -70,7 +70,7 @@ struct cpufreq_conf {
 
 struct cpufreq_table_data {
 	struct cpufreq_frequency_table 		freq_tbl[FREQ_TABLE_SIZE];
-	unsigned int				vddarm_mv[FREQ_TABLE_SIZE];
+	unsigned long				vddarm_mv[FREQ_TABLE_SIZE];
 };
 
 struct cpufreq_conf *sprd_cpufreq_conf = NULL;
@@ -164,20 +164,26 @@ static unsigned int get_mcu_clk_freq(void)
 }
 #endif
 
+enum clocking_levels {
+	NOC, UC0=NOC,	/* no under clock */
+	UC1, UC2, UC3,	/* under clock */
+	MAX_UC=UC3,
+	EC,
+};
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
-                {0, 1300000},
-                {1, 1200000},
-                {2, 1000000},
-                {3, SHARK_TDPLL_FREQUENCY},
-                {4, CPUFREQ_TABLE_END},
+                {NOC, 1300000},
+                {UC1, 1200000},
+                {UC2, 1000000},
+                {UC3, SHARK_TDPLL_FREQUENCY},
+                {EC, CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
-                1050000,
-                1000000,
-                900000,
-                900000,
-                900000,
+                [NOC] = 1050000,
+                [UC1] = 1000000,
+                [UC2] = 900000,
+                [UC3] = 900000,
+                [EC]  = 900000,
         },
 };
 
