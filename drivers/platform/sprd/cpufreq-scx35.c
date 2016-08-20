@@ -168,13 +168,15 @@ static unsigned int get_mcu_clk_freq(void)
 #endif
 
 enum clocking_levels {
-	NOC, UC0=NOC,	/* no under clock */
-	UC1, UC2, UC3,	/* under clock */
+	OC1,			/* overclock */
+	NOC, UC0=NOC, OC0=NOC,	/* no underclock or overclock */
+	UC1, UC2, UC3,		/* underclock */
 	MAX_UC=UC3,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
+		{OC1, 1500000},
                 {NOC, 1300000},
                 {UC1, 1200000},
                 {UC2, 1000000},
@@ -182,6 +184,7 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
                 {EC, CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
+		[OC1] = 1150000,
                 [NOC] = 1050000,
                 [UC1] = 1000000,
                 [UC2] = 900000,
