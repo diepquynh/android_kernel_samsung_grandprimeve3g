@@ -171,7 +171,7 @@ enum clocking_levels {
 	OC1,			/* overclock */
 	NOC, UC0=NOC, OC0=NOC,	/* no underclock or overclock */
 	UC1, UC2, UC3,		/* underclock */
-	MIN_CL=UC3, MAX_CL=OC1
+	MIN_CL=UC3, MAX_CL=OC1,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
