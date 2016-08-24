@@ -512,7 +512,7 @@ static void sprd_set_cpufreq_limit(void)
 	int i;
 	struct cpufreq_frequency_table *tmp = sprd_cpufreq_conf->freq_tbl;
 	cpufreq_min_limit = min(tmp[MIN_CL].frequency, cpufreq_min_limit);
-	cpufreq_max_limit = max(tmp[MAX_CL].frequency, cpufreq_max_limit);
+	cpufreq_max_limit = max(tmp[NOC].frequency, cpufreq_max_limit);
 	pr_info("--xing-- %s max=%u min=%u\n", __func__, cpufreq_max_limit, cpufreq_min_limit);
 }
 
