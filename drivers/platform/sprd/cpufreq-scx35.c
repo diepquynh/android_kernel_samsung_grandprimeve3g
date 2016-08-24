@@ -54,7 +54,7 @@
 #define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
 #define MAX_VOLT (1200 * 1000)
-#define MIN_VOLT (900  * 1200)
+#define MIN_VOLT (800  * 1000)
 
 static DEFINE_MUTEX(freq_lock);
 struct cpufreq_freqs global_freqs;
@@ -168,28 +168,29 @@ static unsigned int get_mcu_clk_freq(void)
 #endif
 
 enum clocking_levels {
-	OC1,			/* overclock */
-	NOC, UC0=NOC, OC0=NOC,	/* no underclock or overclock */
-	UC1, UC2, UC3,		/* underclock */
-	MIN_CL=UC3, MAX_CL=OC1,
+	NOC, UC0=NOC,			/* no underclock */
+	UC1, UC2, UC3, UC4, UC5,	/* underclock */
+	MIN_CL=UC5,			/* minimum clock speed */
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
-		{OC1, 1500000},
                 {NOC, 1300000},
                 {UC1, 1200000},
                 {UC2, 1000000},
                 {UC3, SHARK_TDPLL_FREQUENCY},
+		{UC4, 384000},
+		{UC5, 192000},
                 {EC, CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
-		[OC1] = 1100000,
                 [NOC] = 1050000,
                 [UC1] = 1000000,
                 [UC2] = 900000,
                 [UC3] = 900000,
-                [EC]  = 900000,
+                [UC4] = 850000,
+                [UC5] = 800000,
+                [EC]  = 800000,
         },
 };
 
@@ -624,7 +625,7 @@ static struct cpufreq_driver sprd_cpufreq_driver = {
 	.exit		= sprd_cpufreq_exit,
 	.name		= "sprd",
 	.attr		= sprd_cpufreq_attr,
-	.volt_control = &sprd_vdd_control,
+	.volt_control 	= &sprd_vdd_control,
 	.flags		= CPUFREQ_SHARED
 };
 
