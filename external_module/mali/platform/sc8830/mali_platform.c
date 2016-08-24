@@ -612,7 +612,7 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 		}
 	}
 
-    //limit max freq
+	//limit max freq
 	max_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_max_limit);
 	if ((0 <= max_index) &&
 		(gpu_dfs_ctx.freq_max->freq > gpu_dfs_ctx.freq_list[max_index].freq))
@@ -624,21 +624,9 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 		}
 	}
 
-	// if the loading ratio is greater then 90%, switch the clock to the maximum
-	if(gpu_dfs_ctx.cur_load >= (256*UP_THRESHOLD))
-	{
-		gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_max;
-
-		MALI_DEBUG_PRINT(3,("GPU_DFS util %3d; next_freq %6d\n", gpu_dfs_ctx.cur_load, gpu_dfs_ctx.freq_next->freq));
-	}
-	else
-	{
-		int target_freq = gpu_dfs_ctx.freq_cur->freq * gpu_dfs_ctx.cur_load / 256;
-		gpu_dfs_ctx.freq_next = get_next_freq(gpu_dfs_ctx.freq_min, gpu_dfs_ctx.freq_max, target_freq);
-
-		MALI_DEBUG_PRINT(3,("GPU_DFS util %3d; target_freq %6d; cur_freq %6d -> next_freq %6d\n",
-			gpu_dfs_ctx.cur_load, target_freq, gpu_dfs_ctx.freq_cur->freq, gpu_dfs_ctx.freq_next->freq));
-	}
+	// Instantly switch to maximum clock speed - koquantam
+	gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_max;
+	MALI_DEBUG_PRINT(3,("GPU_DFS util %3d; next_freq %6d\n", gpu_dfs_ctx.cur_load, gpu_dfs_ctx.freq_next->freq));
 
 	if(gpu_dfs_ctx.freq_next->freq != gpu_dfs_ctx.freq_cur->freq)
 	{
