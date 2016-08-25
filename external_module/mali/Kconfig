@@ -45,7 +45,7 @@ config MALI400_UMP
 config MALI_DVFS
 	bool "Enable Mali dynamically frequency change"
 	depends on MALI400
-	default y
+	default n
 	---help---
 	  This enables support for dynamic change frequency of Mali with the goal of lowering power consumption.
 
