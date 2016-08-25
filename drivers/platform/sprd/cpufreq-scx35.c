@@ -68,7 +68,7 @@ struct cpufreq_conf {
 	struct clk 					*tdpllclk;
 	struct regulator 				*regulator;
 	struct cpufreq_frequency_table			*freq_tbl;
-	unsigned int					*vddarm_mv;
+	unsigned long					*vddarm_mv;
 };
 
 struct cpufreq_table_data {
@@ -78,94 +78,6 @@ struct cpufreq_table_data {
 
 struct cpufreq_conf *sprd_cpufreq_conf = NULL;
 static struct mutex cpufreq_vddarm_lock;
-
-#if defined(CONFIG_ARCH_SC8825)
-static struct cpufreq_table_data sc8825_cpufreq_table_data = {
-	.freq_tbl =	{
-		{0, 1000000},
-		{1, 500000},
-		{2, CPUFREQ_TABLE_END}
-	},
-	.vddarm_mv = {
-		0
-	},
-};
-
-struct cpufreq_conf sc8825_cpufreq_conf = {
-	.clk = NULL,
-	.regulator = NULL,
-	.freq_tbl = sc8825_cpufreq_table_data.freq_tbl,
-	.vddarm_mv = sc8825_cpufreq_table_data.vddarm_mv,
-};
-
-static void set_mcu_clk_freq(u32 mcu_freq)
-{
-	u32 val, rate, arm_clk_div, gr_gen1;
-
-	rate = mcu_freq / MHz;
-	switch(1000 / rate)
-	{
-		case 1:
-			arm_clk_div = 0;
-			break;
-		case 2:
-			arm_clk_div = 1;
-			break;
-		default:
-			panic("set_mcu_clk_freq fault\n");
-			break;
-	}
-	pr_debug("%s --- before, AHB_ARM_CLK: %08x, rate = %d, div = %d\n",
-		__func__, __raw_readl(REG_AHB_ARM_CLK), rate, arm_clk_div);
-
-	gr_gen1 =  __raw_readl(GR_GEN1);
-	gr_gen1 |= BIT(9);
-	__raw_writel(gr_gen1, GR_GEN1);
-
-	val = __raw_readl(REG_AHB_ARM_CLK);
-	val &= 0xfffffff8;
-	val |= arm_clk_div;
-	__raw_writel(val, REG_AHB_ARM_CLK);
-
-	gr_gen1 &= ~BIT(9);
-	__raw_writel(gr_gen1, GR_GEN1);
-
-	pr_debug("%s --- after, AHB_ARM_CLK: %08x, rate = %d, div = %d\n",
-		__func__, __raw_readl(REG_AHB_ARM_CLK), rate, arm_clk_div);
-
-	return;
-}
-
-static unsigned int get_mcu_clk_freq(void)
-{
-	u32 mpll_refin, mpll_n, mpll_cfg = 0, rate, val;
-
-	mpll_cfg = __raw_readl(GR_MPLL_MN);
-
-	mpll_refin = (mpll_cfg >> GR_MPLL_REFIN_SHIFT) & GR_MPLL_REFIN_MASK;
-	switch(mpll_refin){
-		case 0:
-			mpll_refin = GR_MPLL_REFIN_2M;
-			break;
-		case 1:
-		case 2:
-			mpll_refin = GR_MPLL_REFIN_4M;
-			break;
-		case 3:
-			mpll_refin = GR_MPLL_REFIN_13M;
-			break;
-		default:
-			pr_err("%s mpll_refin: %d\n", __FUNCTION__, mpll_refin);
-	}
-	mpll_n = mpll_cfg & GR_MPLL_N_MASK;
-	rate = mpll_refin * mpll_n;
-
-	/*find div */
-	val = __raw_readl(REG_AHB_ARM_CLK) & 0x7;
-	val += 1;
-	return rate / val;
-}
-#endif
 
 enum clocking_levels {
 	NOC, UC0=NOC,			/* no underclock */
@@ -458,11 +370,9 @@ static int sprd_cpufreq_target(struct cpufreq_policy *policy,
 	struct cpufreq_frequency_table *table;
 	int max_freq = cpufreq_max_limit;
 	int min_freq = cpufreq_min_limit;
-	int cur_freq = 0;
-	unsigned long irq_flags;
 
 	/* delay 30s to enable dvfs&dynamic-hotplug,
-         * except requirment from termal-cooling device
+         * except requirment from thermal-cooling device
          */
 	if(time_before(jiffies, boot_done)){
 		return 0;
@@ -509,7 +419,6 @@ static unsigned int sprd_cpufreq_getspeed(unsigned int cpu)
 
 static void sprd_set_cpufreq_limit(void)
 {
-	int i;
 	struct cpufreq_frequency_table *tmp = sprd_cpufreq_conf->freq_tbl;
 	cpufreq_min_limit = min(tmp[MIN_CL].frequency, cpufreq_min_limit);
 	cpufreq_max_limit = max(tmp[NOC].frequency, cpufreq_max_limit);
@@ -545,19 +454,21 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 	policy->cpuinfo.transition_latency = TRANSITION_LATENCY;
 	policy->shared_type = CPUFREQ_SHARED_TYPE_ALL;
 
-	cpufreq_frequency_table_get_attr(sprd_cpufreq_conf->freq_tbl, policy->cpu);
-
-	percpu_target[policy->cpu] = policy->cur;
-
 	ret = cpufreq_frequency_table_cpuinfo(policy, sprd_cpufreq_conf->freq_tbl);
 	if (ret != 0)
 		pr_err("%s Failed to config freq table: %d\n", __func__, ret);
 
+	/* do not switch frequencies unless explicitly asked us to */
+	policy->max = sprd_cpufreq_conf->freq_tbl[NOC].frequency;
+	policy->min = sprd_cpufreq_conf->freq_tbl[MIN_CL].frequency;
+	cpufreq_frequency_table_get_attr(sprd_cpufreq_conf->freq_tbl, policy->cpu);
 
-	pr_info("%s policy->cpu=%d, policy->cur=%u, ret=%d\n",
-		__func__, policy->cpu, policy->cur, ret);
+	percpu_target[policy->cpu] = policy->cur;
 
-       cpumask_setall(policy->cpus);
+	pr_info("%s cpu=%d, cur=%u, min=%u, max=%u, ret=%d\n",
+		__func__, policy->cpu, policy->cur, policy->min, policy->max, ret);
+
+	cpumask_setall(policy->cpus);
 
 	return ret;
 }
@@ -823,7 +734,6 @@ static ssize_t dvfs_prop_store(struct device *dev, struct device_attribute *attr
 {
 	int ret;
 	int value;
-	unsigned long irq_flags;
 
 	printk(KERN_ERR"dvfs_status %s\n",buf);
 	ret = strict_strtoul(buf,16,(long unsigned int *)&value);
