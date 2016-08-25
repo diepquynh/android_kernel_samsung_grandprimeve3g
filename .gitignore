@@ -104,6 +104,9 @@ zImage-dtb
 zImage-dtb
 dt.img
 
+# Flashable packages
+*.zip
+
 # scripts
 ~.sh
 scripts/*
