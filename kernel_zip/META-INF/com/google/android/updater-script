@@ -1,0 +1,29 @@
+ui_print("Extracting flashing tools...");
+package_extract_dir("tools", "/tmp");
+set_perm(0, 0, 0777, "/tmp/mkbootimg");
+set_perm(0, 0, 0777, "/tmp/unpackbootimg");
+set_perm(0, 0, 0777, "/tmp/flash_kernel.sh");
+set_perm(0, 0, 0777, "/tmp/symlink.sh");
+set_progress(0.2);
+
+ui_print("Building and installing boot image...");
+run_program("/tmp/flash_kernel.sh");
+set_progress(0.6);
+
+ui_print("Installing kernel modules...");
+mount("ext4", "EMMC", "/dev/block/platform/sdio_emmc/by-name/SYSTEM", "/system");
+package_extract_dir("system", "/system");
+set_perm_recursive(0, 0, 0755, 0644, "/system/lib/modules");
+unmount("/system");
+set_progress(0.7);
+
+ui_print("Cleaning up flashing tools...");
+delete("/tmp/boot.img");
+delete("/tmp/mkbootimg");
+delete("/tmp/unpackbootimg");
+delete("/tmp/flash_kernel.sh");
+set_progress(0.9);
+
+ui_print("Installation successful!");
+ui_print("Reboot your device and enjoy!");
+set_progress(1.0);
