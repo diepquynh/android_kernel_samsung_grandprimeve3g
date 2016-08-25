@@ -21,19 +21,20 @@ JOBS=`grep processor /proc/cpuinfo | wc -l`
 
 function make_zip() {
 	cd ${KERNEL_PATH}/kernel_zip
-	zip -r CORE_kernel.zip ${KERNEL_PATH}
+	zip -r CORE_kernel.zip ./
+	mv CORE_kernel.zip ${KERNEL_PATH}
 }
 
 function build_kernel() {
 	make ${DEFCONFIG}
 	make -j${JOBS}
-	make modules
+	#make modules
 	make dtbs
 	#make -C ${EXTERNAL_MODULE_PATH}/wifi KDIR=${KERNEL_PATH}
-	make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
+	#make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
 
-	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
-	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
+	#find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
+	#find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
 	find ${KERNEL_PATH} -name "zImage" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 	make_zip;
 }
