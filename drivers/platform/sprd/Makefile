@@ -1,3 +1,5 @@
+CFLAGS_KERNEL := -fno-strict-aliasing
+
 obj-$(CONFIG_64BIT)		+= iomap.o
 obj-$(CONFIG_ARCH_SCX35)	+= arch_init.o arch_misc.o adi.o adc.o glb.o boot_mode.o pin_switch.o
 obj-$(CONFIG_SPRD_MAILBOX) += mailbox.o

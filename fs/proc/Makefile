@@ -1,6 +1,8 @@
 #
 # Makefile for the Linux proc filesystem routines.
 #
+CFLAGS_proc_net.o := -fno-strict-aliasing
+CFLAGS_namespaces.o := -fno-strict-aliasing
 
 obj-y   += proc.o
 obj-y   += sprd_debug/

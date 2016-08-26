@@ -4,6 +4,7 @@
 # 2 Sep 2000, Christoph Hellwig <hch@infradead.org>
 # Rewritten to use lists instead of if-statements.
 #
+CFLAGS_KERNEL := -fno-strict-aliasing
 
 obj-y	:= nonet.o
 

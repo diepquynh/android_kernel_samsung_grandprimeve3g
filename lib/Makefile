@@ -1,6 +1,12 @@
 #
 # Makefile for some libs needed in the kernel.
 #
+CFLAGS_libcrc32c.o := -fno-strict-aliasing
+CFLAGS_nlattr.o := -fno-strict-aliasing
+CFLAGS_klist.o := -fno-strict-aliasing
+CFLAGS_kobject_uevent.o := -fno-strict-aliasing
+CFLAGS_radix-tree.o := -fno-strict-aliasing
+CFLAGS_vsprintf.o := -fno-strict-aliasing
 
 ifdef CONFIG_FUNCTION_TRACER
 ORIG_CFLAGS := $(KBUILD_CFLAGS)

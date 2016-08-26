@@ -1,3 +1,6 @@
+CFLAGS_of_mdio.o := -fno-strict-aliasing
+CFLAGS_of_net.o := -fno-strict-aliasing
+
 obj-y = base.o
 obj-$(CONFIG_OF_FLATTREE) += fdt.o
 obj-$(CONFIG_OF_PROMTREE) += pdt.o

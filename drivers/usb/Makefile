@@ -3,6 +3,7 @@
 #
 
 # Object files in subdirectories
+CFLAGS_thermal_core.o := -fno-strict-aliasing
 
 obj-$(CONFIG_USB)		+= core/
 
