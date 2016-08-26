@@ -345,8 +345,8 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 CFLAGS_MODULE   =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+CFLAGS_KERNEL	= -munaligned-access
+AFLAGS_KERNEL	= -munaligned-access
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -369,13 +369,11 @@ LINUXINCLUDE    := \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
-KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+KBUILD_CFLAGS   := $(EXTERNAL_CFLAGS) -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks \
-		   -std=gnu89 \
-		   -munaligned-access
+		   -fno-delete-null-pointer-checks -std=gnu89
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -572,6 +570,10 @@ endif # $(dot-config)
 # This allow a user to issue only 'make' to build a kernel including modules
 # Defaults to vmlinux, but the arch makefile usually adds further targets
 all: vmlinux
+EXTERNAL_CFLAGS = -fgcse-las -fgcse-sm -fipa-pta -fivopts -fomit-frame-pointer \
+		   -frename-registers -fsection-anchors -ftracer -ftree-loop-im \
+		   -ftree-loop-ivcanon -funsafe-loop-optimizations -funswitch-loops \
+		   -fweb -Wno-error=array-bounds -Wno-error=clobbered
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
