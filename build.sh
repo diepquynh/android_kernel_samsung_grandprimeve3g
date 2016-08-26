@@ -7,7 +7,7 @@
 
 set -e -o pipefail
 
-export CROSS_COMPILE=/home/a1/toolchain/linaro-5.2/bin/arm-eabi-
+export CROSS_COMPILE=/home/a1/toolchain/linaro-5.3/bin/arm-linux-gnueabihf-
 export ARCH=arm
 
 PLATFORM=sc8830
