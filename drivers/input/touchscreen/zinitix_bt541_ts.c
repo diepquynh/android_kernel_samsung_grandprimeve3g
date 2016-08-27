@@ -58,7 +58,7 @@ u8 m_FirmwareIdx = 0;
 static bool ta_connected =0;
 #define ZINITIX_DEBUG				1
 #define ZINITIX_I2C_CHECKSUM		1
-#define TOUCH_BOOSTER			1
+#define TOUCH_BOOSTER			0
 #define NOT_SUPPORTED_TOUCH_DUMMY_KEY
 #if TOUCH_BOOSTER
 #include <linux/cpufreq.h>
@@ -76,15 +76,15 @@ struct cpu_num_min_limit_handle *cpu_num_limit_handle = NULL;
 #define TOUCH_POINT_MODE			0
 #endif
 
-#define MAX_SUPPORTED_FINGER_NUM	2 /* max 10 */
+#define MAX_SUPPORTED_FINGER_NUM	5 /* max 10 */
 
 #ifdef SUPPORTED_TOUCH_KEY
 #ifdef NOT_SUPPORTED_TOUCH_DUMMY_KEY
 #define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
 #define SUPPORTED_BUTTON_NUM		2
 #else
-#define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
-#define SUPPORTED_BUTTON_NUM		2
+#define MAX_SUPPORTED_BUTTON_NUM	6 /* max 8 */
+#define SUPPORTED_BUTTON_NUM		4
 #endif
 #endif
 
