@@ -1,0 +1,50 @@
+config CPU_FREQ_GOV_LULZACTIVE2
+	tristate "'lulzactive' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	  When workload is greater than or equal to 60%, the 
+	  governor scales up CPU to next higher step. When 
+	  workload is less than 60%, governor scales down CPU
+	  to next lower step. When screen is off, frequency is
+	  locked to global scaling minimum frequency.
+
+config CPU_FREQ_GOV_SMARTASS2
+	tristate "'smartassV2' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	SmartassV2 is a governor (controls the frequency of the 
+	CPU at each give moment) which like the first smartass is 
+	generally based on the implementation of interactive with
+	some major changes and the addition of a built in sleep
+	profile (behaves a bit differently when screen is off vs. on).
+	The smartassV2 improves the very naive scheme which the first
+	smartass had
+
+config CPU_FREQ_GOV_WHEATLEY
+	tristate "'wheatley' cpufreq governor"
+	depends on CPU_FREQ
+     ---help---
+	Building on the classic 'ondemand' governor is implemented Wheatley
+	governor. The governor has two additional parameters that control
+	the state.
+
+config CPU_FREQ_GOV_LAGFREE
+        tristate "'lagfree' cpufreq governor"
+        depends on CPU_FREQ
+        ---help---
+	Lagfree is similar to ondemand. Main difference is it's optimization
+	to become more battery friendly. Frequency is gracefully decreased and
+	increased, unlike ondemand which jumps to 100% too often. Lagfree does
+	not skip any frequency step while scaling up or down. Remember that if
+	there's a requirement for sudden burst of power, lagfree can not satisfy
+	that since it has to raise cpu through each higher frequency step from
+	current. Some users report that video playback using lagfree stutters a little.
+  
+config CPU_FREQ_GOV_LIONHEART
+	tristate "'lionheart' cpufreq policy governor"
+	depends on CPU_FREQ
+	---help---
+	Lionheart is a conservative-based governor which is based on samsung
+	update3 source. The tunables (such as the thresholds and sampling rate)
+	were changed so the governor behaves more like the performance one, at
+	the cost of battery as the scaling is very aggressive.
