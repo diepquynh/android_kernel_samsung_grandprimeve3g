@@ -7,22 +7,26 @@
 
 set -e -o pipefail
 
-export CROSS_COMPILE=/home/a1/toolchain/linaro-5.3/bin/arm-linux-gnueabihf-
-export ARCH=arm
-
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
+NAME=CORE_kernel
+VERSION=v1.1
+
+export CROSS_COMPILE=/home/a1/toolchain/linaro-5.3/bin/arm-linux-gnueabihf-
+export ARCH=arm
+export LOCALVERSION=-`echo ${VERSION}`
 
 KERNEL_PATH=$(pwd)
 KERNEL_ZIP=${KERNEL_PATH}/kernel_zip
+KERNEL_ZIP_NAME=${NAME}_${VERSION}
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
 
 JOBS=`grep processor /proc/cpuinfo | wc -l`
 
 function make_zip() {
 	cd ${KERNEL_PATH}/kernel_zip
-	zip -r CORE_kernel.zip ./
-	mv CORE_kernel.zip ${KERNEL_PATH}
+	zip -r ${KERNEL_ZIP_NAME}.zip ./
+	mv ${KERNEL_ZIP_NAME}.zip ${KERNEL_PATH}
 }
 
 function build_kernel() {
@@ -40,7 +44,12 @@ function build_kernel() {
 }
 
 function main() {
-	[ "${1}" = "clean" ] && make mrproper || build_kernel
+if [ "${1}" = "clean" ]; then
+	make mrproper;
+	rm ${KERNEL_ZIP_NAME}.zip
+else
+	build_kernel
+fi;
 }
 
 main $@
