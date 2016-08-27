@@ -76,15 +76,15 @@ struct cpu_num_min_limit_handle *cpu_num_limit_handle = NULL;
 #define TOUCH_POINT_MODE			0
 #endif
 
-#define MAX_SUPPORTED_FINGER_NUM	5 /* max 10 */
+#define MAX_SUPPORTED_FINGER_NUM	2 /* max 10 */
 
 #ifdef SUPPORTED_TOUCH_KEY
 #ifdef NOT_SUPPORTED_TOUCH_DUMMY_KEY
 #define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
 #define SUPPORTED_BUTTON_NUM		2
 #else
-#define MAX_SUPPORTED_BUTTON_NUM	6 /* max 8 */
-#define SUPPORTED_BUTTON_NUM		4
+#define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
+#define SUPPORTED_BUTTON_NUM		2
 #endif
 #endif
 
