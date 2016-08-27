@@ -10,7 +10,7 @@ set -e -o pipefail
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
 NAME=CORE_kernel
-VERSION=v1.1
+VERSION=v1.2
 
 export CROSS_COMPILE=/home/a1/toolchain/linaro-5.3/bin/arm-linux-gnueabihf-
 export ARCH=arm
@@ -34,7 +34,6 @@ function build_kernel() {
 	make -j${JOBS}
 	make modules
 	make dtbs
-	#make -C ${EXTERNAL_MODULE_PATH}/wifi KDIR=${KERNEL_PATH}
 	make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
 
 	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
