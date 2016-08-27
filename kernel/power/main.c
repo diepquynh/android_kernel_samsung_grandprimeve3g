@@ -737,7 +737,6 @@ static ssize_t restart_cpc_store(struct kobject *kobj, struct kobj_attribute *at
 #endif
 
 	memcpy(cp_assert_info, buf, 1);
-#ifdef CONFIG_SEC_LOG_BUF_NOCACHE
 	if (sscanf(cp_assert_info, "%d", &val) == 1 && val > 0){
 		if(sec_log_buf_nocache_enable == 1){
 			base_cp_dbg = ioremap_nocache(CP_DBG_ADD, CP_DBG_LEN);
@@ -752,7 +751,6 @@ static ssize_t restart_cpc_store(struct kobject *kobj, struct kobj_attribute *at
 
 		cp_abort(buf+2);
 	}
-#endif
 	return n;
 }
 

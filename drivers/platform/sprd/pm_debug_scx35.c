@@ -32,6 +32,12 @@
 #include <soc/sprd/gpio.h>
 #include <soc/sprd/iomap.h>
 
+#define SCX35_PM_DEBUG  (0)
+#if SCX35_PM_DEBUG
+#define DMSG(x ...) DMSG(x)
+#else
+#define DMSG(x ...) (void)0
+#endif
 struct dentry * dentry_debug_root = NULL;
 static int is_print_sleep_mode = 0;
 int is_print_linux_clock = 1;
@@ -153,16 +159,16 @@ void hard_irq_set(void)
 }
 void print_int_status(void)
 {
-	printk("APB_EB 0x%08x\n", __raw_readl(REG_AP_APB_APB_EB));
-	printk("INTC0 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV0_IRQ_MSKSTS),__raw_readl(INTCV0_IRQ_RAW), __raw_readl(INTCV0_IRQ_EN));
-	printk("INTC1 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV1_IRQ_MSKSTS),__raw_readl(INTCV1_IRQ_RAW), __raw_readl(INTCV1_IRQ_EN));
-	printk("INTC2 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV2_IRQ_MSKSTS),__raw_readl(INTCV2_IRQ_RAW), __raw_readl(INTCV2_IRQ_EN));
-	printk("INTC3 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV3_IRQ_MSKSTS),__raw_readl(INTCV3_IRQ_RAW), __raw_readl(INTCV3_IRQ_EN));
-	printk("INT mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INT_IRQ_STS),__raw_readl(INT_IRQ_RAW), __raw_readl(INT_IRQ_ENB));
-	printk("ANA INT mask:0x%08x raw:0x%08x en:0x%08x\n", sci_adi_read(ANA_REG_INT_MASK_STATUS), sci_adi_read(ANA_REG_INT_RAW_STATUS), sci_adi_read(ANA_REG_INT_EN));
-	printk("ANA EIC MODULE_EN 0x%08x eic bit(3)\n", sci_adi_read(ANA_REG_GLB_ARM_MODULE_EN));
-	printk("ANA EIC int en 0x%08x\n", sci_adi_read(ANA_CTL_EIC_BASE + 0x18));
-	printk("ANA EIC int status 0x%08x, 0x%08x\n", sci_adi_read(ANA_CTL_EIC_BASE + 0x20),sci_adi_read(ANA_CTL_EIC_BASE + 0x14));
+	DMSG("APB_EB 0x%08x\n", __raw_readl(REG_AP_APB_APB_EB));
+	DMSG("INTC0 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV0_IRQ_MSKSTS),__raw_readl(INTCV0_IRQ_RAW), __raw_readl(INTCV0_IRQ_EN));
+	DMSG("INTC1 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV1_IRQ_MSKSTS),__raw_readl(INTCV1_IRQ_RAW), __raw_readl(INTCV1_IRQ_EN));
+	DMSG("INTC2 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV2_IRQ_MSKSTS),__raw_readl(INTCV2_IRQ_RAW), __raw_readl(INTCV2_IRQ_EN));
+	DMSG("INTC3 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV3_IRQ_MSKSTS),__raw_readl(INTCV3_IRQ_RAW), __raw_readl(INTCV3_IRQ_EN));
+	DMSG("INT mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INT_IRQ_STS),__raw_readl(INT_IRQ_RAW), __raw_readl(INT_IRQ_ENB));
+	DMSG("ANA INT mask:0x%08x raw:0x%08x en:0x%08x\n", sci_adi_read(ANA_REG_INT_MASK_STATUS), sci_adi_read(ANA_REG_INT_RAW_STATUS), sci_adi_read(ANA_REG_INT_EN));
+	DMSG("ANA EIC MODULE_EN 0x%08x eic bit(3)\n", sci_adi_read(ANA_REG_GLB_ARM_MODULE_EN));
+	DMSG("ANA EIC int en 0x%08x\n", sci_adi_read(ANA_CTL_EIC_BASE + 0x18));
+	DMSG("ANA EIC int status 0x%08x, 0x%08x\n", sci_adi_read(ANA_CTL_EIC_BASE + 0x20),sci_adi_read(ANA_CTL_EIC_BASE + 0x14));
 }
 
 #define GPIO_GROUP_NUM		16
@@ -189,116 +195,116 @@ void print_hard_irq_inloop(int ret)
 	static unsigned int alarm_cnt = 0;
 
 	if(sprd_irqs_sts[0] != 0)
-		printk("%c#:INTC0: %08x\n", ret?'S':'F', sprd_irqs_sts[0]);
+		DMSG("%c#:INTC0: %08x\n", ret?'S':'F', sprd_irqs_sts[0]);
 	if(sprd_irqs_sts[1] != 0)
-		printk("%c#:INTC0 FIQ: %08x\n", ret?'S':'F', sprd_irqs_sts[1]);
+		DMSG("%c#:INTC0 FIQ: %08x\n", ret?'S':'F', sprd_irqs_sts[1]);
 	if(sprd_irqs_sts[0]&IRQ_EIC){
-		printk("wake up by eic\n");
+		DMSG("wake up by eic\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_BUSMON){
-		printk("wake up by busmoniter\n");
+		DMSG("wake up by busmoniter\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_WDG){
-		printk("wake up by ca7_wdg or ap_wdg\n");
+		DMSG("wake up by ca7_wdg or ap_wdg\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_CP2){
-		printk("wake up by cp2\n");
+		DMSG("wake up by cp2\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_CP1){
-		printk("wake up by cp1\n");
+		DMSG("wake up by cp1\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_CP0){
-		printk("wake up by cp0 :total cp0 %u times, alarm %u times\n", cp0_cnt, alarm_cnt);
+		DMSG("wake up by cp0 :total cp0 %u times, alarm %u times\n", cp0_cnt, alarm_cnt);
 		cp0_cnt++;
 	}
 	if(sprd_irqs_sts[0]&IRQ_GPU){
-		printk("wake up by gpu\n");
+		DMSG("wake up by gpu\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_MM){
-		printk("wake up by mm\n");
+		DMSG("wake up by mm\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_4){
 		if(sprd_hard_irq[34])
-			printk("wake up by i2c\n");
+			DMSG("wake up by i2c\n");
 		if(sprd_hard_irq[20])
-			printk("wake up by audio\n");
+			DMSG("wake up by audio\n");
 		if(sprd_hard_irq[27])
-			printk("wake up by fm\n");
+			DMSG("wake up by fm\n");
 		if(sprd_hard_irq[25]){
-			printk("wake up by adi\n");
+			DMSG("wake up by adi\n");
 		}
 		if(sprd_hard_irq[38]){
-			printk("wake up by ana ");
+			DMSG("wake up by ana ");
 			ana_sts = sci_adi_read(ANA_REG_INT_RAW_STATUS);
 			if(ana_sts & BIT(0))
-				printk("adc\n");
+				DMSG("adc\n");
 			if(ana_sts & BIT(1)){
-				printk("gpio\n");
-				printk("gpio 0 ~ 16 0x%08x\n", sci_adi_read(SPRD_MISC_BASE + 0x0480 + 0x1c));
-				printk("gpio 17 ~ 31 0x%08x\n", sci_adi_read(SPRD_MISC_BASE + 0x0480 + 0x40 + 0x1c));
+				DMSG("gpio\n");
+				DMSG("gpio 0 ~ 16 0x%08x\n", sci_adi_read(SPRD_MISC_BASE + 0x0480 + 0x1c));
+				DMSG("gpio 17 ~ 31 0x%08x\n", sci_adi_read(SPRD_MISC_BASE + 0x0480 + 0x40 + 0x1c));
 			}
 			if(ana_sts & BIT(2)){
-				printk("rtc :total cp0 %u times, alarm %u times\n", cp0_cnt, alarm_cnt);
+				DMSG("rtc :total cp0 %u times, alarm %u times\n", cp0_cnt, alarm_cnt);
 				alarm_cnt++;
 			}
 			if(ana_sts & BIT(3))
-				printk("wdg\n");
+				DMSG("wdg\n");
 			if(ana_sts & BIT(4))
-				printk("fgu\n");
+				DMSG("fgu\n");
 			if(ana_sts & BIT(5)){
-				printk("eic\n");
-				printk("ana eic 0x%08x\n", sci_adi_read(ANA_EIC_BASE + 0x1c));
+				DMSG("eic\n");
+				DMSG("ana eic 0x%08x\n", sci_adi_read(ANA_EIC_BASE + 0x1c));
 			}
 			if(ana_sts & BIT(6))
-				printk("aud head button\n");
+				DMSG("aud head button\n");
 			if(ana_sts & BIT(7))
-				printk("aud protect\n");
+				DMSG("aud protect\n");
 			if(ana_sts & BIT(8))
-				printk("thermal\n");
+				DMSG("thermal\n");
 			if(ana_sts & BIT(10))
-				printk("dcdc otp\n");
-			printk("ANA INT 0x%08x\n", ana_sts);
+				DMSG("dcdc otp\n");
+			DMSG("ANA INT 0x%08x\n", ana_sts);
 		}
 		if(sprd_hard_irq[36])
-			printk("wake up by kpd\n");
+			DMSG("wake up by kpd\n");
 		if(sprd_hard_irq[35]){
-			printk("wake up by gpio\n");
+			DMSG("wake up by gpio\n");
 		}
 	}
 	if(sprd_irqs_sts[0]&IRQ_3){
 		if(sprd_hard_irq[23])
-			printk("wake up by vbc_ad01\n");
+			DMSG("wake up by vbc_ad01\n");
 		if(sprd_hard_irq[24])
-			printk("wake up by vbc_ad23\n");
+			DMSG("wake up by vbc_ad23\n");
 		if(sprd_hard_irq[22])
-			printk("wake up by vbc_da\n");
+			DMSG("wake up by vbc_da\n");
 		if(sprd_hard_irq[21])
-			printk("wake up by afifi_error\n");
+			DMSG("wake up by afifi_error\n");
 	}
 	if(sprd_irqs_sts[0]&IRQ_2){
 		if(sprd_hard_irq[29]){
-			printk("wake up by ap_tmr0\n");
+			DMSG("wake up by ap_tmr0\n");
 		}
 		if(sprd_hard_irq[118]){
-			printk("wake up by ap_tmr1\n");
+			DMSG("wake up by ap_tmr1\n");
 		}
 		if(sprd_hard_irq[119]){
-			printk("wake up by ap_tmr2\n");
+			DMSG("wake up by ap_tmr2\n");
 		}
 		if(sprd_hard_irq[120]){
-			printk("wake up by ap_tmr3\n");
+			DMSG("wake up by ap_tmr3\n");
 		}
 		if(sprd_hard_irq[121]){
-			printk("wake up by ap_tmr4\n");
+			DMSG("wake up by ap_tmr4\n");
 		}
 		if(sprd_hard_irq[31]){
-			printk("wake up by ap_syst\n");
+			DMSG("wake up by ap_syst\n");
 		}
 		if(sprd_hard_irq[30]){
-			printk("wake up by aon_syst\n");
+			DMSG("wake up by aon_syst\n");
 		}
 		if(sprd_hard_irq[28]){
-			printk("wake up by aon_tmr\n");
+			DMSG("wake up by aon_tmr\n");
 		}
 	}
 
@@ -307,14 +313,14 @@ void print_hard_irq_inloop(int ret)
 			j = 2*i;
 			gpio_irq[j]= __raw_readl(SPRD_GPIO_BASE + 0x100*i + REG_GPIO_MIS);
 			gpio_irq[j+1]= __raw_readl(SPRD_GPIO_BASE + 0x100*i + 0x80 + REG_GPIO_MIS);
-	//		printk("gpio_irq[%d]:0x%x, gpio_irq[%d]:0x%x \n", j, gpio_irq[j], j+1, gpio_irq[j+1]);
+	//		DMSG("gpio_irq[%d]:0x%x, gpio_irq[%d]:0x%x \n", j, gpio_irq[j], j+1, gpio_irq[j+1]);
 		}
 		for(i=0; i<GPIO_GROUP_NUM; i++){
 			if(gpio_irq[i] != 0){
 				val = gpio_irq[i];
 				while(val){
 					j = __ffs(val);
-					printk("irq from gpio%d\n", j + 16*i);
+					DMSG("irq from gpio%d\n", j + 16*i);
 					val &= ~(1<<j);
 				}
 			}
@@ -329,7 +335,7 @@ static void print_hard_irq(void)
 		return;
 	do{
 		if(0 != sprd_hard_irq[i])
-			printk("##: sprd_hard_irq[%d] = %d.\n",
+			DMSG("##: sprd_hard_irq[%d] = %d.\n",
                                 i, sprd_hard_irq[i]);
 	}while(--i >= 0);
 }
@@ -348,12 +354,12 @@ void inc_irq(int irq)
 {
 	if(is_wakeup){
 		if (irq >= SPRD_IRQ_NUM) {
-			printk("## bad irq number %d.\n", irq);
+			DMSG("## bad irq number %d.\n", irq);
 			return;
 		}
 		sprd_irqs[irq]++;
 		if(is_print_wakeup)
-			printk("\n#####: wakeup irq = %d.\n", irq);
+			DMSG("\n#####: wakeup irq = %d.\n", irq);
 		is_wakeup = 0;
 	}
 }
@@ -367,7 +373,7 @@ static void print_irq(void)
 		return;
 	do{
 		if(0 != sprd_irqs[i])
-			printk("##: sprd_irqs[%d] = %d.\n",
+			DMSG("##: sprd_irqs[%d] = %d.\n",
                                 i, sprd_irqs[i]);
 	}while(--i >= 0);
 }
@@ -422,7 +428,7 @@ void print_time(void)
 {
 	if(!is_print_time)
 		return;
-	printk("time statisics : sleep_time=%d, core_time=%d, mcu_time=%d, lit_time=%d, deep_sus=%d, dep_fail=%d\n",
+	DMSG("time statisics : sleep_time=%d, core_time=%d, mcu_time=%d, lit_time=%d, deep_sus=%d, dep_fail=%d\n",
 		sleep_time, core_time, mcu_time, lit_time, deep_time_successed, deep_time_failed);
 }
 
@@ -433,19 +439,19 @@ void set_sleep_mode(int sm){
 		return;
 	switch(sm){
 		case SLP_MODE_ARM:
-			printk("\n[ARM]\n");
+			DMSG("\n[ARM]\n");
 			break;
 		case SLP_MODE_MCU:
-			printk("\n[MCU]\n");
+			DMSG("\n[MCU]\n");
 			break;
 		case SLP_MODE_LIT:
-			printk("\n[LIT]\n");
+			DMSG("\n[LIT]\n");
 			break;
 		case SLP_MODE_DEP:
-			printk("\n[DEP]\n");
+			DMSG("\n[DEP]\n");
 			break;
 		default:
-			printk("\nNONE\n");
+			DMSG("\nNONE\n");
 	}
 }
 void clr_sleep_mode(void)
@@ -459,8 +465,8 @@ void print_statisic(void)
 	print_irq();
 	pm_debug_dump_ahb_glb_regs();
 	if(is_print_wakeup){
-		printk("###wake up form %s : %08x\n",  sleep_mode_str[sleep_mode],  sprd_irqs_sts[0]);
-		printk("###wake up form %s : %08x\n",  sleep_mode_str[sleep_mode],  sprd_irqs_sts[1]);
+		DMSG("###wake up form %s : %08x\n",  sleep_mode_str[sleep_mode],  sprd_irqs_sts[0]);
+		DMSG("###wake up form %s : %08x\n",  sleep_mode_str[sleep_mode],  sprd_irqs_sts[1]);
 	}
 }
 #ifdef PM_PRINT_ENABLE
@@ -480,14 +486,14 @@ void cp0_power_domain_debug(void)
         unsigned long cp0_ceva_0_cfg = __raw_readl(REG_PMU_APB_PD_CP0_CEVA_0_CFG);
         unsigned long cp0_ceva_1_cfg = __raw_readl(REG_PMU_APB_PD_CP0_CEVA_1_CFG);
 
-        printk("###---- REG_PMU_APB_PD_CP0_ARM9_0_CFG : 0x%08x\n", cp0_arm9_0_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_ARM9_1_CFG : 0x%08x\n", cp0_arm9_1_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_HU3GE_CFG : 0x%08x\n", cp0_hu3ge_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_GSM_0_CFG : 0x%08x\n", cp0_gsm_0_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_GSM_1_CFG : 0x%08x\n", cp0_gsm_1_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_TD_CFG : 0x%08x\n", cp0_td_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_CEVA_0_CFG : 0x%08x\n", cp0_ceva_0_cfg);
-        printk("###---- REG_PMU_APB_PD_CP0_CEVA_1_CFG : 0x%08x\n", cp0_ceva_1_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_ARM9_0_CFG : 0x%08x\n", cp0_arm9_0_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_ARM9_1_CFG : 0x%08x\n", cp0_arm9_1_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_HU3GE_CFG : 0x%08x\n", cp0_hu3ge_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_GSM_0_CFG : 0x%08x\n", cp0_gsm_0_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_GSM_1_CFG : 0x%08x\n", cp0_gsm_1_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_TD_CFG : 0x%08x\n", cp0_td_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_CEVA_0_CFG : 0x%08x\n", cp0_ceva_0_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP0_CEVA_1_CFG : 0x%08x\n", cp0_ceva_1_cfg);
 }
 
 void cp1_power_domain_debug(void)
@@ -498,11 +504,11 @@ void cp1_power_domain_debug(void)
         unsigned long cp1_ceva_cfg = __raw_readl(REG_PMU_APB_PD_CP1_CEVA_CFG);
         /*unsigned long cp1_comwrap_cfg = __raw_readl(REG_PMU_APB_PD_COMWRAP_CFG);*/
 
-        printk("###---- REG_PMU_APB_PD_CP1_CA5_CFG : 0x%08x\n", cp1_ca5_cfg);
-        printk("###---- REG_PMU_APB_PD_CP1_LTE_P1_CFG : 0x%08x\n", cp1_lte_p1_cfg);
-        printk("###---- REG_PMU_APB_PD_CP1_LTE_P2_CFG : 0x%08x\n", cp1_lte_p2_cfg);
-        printk("###---- REG_PMU_APB_PD_CP1_CEVA_CFG : 0x%08x\n", cp1_ceva_cfg);
-        /*printk("REG_PMU_APB_PD_COMWRAP_CFG ------ 0x%08x\n", cp1_comwrap_cfg);*/
+        DMSG("###---- REG_PMU_APB_PD_CP1_CA5_CFG : 0x%08x\n", cp1_ca5_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP1_LTE_P1_CFG : 0x%08x\n", cp1_lte_p1_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP1_LTE_P2_CFG : 0x%08x\n", cp1_lte_p2_cfg);
+        DMSG("###---- REG_PMU_APB_PD_CP1_CEVA_CFG : 0x%08x\n", cp1_ceva_cfg);
+        /*DMSG("REG_PMU_APB_PD_COMWRAP_CFG ------ 0x%08x\n", cp1_comwrap_cfg);*/
 }
 #endif
 
@@ -555,184 +561,184 @@ static void print_debug_info(void)
 	ldo_dcdc_pd_ctrl = sci_adi_read(ANA_REG_GLB_LDO_DCDC_PD);
 #endif
 	unsigned long sleep_ctrl = __raw_readl(REG_PMU_APB_SLEEP_CTRL);
-	printk("###---- REG_PMU_APB_SLEEP_CTRL : 0x%08x\n", sleep_ctrl);
-	printk("###---- REG_AP_AHB_AHB_EB : 0x%08x\n", ahb_eb);
-	printk("###---- REG_AP_AHB_AP_SYS_AUTO_SLEEP_CFG : 0x%08x\n", ap_sys_auto_sleep_cfg);
-	printk("###---- REG_AP_APB_APB_EB : 0x%08x\n", ap_apb_eb);
-	printk("###---- REG_AON_APB_APB_EB0 : 0x%08x\n", apb_eb0);
+	DMSG("###---- REG_PMU_APB_SLEEP_CTRL : 0x%08x\n", sleep_ctrl);
+	DMSG("###---- REG_AP_AHB_AHB_EB : 0x%08x\n", ahb_eb);
+	DMSG("###---- REG_AP_AHB_AP_SYS_AUTO_SLEEP_CFG : 0x%08x\n", ap_sys_auto_sleep_cfg);
+	DMSG("###---- REG_AP_APB_APB_EB : 0x%08x\n", ap_apb_eb);
+	DMSG("###---- REG_AON_APB_APB_EB0 : 0x%08x\n", apb_eb0);
 #if defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_ARCH_SCX35L)
-	printk("###---- REG_AON_APB_APB_EB1 : 0x%08x\n", aon_apb_eb1);
+	DMSG("###---- REG_AON_APB_APB_EB1 : 0x%08x\n", aon_apb_eb1);
 #endif
-	printk("###---- REG_PMU_APB_CP_SLP_STATUS_DBG0 : 0x%08x\n", cp_slp_status0);
+	DMSG("###---- REG_PMU_APB_CP_SLP_STATUS_DBG0 : 0x%08x\n", cp_slp_status0);
 #if !defined(CONFIG_ARCH_SCX35L)
-	printk("###---- REG_PMU_APB_CP_SLP_STATUS_DBG1 : 0x%08x\n", cp_slp_status1);
+	DMSG("###---- REG_PMU_APB_CP_SLP_STATUS_DBG1 : 0x%08x\n", cp_slp_status1);
 #endif
-	printk("###---- REG_PMU_APB_PWR_STATUS0_DBG : 0x%08x\n", apb_pwrstatus0);
-	printk("###---- REG_PMU_APB_PWR_STATUS1_DBG : 0x%08x\n", apb_pwrstatus1);
-	printk("###---- REG_PMU_APB_PWR_STATUS2_DBG : 0x%08x\n", apb_pwrstatus2);
+	DMSG("###---- REG_PMU_APB_PWR_STATUS0_DBG : 0x%08x\n", apb_pwrstatus0);
+	DMSG("###---- REG_PMU_APB_PWR_STATUS1_DBG : 0x%08x\n", apb_pwrstatus1);
+	DMSG("###---- REG_PMU_APB_PWR_STATUS2_DBG : 0x%08x\n", apb_pwrstatus2);
 #if !defined(CONFIG_ARCH_SCX35L)
-	printk("###---- REG_PMU_APB_PWR_STATUS3_DBG : 0x%08x\n", apb_pwrstatus3);
+	DMSG("###---- REG_PMU_APB_PWR_STATUS3_DBG : 0x%08x\n", apb_pwrstatus3);
 #endif
-	printk("###---- REG_PMU_APB_SLEEP_STATUS : 0x%08x\n", apb_slp_status);
+	DMSG("###---- REG_PMU_APB_SLEEP_STATUS : 0x%08x\n", apb_slp_status);
 #if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX35) || defined(CONFIG_ARCH_SCX30G)
-	printk("###---- REG_AON_APB_MPLL_CFG : 0x%08x\n", mpll_cfg);
-	printk("###---- REG_AON_APB_DPLL_CFG : 0x%08x\n", dpll_cfg);
+	DMSG("###---- REG_AON_APB_MPLL_CFG : 0x%08x\n", mpll_cfg);
+	DMSG("###---- REG_AON_APB_DPLL_CFG : 0x%08x\n", dpll_cfg);
 #endif
-	printk("###---- REG_AON_CLK_EMC_CFG : 0x%08x\n", emc_clk_cfg);
-	printk("###---- ANA_REG_GLB_LDO_PD_CTRL : 0x%08x\n", ldo_pd_ctrl);
+	DMSG("###---- REG_AON_CLK_EMC_CFG : 0x%08x\n", emc_clk_cfg);
+	DMSG("###---- ANA_REG_GLB_LDO_PD_CTRL : 0x%08x\n", ldo_pd_ctrl);
 #if defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_ARCH_SCX35L)
-	printk("###---- REG_AON_APB_MPLL_CFG1 : 0x%08x\n", mpll_cfg1);
-	printk("###---- REG_AON_APB_DPLL_CFG1 : 0x%08x\n", dpll_cfg1);
-	printk("###---- REG_PMU_APB_DDR_SLEEP_CTRL : 0x%08x\n",
+	DMSG("###---- REG_AON_APB_MPLL_CFG1 : 0x%08x\n", mpll_cfg1);
+	DMSG("###---- REG_AON_APB_DPLL_CFG1 : 0x%08x\n", dpll_cfg1);
+	DMSG("###---- REG_PMU_APB_DDR_SLEEP_CTRL : 0x%08x\n",
 				sci_glb_read(REG_PMU_APB_DDR_SLEEP_CTRL, -1UL) );
 #endif
 #if defined(CONFIG_ARCH_SCX35L)
-	printk("###---- REG_AON_APB_MPLL_CFG2 : 0x%08x\n", mpll_cfg2);
-        printk("###---- REG_AON_APB_DPLL_CFG2 : 0x%08x\n", dpll_cfg2);
+	DMSG("###---- REG_AON_APB_MPLL_CFG2 : 0x%08x\n", mpll_cfg2);
+        DMSG("###---- REG_AON_APB_DPLL_CFG2 : 0x%08x\n", dpll_cfg2);
 #endif
 #if defined(CONFIG_ARCH_SCX15)
-       printk("###---- ANA_REG_GLB_LDO_DCDC_PD_CTRL : 0x%08x\n", ldo_dcdc_pd_ctrl);
+       DMSG("###---- ANA_REG_GLB_LDO_DCDC_PD_CTRL : 0x%08x\n", ldo_dcdc_pd_ctrl);
 #endif
 	if (apb_eb0 & BIT_GPU_EB)
-		printk("###---- BIT_GPU_EB still set ----###\n");
+		DMSG("###---- BIT_GPU_EB still set ----###\n");
 	if (apb_eb0 & BIT_MM_EB)
-		printk("###---- BIT_MM_EB still set ----###\n");
+		DMSG("###---- BIT_MM_EB still set ----###\n");
 	if (apb_eb0 & BIT_CA7_DAP_EB)
-		printk("###---- BIT_CA7_DAP_EB still set ----###\n");
+		DMSG("###---- BIT_CA7_DAP_EB still set ----###\n");
 
 	if (ahb_eb & BIT_GSP_EB)
-		printk("###---- BIT_GSP_EB still set ----###\n");
+		DMSG("###---- BIT_GSP_EB still set ----###\n");
 #if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G)
 	if (ahb_eb & BIT_DISPC1_EB)
-		printk("###---- BIT_DISPC1_EB still set ----###\n");
+		DMSG("###---- BIT_DISPC1_EB still set ----###\n");
 #endif
 #if defined(CONFIG_ARCH_SCX35L)
 	if (ahb_eb & BIT_HSIC_EB)
-                printk("###---- BIT_HSIC_EB still set ----###\n");
+                DMSG("###---- BIT_HSIC_EB still set ----###\n");
 	if (ahb_eb & BIT_DISPC_EB)
-                printk("###---- BIT_DISPC_EB still set ----###\n");
+                DMSG("###---- BIT_DISPC_EB still set ----###\n");
 #else
 	if (ahb_eb & BIT_DISPC0_EB)
-		printk("###---- BIT_DISPC0_EB still set ----###\n");
+		DMSG("###---- BIT_DISPC0_EB still set ----###\n");
 #endif
 	if (ahb_eb & BIT_SDIO0_EB)
-		printk("###---- SDIO0_EB still set ----###\n");
+		DMSG("###---- SDIO0_EB still set ----###\n");
 	if (ahb_eb & BIT_SDIO1_EB)
-		printk("###---- SDIO1_EB still set ----###\n");
+		DMSG("###---- SDIO1_EB still set ----###\n");
 	if (ahb_eb & BIT_SDIO2_EB)
-		printk("###---- BIT_SDIO2_EB still set ----###\n");
+		DMSG("###---- BIT_SDIO2_EB still set ----###\n");
 #if defined(CONFIG_ARCH_SCX35L)
 	if (ahb_eb & BIT_OTG_EB)
-                printk("###---- BIT_OTG_EB still set ----###\n");
+                DMSG("###---- BIT_OTG_EB still set ----###\n");
 #else
 	if (ahb_eb & BIT_USB_EB)
-		printk("###---- BIT_USB_EB still set ----###\n");
+		DMSG("###---- BIT_USB_EB still set ----###\n");
 #endif
 	if (ahb_eb & BIT_DMA_EB)
-		printk("###---- BIT_DMA_EB still set ----###\n");
+		DMSG("###---- BIT_DMA_EB still set ----###\n");
 	if (ahb_eb & BIT_NFC_EB)
-		printk("###---- BIT_NFC_EB still set ----###\n");
+		DMSG("###---- BIT_NFC_EB still set ----###\n");
 	if (ahb_eb & BIT_EMMC_EB)
-		printk("###---- BIT_EMMC_EB still set ----###\n");
+		DMSG("###---- BIT_EMMC_EB still set ----###\n");
 #if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_64BIT)
 	if (ahb_eb & BIT_ZIPDEC_EB)
-		printk("###---- BIT_ZIPDEC_EB still set ----###\n");
+		DMSG("###---- BIT_ZIPDEC_EB still set ----###\n");
 	if (ahb_eb & BIT_ZIPENC_EB)
-		printk("###---- BIT_ZIPENC_EB still set ----###\n");
+		DMSG("###---- BIT_ZIPENC_EB still set ----###\n");
 	if (ahb_eb & BIT_NANDC_ECC_EB)
-		printk("###---- BIT_NANDC_ECC_EB still set ----###\n");
+		DMSG("###---- BIT_NANDC_ECC_EB still set ----###\n");
 	if (ahb_eb & BIT_NANDC_2X_EB)
-		printk("###---- BIT_NANDC_2X_EB still set ----###\n");
+		DMSG("###---- BIT_NANDC_2X_EB still set ----###\n");
 	if (ahb_eb & BIT_NANDC_EB)
-		printk("###---- BIT_NANDC_EB still set ----###\n");
+		DMSG("###---- BIT_NANDC_EB still set ----###\n");
 #endif
 #if defined(CONFIG_ARCH_SCX30G)
 	if (aon_apb_eb1 & BIT_GSP_EMC_EB )
-		printk("###---- BIT_GSP_EMC_EB set ----###\n");
+		DMSG("###---- BIT_GSP_EMC_EB set ----###\n");
 	if (aon_apb_eb1 & BIT_ZIP_EMC_EB )
-		printk("###---- BIT_ZIP_EMC_EB set ----###\n");
+		DMSG("###---- BIT_ZIP_EMC_EB set ----###\n");
 	if (aon_apb_eb1 & BIT_DISP_EMC_EB )
-		printk("###---- BIT_DISP_EMC_EB set ----###\n");
+		DMSG("###---- BIT_DISP_EMC_EB set ----###\n");
 #endif
 
 	/*A-die*/
-	printk("---------- A-die power status -----------\n");
+	DMSG("---------- A-die power status -----------\n");
 	if (!(ldo_pd_ctrl & BIT_DCDC_WPA_PD))
-		printk("###---- BIT_DCDC_WPA_PD power on! ----###\n");
+		DMSG("###---- BIT_DCDC_WPA_PD power on! ----###\n");
 #if defined(CONFIG_ADIE_SC2713S)
 	if (!(ldo_pd_ctrl & BIT_LDO_CLSG_PD))
-		printk("###---- BIT_LDO_CLSG_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CLSG_PD power on! ----###\n");
 #endif
 	if (!(ldo_pd_ctrl & BIT_LDO_USB_PD))
-		printk("###---- BIT_LDO_USB_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_USB_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_CAMMOT_PD))
-		printk("###---- BIT_LDO_CAMMOT_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CAMMOT_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_CAMIO_PD))
-		printk("###---- BIT_LDO_CAMIO_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CAMIO_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_CAMD_PD))
-		printk("###---- BIT_LDO_CAMD_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CAMD_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_CAMA_PD))
-		printk("###---- BIT_LDO_CAMA_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CAMA_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_SIM2_PD))
-		printk("###---- BIT_LDO_SIM2_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SIM2_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_SIM1_PD))
-		printk("###---- BIT_LDO_SIM1_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SIM1_PD power on! ----###\n");
 	if (!(ldo_pd_ctrl & BIT_LDO_SIM0_PD))
-		printk("###---- BIT_LDO_SIM0_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SIM0_PD power on! ----###\n");
 #if defined(CONFIG_ADIE_SC2713S)
 	if (!(ldo_pd_ctrl & BIT_LDO_SD_PD))
-		printk("###---- BIT_LDO_SD_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SD_PD power on! ----###\n");
 #endif
 #if defined(CONFIG_ADIE_SC2723S)
 	if (!(ldo_pd_ctrl & BIT_LDO_SDIO_PD))
-		printk("###---- BIT_LDO_SD_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SD_PD power on! ----###\n");
 #endif
 #if defined(CONFIG_ADIE_SC2723)
 	if (!(ldo_pd_ctrl & BIT_LDO_SDIO_PD))
-		printk("###---- BIT_LDO_SD_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_SD_PD power on! ----###\n");
 #endif
 #if defined(CONFIG_ARCH_SCX15)
 	if (!(ldo_dcdc_pd_ctrl & BIT_BG_PD))
-		printk("###---- BIT_BG_PD power on! ----###\n");
+		DMSG("###---- BIT_BG_PD power on! ----###\n");
 	if (!(ldo_dcdc_pd_ctrl & BIT_LDO_CON_PD))
-		printk("###---- BIT_LDO_CON_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_CON_PD power on! ----###\n");
 	if (!(ldo_dcdc_pd_ctrl & BIT_LDO_DCXO_PD))
-		printk("###---- BIT_LDO_DCXO_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_DCXO_PD power on! ----###\n");
 	if (!(ldo_dcdc_pd_ctrl & BIT_LDO_EMMCIO_PD))
-		printk("###---- BIT_LDO_EMMCIO_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_EMMCIO_PD power on! ----###\n");
 	if (!(ldo_dcdc_pd_ctrl & BIT_LDO_EMMCCORE_PD))
-		printk("###---- BIT_LDO_EMMCCORE_PD power on! ----###\n");
+		DMSG("###---- BIT_LDO_EMMCCORE_PD power on! ----###\n");
 #endif
 
 #if defined(CONFIG_ARCH_SCX15)
 	if (ap_apb_eb & BIT_UART4_EB)
-		printk("###---- BIT_UART4_EB set! ----###\n");
+		DMSG("###---- BIT_UART4_EB set! ----###\n");
 	if (ap_apb_eb & BIT_UART3_EB)
-		printk("###---- BIT_UART3_EB set! ----###\n");
+		DMSG("###---- BIT_UART3_EB set! ----###\n");
 	if (ap_apb_eb & BIT_UART2_EB)
-		printk("###---- BIT_UART2_EB set! ----###\n");
+		DMSG("###---- BIT_UART2_EB set! ----###\n");
 	if (ap_apb_eb & BIT_UART1_EB)
-		printk("###---- BIT_UART1_EB set! ----###\n");
+		DMSG("###---- BIT_UART1_EB set! ----###\n");
 	if (ap_apb_eb & BIT_UART0_EB)
-		printk("###---- BIT_UART0_EB set! ----###\n");
+		DMSG("###---- BIT_UART0_EB set! ----###\n");
 	if (ap_apb_eb & BIT_I2C4_EB)
-		printk("###---- BIT_I2C4_EB set! ----###\n");
+		DMSG("###---- BIT_I2C4_EB set! ----###\n");
 	if (ap_apb_eb & BIT_I2C3_EB)
-		printk("###---- BIT_I2C3_EB set! ----###\n");
+		DMSG("###---- BIT_I2C3_EB set! ----###\n");
 	if (ap_apb_eb & BIT_I2C2_EB)
-		printk("###---- BIT_I2C2_EB set! ----###\n");
+		DMSG("###---- BIT_I2C2_EB set! ----###\n");
 	if (ap_apb_eb & BIT_I2C1_EB)
-		printk("###---- BIT_I2C1_EB set! ----###\n");
+		DMSG("###---- BIT_I2C1_EB set! ----###\n");
 	if (ap_apb_eb & BIT_I2C0_EB)
-		printk("###---- BIT_I2C0_EB set! ----###\n");
+		DMSG("###---- BIT_I2C0_EB set! ----###\n");
 	if (ap_apb_eb & BIT_IIS3_EB)
-		printk("###---- BIT_IIS3_EB set! ----###\n");
+		DMSG("###---- BIT_IIS3_EB set! ----###\n");
 	if (ap_apb_eb & BIT_IIS2_EB)
-		printk("###---- BIT_IIS2_EB set! ----###\n");
+		DMSG("###---- BIT_IIS2_EB set! ----###\n");
 	if (ap_apb_eb & BIT_IIS1_EB)
-		printk("###---- BIT_IIS1_EB set! ----###\n");
+		DMSG("###---- BIT_IIS1_EB set! ----###\n");
 	if (ap_apb_eb & BIT_IIS0_EB)
-		printk("###---- BIT_IIS0_EB set! ----###\n");
+		DMSG("###---- BIT_IIS0_EB set! ----###\n");
 #endif
 
 }
@@ -755,7 +761,7 @@ static void debugfs_init(void)
 {
 	dentry_debug_root = debugfs_create_dir("power", NULL);
 	if (IS_ERR(dentry_debug_root) || !dentry_debug_root) {
-		printk("!!!powermanager Failed to create debugfs directory\n");
+		DMSG("!!!powermanager Failed to create debugfs directory\n");
 		dentry_debug_root = NULL;
 		return;
 	}
@@ -786,7 +792,7 @@ void pm_debug_init(void)
 			"pm_message_wakelock");
 	task = kthread_create(print_thread, NULL, "pm_print");
 	if (task == 0) {
-		printk("Can't crate power manager print thread!\n");
+		DMSG("Can't crate power manager print thread!\n");
 	}else
 		wake_up_process(task);
 #endif
@@ -882,21 +888,21 @@ void pm_debug_set_apwdt(void)
 #if 0
 	do{
 		udelay(1000);
-		printk("INTC1 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV1_IRQ_MSKSTS),__raw_readl(INTCV1_IRQ_RAW), __raw_readl(INTCV1_IRQ_EN));
-		printk("INT mask:0x%08x raw:0x%08x en:0x%08x ana 0x%08x\n", __raw_readl(INT_IRQ_STS),__raw_readl(INT_IRQ_RAW), __raw_readl(INT_IRQ_ENB), sci_adi_read(ANA_REG_INT_MASK_STATUS));
-		printk("ANA mask:0x%08x raw:0x%08x en:0x%08x\n", sci_adi_read(ANA_REG_INT_MASK_STATUS), sci_adi_read(ANA_REG_INT_RAW_STATUS), sci_adi_read(ANA_REG_INT_EN));
-		printk("wdg cnt low 0x%08x high 0x%08x\n", sci_adi_read(WDG_CNT_LOW), sci_adi_read(WDG_CNT_HIGH));
+		DMSG("INTC1 mask:0x%08x raw:0x%08x en:0x%08x\n", __raw_readl(INTCV1_IRQ_MSKSTS),__raw_readl(INTCV1_IRQ_RAW), __raw_readl(INTCV1_IRQ_EN));
+		DMSG("INT mask:0x%08x raw:0x%08x en:0x%08x ana 0x%08x\n", __raw_readl(INT_IRQ_STS),__raw_readl(INT_IRQ_RAW), __raw_readl(INT_IRQ_ENB), sci_adi_read(ANA_REG_INT_MASK_STATUS));
+		DMSG("ANA mask:0x%08x raw:0x%08x en:0x%08x\n", sci_adi_read(ANA_REG_INT_MASK_STATUS), sci_adi_read(ANA_REG_INT_RAW_STATUS), sci_adi_read(ANA_REG_INT_EN));
+		DMSG("wdg cnt low 0x%08x high 0x%08x\n", sci_adi_read(WDG_CNT_LOW), sci_adi_read(WDG_CNT_HIGH));
 	}while(0);
 #endif
 }
 void pm_debug_clr_apwdt(void)
 {
 	//sci_adi_raw_write(WDG_LOCK, WDG_UNLOCK_KEY);
-	printk("watchdog int raw status: 0x%x\n", sci_adi_read(WDG_INT_RAW));
-	printk("watchdog int msk status: 0x%x\n", sci_adi_read(WDG_INT_MSK));
+	DMSG("watchdog int raw status: 0x%x\n", sci_adi_read(WDG_INT_RAW));
+	DMSG("watchdog int msk status: 0x%x\n", sci_adi_read(WDG_INT_MSK));
 	sci_adi_set(WDG_INT_CLR, WDG_INT_CLEAR_BIT | WDG_RST_CLEAR_BIT);
-	printk("watchdog int raw status: 0x%x\n", sci_adi_read(WDG_INT_RAW));
-	printk("watchdog int msk status: 0x%x\n", sci_adi_read(WDG_INT_MSK));
+	DMSG("watchdog int raw status: 0x%x\n", sci_adi_read(WDG_INT_RAW));
+	DMSG("watchdog int msk status: 0x%x\n", sci_adi_read(WDG_INT_MSK));
 	sci_adi_clr(WDG_CTRL, WDG_CNT_EN_BIT | WDG_RST_EN_BIT);
 	//sci_adi_raw_write(WDG_LOCK, (uint16_t) (~WDG_UNLOCK_KEY));
 }
