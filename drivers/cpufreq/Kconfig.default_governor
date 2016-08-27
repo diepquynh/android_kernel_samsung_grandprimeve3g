@@ -29,6 +29,12 @@ config CPU_FREQ_DEFAULT_GOV_LIONHEART
 	help
 	Use the CPUFreq governor 'lionheart' as default.
 
+config CPU_FREQ_DEFAULT_GOV_LIONFISH
+	bool "lionfish"
+	select CPU_FREQ_GOV_LIONFISH
+	help
+	  Use the CPUFreq governor 'lionfish' as default.
+
 config CPU_FREQ_DEFAULT_GOV_LULZACTIVE
 	bool "lulzactive2"
 	select CPU_FREQ_GOV_LULZACTIVE

@@ -48,3 +48,25 @@ config CPU_FREQ_GOV_LIONHEART
 	update3 source. The tunables (such as the thresholds and sampling rate)
 	were changed so the governor behaves more like the performance one, at
 	the cost of battery as the scaling is very aggressive.
+
+config CPU_FREQ_GOV_LIONFISH
+	tristate "'lionfish' governor"
+	depends on CPU_FREQ
+	help
+	  'lionfish' - this is an improved version of the conservative governor
+	  that is optimized for smartphones. To avoid lag, it quickly jumps
+	  to an intermediate frequency when high load is encountered at low
+	  frequencies. If very high load is encountered above this intermediate
+	  frequency, it jumps to a high frequency. For moderate loads, it
+	  votes to increase, decrease, or maintain frequencies at each sampling
+	  interval. When enough votes are gathered to raise or lower the
+	  frequency, the frequency is changed. This mechanism reduces jitter
+	  compared to the conservative governor. Lionfish uses proportional
+	  ramping to more quickly reach suitable frequencies compared to the
+	  conservative governor. By default, Lionfish also reduces frequencies
+	  more aggressively than the conservative governor when loads are reduced.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_lionfish.
+
+	  If in doubt, say N.
