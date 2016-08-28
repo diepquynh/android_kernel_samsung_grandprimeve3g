@@ -7,4 +7,4 @@ obj-$(CONFIG_ASMP)		+= autosmp.o
 obj-$(CONFIG_THUNDERPLUG_CONTROL) += thunderplug.o 
 obj-$(CONFIG_MAKO_HOTPLUG) 	+= mako_hotplug.o
 obj-$(CONFIG_MSM_SLEEPER) 	+= msm_sleeper.o
-
+obj-$(CONFIG_MSM_RUN_QUEUE_STATS) += msm_rq_stats.o
