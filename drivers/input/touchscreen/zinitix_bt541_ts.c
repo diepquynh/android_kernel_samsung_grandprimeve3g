@@ -55,20 +55,10 @@ extern u32 boot_panel_id;
 u8 m_FirmwareIdx = 0;
 #define CHECK_HWID				0
 
-static bool ta_connected =0;
+static bool ta_connected = 0;
 #define ZINITIX_DEBUG				1
 #define ZINITIX_I2C_CHECKSUM		1
-#define TOUCH_BOOSTER			0
 #define NOT_SUPPORTED_TOUCH_DUMMY_KEY
-#if TOUCH_BOOSTER
-#include <linux/cpufreq.h>
-#include <linux/cpufreq_limit.h>
-struct cpufreq_limit_handle *min_handle = NULL;
-static const unsigned long touch_cpufreq_lock = 1200000;
-#ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-struct cpu_num_min_limit_handle *cpu_num_limit_handle = NULL;
-#endif
-#endif
 
 #ifdef SUPPORTED_PALM_TOUCH
 #define TOUCH_POINT_MODE			2
@@ -567,9 +557,6 @@ struct bt541_ts_info {
 	s16 Gap_min_val;
 	s16 Gap_Gap_val;
 	s16 Gap_node_num;
-#endif
-#if TOUCH_BOOSTER
-	u8							finger_cnt;
 #endif
 };
 /* Dummy touchkey code */
@@ -2351,27 +2338,6 @@ static irqreturn_t bt541_touch_work(int irq, void *data)
 			info->touch_info.coord[i].y = y;
 			if (zinitix_bit_test(sub_status, SUB_BIT_DOWN))
 			{
-#if TOUCH_BOOSTER
-				if (!min_handle)
-				{
-					min_handle = cpufreq_limit_min_freq(touch_cpufreq_lock, "TSP");
-					if (IS_ERR(min_handle)) {
-						printk(KERN_ERR "[TSP] cannot get cpufreq_min lock %lu(%ld)\n",
-								touch_cpufreq_lock, PTR_ERR(min_handle));
-						min_handle = NULL;
-					}
-#ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-					cpu_num_limit_handle = _store_cpu_num_min_limit(2, "TSP");
-					if (IS_ERR(cpu_num_limit_handle)) {
-						printk(KERN_ERR "[TSP] cannot get cpuf_num_min limit %d(%ld)\n",
-								2, PTR_ERR(cpu_num_limit_handle));
-						cpu_num_limit_handle = NULL;
-					}
-#endif
-					dev_info(&client->dev, "cpu freq on\n");
-				}
-				info->finger_cnt++;
-#endif
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 				dev_info(&client->dev, "Finger [%02d] x = %d, y = %d,"
 						" w = %d\n", i, x, y, w);
@@ -2428,21 +2394,6 @@ static irqreturn_t bt541_touch_work(int irq, void *data)
 			input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y);
 		} else if (zinitix_bit_test(sub_status, SUB_BIT_UP)||
 				zinitix_bit_test(prev_sub_status, SUB_BIT_EXIST)) {
-#if TOUCH_BOOSTER
-			info->finger_cnt--;
-			if (!info->finger_cnt)
-			{
-#ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-				if (cpu_num_limit_handle) {
-					cpu_num_min_limit_put(cpu_num_limit_handle);
-					cpu_num_limit_handle = NULL;
-				}
-#endif
-				cpufreq_limit_put(min_handle);
-				min_handle = NULL;
-				dev_info(&client->dev, "cpu freq off\n");
-			}
-#endif
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			dev_info(&client->dev, "Finger [%02d] up\n", i);
 #else
@@ -2569,26 +2520,6 @@ static void bt541_ts_early_suspend(struct early_suspend *h)
 	}
 #else
 	bt541_power_control(info, POWER_OFF);
-#endif
-#if TOUCH_BOOSTER
-#ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-	if (cpu_num_limit_handle) {
-		cpu_num_min_limit_put(cpu_num_limit_handle);
-		cpu_num_limit_handle = NULL;
-	}
-#endif
-	if (min_handle)
-	{
-		dev_err(&info->client->dev,"[TSP] %s %d:: OOPs, Cpu was not in Normal Freq..\n", __func__, __LINE__);
-
-		if (cpufreq_limit_put(min_handle) < 0) {
-			dev_err(&info->client->dev, "[TSP] Error in scaling down cpu frequency\n");
-		}
-
-		min_handle = NULL;
-		info->finger_cnt = 0;
-		dev_info(&info->client->dev, "cpu freq off\n");
-	}
 #endif
 	zinitix_printk("early suspend--\n");
 	up(&info->work_lock);
@@ -5237,9 +5168,6 @@ static int bt541_ts_probe(struct i2c_client *client,
 			info->irq, pdata->gpio_int);
 
 	info->work_state = NOTHING;
-#if TOUCH_BOOSTER
-	info->finger_cnt = 0;
-#endif
 	sema_init(&info->work_lock, 1);
 
 #if ESD_TIMER_INTERVAL
