@@ -80,25 +80,44 @@ struct cpufreq_conf *sprd_cpufreq_conf = NULL;
 static struct mutex cpufreq_vddarm_lock;
 
 enum clocking_levels {
-	NOC, UC0=NOC,	/* no underclock */
-	UC1, UC2, UC3,	/* underclock */
-	MIN_CL=UC3,	/* minimum clock speed */
+	NOC, UC0=NOC,			 /* no underclock */
+	UC1, UC2, UC3, UC4, UC5, UC6,	 /* underclock */
+	UC7, UC8, UC9, UC10, UC11, UC12,
+	MIN_CL=UC12,			 /* minimum clock speed */
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
-                {NOC, 1300000},
-                {UC1, 1000000},
-                {UC2, SHARK_TDPLL_FREQUENCY},
-		{UC3, 384000},
-                {EC, CPUFREQ_TABLE_END},
+                {NOC,  1300000},
+		{UC1,  1200000},
+		{UC2,  1100000},
+                {UC3,  1000000},
+		{UC4,  900000},
+		{UC5,  800000},
+		{UC6,  700000},
+		{UC7,  600000},
+		{UC8,  500000},
+		{UC9,  400000},
+		{UC10, 300000},
+		{UC11, 200000},
+		{UC12, 100000},
+                {EC,   CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
-                [NOC] = 1050000,
-                [UC1] = 900000,
-                [UC2] = 900000,
-                [UC3] = 850000,
-                [EC]  = 800000,
+                [NOC]  = 1050000,
+                [UC1]  = 900000,
+                [UC2]  = 900000,
+                [UC3]  = 850000,
+                [UC4]  = 800000,
+                [UC5]  = 800000,
+                [UC6]  = 800000,
+                [UC7]  = 800000,
+                [UC8]  = 800000,
+                [UC9]  = 800000,
+                [UC10] = 800000,
+                [UC11] = 800000,
+                [UC12] = 800000,
+                [EC]   = 800000,
         },
 };
 
