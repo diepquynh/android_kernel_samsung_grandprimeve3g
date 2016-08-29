@@ -16,6 +16,7 @@ endif
 obj-$(CONFIG_FB_SCX30G) += dsi_1_21a/
 obj-$(CONFIG_FB_SCX30G) += spi/
 obj-$(CONFIG_FB_SCX30G) += lcd/
+obj-$(CONFIG_FB_SCX30G) += lcd_notify.o
 
 obj-$(CONFIG_FB_SCX15) := sprdfb_main.o sprdfb_panel.o sprdfb_dispc.o sprdfb_mcu.o sprdfb_rgb.o sprdfb_i2c.o sprdfb_spi.o sprdfb_chip_common.o sprdfb_chip_7715.o
 obj-$(CONFIG_FB_SCX15) += spi/

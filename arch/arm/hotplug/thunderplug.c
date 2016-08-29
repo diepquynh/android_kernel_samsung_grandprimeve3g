@@ -21,11 +21,12 @@
 #include <linux/cpu.h>
 #include <linux/lcd_notify.h>
 #include <linux/cpufreq.h>
+#include "cpufreq_governor.h"
 
 static int suspend_cpu_num = 2, resume_cpu_num = 7;
 static int endurance_level = 0;
-static int device_cpus = 8;
-static int core_limit = 8;
+static int device_cpus = 4;
+static int core_limit = 4;
 
 static bool isSuspended = false;
 
@@ -45,7 +46,7 @@ struct notifier_block lcd_worker;
 static int sampling_time = DEF_SAMPLING_MS;
 static int load_threshold = CPU_LOAD_THRESHOLD;
 
-static int tplug_hp_enabled = 1;
+static int tplug_hp_enabled = 0;
 
 static int touch_boost_enabled = 0;
 
@@ -58,7 +59,7 @@ static struct delayed_work tplug_boost;
 static struct workqueue_struct *tplug_resume_wq;
 static struct delayed_work tplug_resume_work;
 
-static unsigned int last_load[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static unsigned int last_load[4] = {0, 0, 0, 0};
 
 struct cpu_load_data {
 	u64 prev_cpu_idle;
@@ -204,7 +205,7 @@ static ssize_t thunderplug_suspend_cpus_store(struct kobject *kobj, struct kobj_
 {
 	int val;
 	sscanf(buf, "%d", &val);
-	if(val < 1 || val > 8)
+	if(val < 1 || val > 4)
 		pr_info("%s: suspend cpus off-limits\n", THUNDERPLUG);
 	else
 		suspend_cpu_num = val;
@@ -375,16 +376,13 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	switch(endurance_level)
 	{
 	case 0:
-		core_limit = 8;
-	break;
-	case 1:
 		core_limit = 4;
 	break;
-	case 2:
+	case 1:
 		core_limit = 2;
 	break;
 	default:
-		core_limit = 8;
+		core_limit = 4;
 	break;
 	}
 

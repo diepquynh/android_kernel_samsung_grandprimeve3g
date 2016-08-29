@@ -52,6 +52,7 @@ config ASMP
 
 config THUNDERPLUG_CONTROL
  	bool "Enable plugging down/up of cores using powersuspend"
+	default y
  	help
  	  This driver uses powersuspend to take down the cpu cores on a octa core device.
 
