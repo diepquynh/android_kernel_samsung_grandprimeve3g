@@ -23,7 +23,7 @@
 #include <linux/cpufreq.h>
 #include "cpufreq_governor.h"
 
-static int suspend_cpu_num = 2, resume_cpu_num = 7;
+static int suspend_cpu_num = 1, resume_cpu_num = 3;
 static int endurance_level = 0;
 static int device_cpus = 4;
 static int core_limit = 4;
@@ -88,7 +88,7 @@ static inline void offline_cpus(void)
 		default:
 		break;
 	}
-	for(cpu = 7; cpu > (suspend_cpu_num - 1); cpu--) {
+	for(cpu = 3; cpu > (suspend_cpu_num - 1); cpu--) {
 		if (cpu_online(cpu))
 			cpu_down(cpu);
 	}
@@ -108,8 +108,8 @@ static inline void cpus_online_all(void)
 			resume_cpu_num = 1;
 	break;
 	case 0:
-		if(resume_cpu_num < 7)
-			resume_cpu_num = 7;
+		if(resume_cpu_num < 3)
+			resume_cpu_num = 3;
 	break;
 	default:
 	break;
@@ -371,7 +371,7 @@ static void __cpuinit tplug_resume_work_fn(struct work_struct *work)
 static void __cpuinit tplug_work_fn(struct work_struct *work)
 {
 	int i;
-	unsigned int load[8], avg_load[8];
+	unsigned int load[4], avg_load[4];
 
 	switch(endurance_level)
 	{
@@ -403,7 +403,7 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	{
 	if(DEBUG)
 		pr_info("%s : bringing back cpu%d\n", THUNDERPLUG,i);
-		if(!((i+1) > 7))
+		if(!((i+1) > 3))
 			cpu_up(i+1);
 	}
 	else if(cpu_online(i) && avg_load[i] < load_threshold && cpu_online(i+1))
