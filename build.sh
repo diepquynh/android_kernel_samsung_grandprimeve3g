@@ -36,6 +36,9 @@ function build_kernel() {
 	make dtbs
 	make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
 
+if [ ! -e ${KERNEL_ZIP}/system/lib/modules ]; then
+	mkdir -p ${KERNEL_ZIP}/system/lib/modules
+fi;
 	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
 	find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
 	find ${KERNEL_PATH} -name "zImage" -exec mv -f {} ${KERNEL_ZIP}/tools \;
