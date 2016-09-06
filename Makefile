@@ -378,7 +378,7 @@ LINUXINCLUDE    := \
 KBUILD_CPPFLAGS := -D__KERNEL__
 
 KBUILD_CFLAGS := $(GRAPHITE) -Wall -marm -DNDEBUG -Wundef -Wstrict-prototypes -Wno-trigraphs \
-		-fno-strict-aliasing -fno-common -mcpu=cortex-a15 -mtune=cortex-a7 -mfpu=neon-vfpv4 \
+		-fno-strict-aliasing -fno-common -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 \
 		-Werror-implicit-function-declaration -mvectorize-with-neon-quad -ffast-math \
 		-fstdarg-opt -fsection-anchors -fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-vectorize \
 		-funswitch-loops -fgcse-after-reload -fno-delete-null-pointer-checks -Wno-unused-const-variable \
