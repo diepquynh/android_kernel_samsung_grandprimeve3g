@@ -12,7 +12,7 @@ DEFCONFIG=grandprimeve3g-dt_defconfig
 NAME=CORE_kernel
 VERSION=v2.0
 
-export CROSS_COMPILE=/home/a1/toolchain/linaro-5.3/bin/arm-linux-gnueabihf-
+export CROSS_COMPILE=/home/a1/toolchain/sabermod-5.2/bin/arm-eabi-
 export ARCH=arm
 export LOCALVERSION=-`echo ${VERSION}`
 
