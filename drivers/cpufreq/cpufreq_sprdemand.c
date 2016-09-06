@@ -98,7 +98,7 @@ struct work_struct unplug_all_work;
 static int cpu_num_limit_temp;
 static void sprd_thm_unplug_cpu(struct work_struct *work);
 
-static DEFINE_PER_CPU(struct unplug_work_info, uwi);
+//static DEFINE_PER_CPU(struct unplug_work_info, uwi);
 
 static DEFINE_PER_CPU(struct od_cpu_dbs_info_s, sd_cpu_dbs_info);
 
