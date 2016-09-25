@@ -15,12 +15,7 @@
 struct zcomp_strm {
 	/* compression/decompression buffer */
 	void *buffer;
-	/*
-	 * The private data of the compression stream, only compression
-	 * stream backend can touch this (e.g. compression algorithm
-	 * working memory)
-	 */
-	void *private;
+	struct crypto_comp *tfm;
 	/* used in multi stream backend, protected by backend strm_lock */
 	struct list_head list;
 };
@@ -48,6 +43,7 @@ struct zcomp {
 	void (*strm_release)(struct zcomp *comp, struct zcomp_strm *zstrm);
 	bool (*set_max_streams)(struct zcomp *comp, int num_strm);
 	void (*destroy)(struct zcomp *comp);
+	const char *name;
 };
 
 ssize_t zcomp_available_show(const char *comp, char *buf);
@@ -58,11 +54,11 @@ void zcomp_destroy(struct zcomp *comp);
 struct zcomp_strm *zcomp_strm_find(struct zcomp *comp);
 void zcomp_strm_release(struct zcomp *comp, struct zcomp_strm *zstrm);
 
-int zcomp_compress(struct zcomp *comp, struct zcomp_strm *zstrm,
-		const unsigned char *src, size_t *dst_len);
+int zcomp_compress(struct zcomp_strm *zstrm,
+		const void *src, unsigned int *dst_len);
 
-int zcomp_decompress(struct zcomp *comp, const unsigned char *src,
-		size_t src_len, unsigned char *dst);
+int zcomp_decompress(struct zcomp_strm *zstrm,
+		const void *src, unsigned int src_len, void *dst);
 
 bool zcomp_set_max_streams(struct zcomp *comp, int num_strm);
 #endif /* _ZCOMP_H_ */
