@@ -10,7 +10,7 @@ set -e -o pipefail
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
 NAME=CORE_kernel
-VERSION=v2.1
+VERSION=v2.2
 
 export CROSS_COMPILE=/home/a1/toolchain/sabermod-6.0/bin/arm-eabi-
 export ARCH=arm
