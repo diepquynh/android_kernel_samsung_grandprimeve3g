@@ -348,7 +348,7 @@ CHECK		= sparse
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ -Wbitwise -Wno-return-void $(CF)
 
 GRAPHITE	= -fgraphite-identity -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -floop-flatten -fgcse-sm -fgcse-las -fsched-spec-load -funroll-loops -fforce-addr -mvectorize-with-neon-quad -ffast-math -fpredictive-commoning -floop-nest-optimize -floop-unroll-and-jam -pthread -fopenmp
-KERNELFLAGS	= $(GRAPHITE) -Ofast -DNDEBUG -munaligned-access -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4 -ftree-vectorize -ftree-loop-im -ftree-loop-ivcanon -fprefetch-loop-arrays -fmodulo-sched -fmodulo-sched-allow-regmoves -fivopts -floop-strip-mine -frename-registers
+KERNELFLAGS	= $(GRAPHITE) -Ofast -DNDEBUG -munaligned-access -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4 -ftree-vectorize -ftree-loop-im -ftree-loop-ivcanon -fprefetch-loop-arrays -fmodulo-sched -fmodulo-sched-allow-regmoves -fivopts -floop-strip-mine -frename-registers -funsafe-math-optimizations
 MODFLAGS	= -DMODULE $(KERNELFLAGS) 
 CFLAGS_MODULE 	= $(MODFLAGS)
 AFLAGS_MODULE 	= $(MODFLAGS)
@@ -382,7 +382,8 @@ KBUILD_CFLAGS := $(GRAPHITE) -Wall -marm -DNDEBUG -Wundef -Wstrict-prototypes -W
 		-Werror-implicit-function-declaration -mvectorize-with-neon-quad -ffast-math \
 		-fstdarg-opt -fsection-anchors -fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-vectorize \
 		-funswitch-loops -fgcse-after-reload -fno-delete-null-pointer-checks -Wno-unused-const-variable \
-		--param l1-cache-size=32 --param l1-cache-line-size=32 --param l2-cache-size=512
+		--param l1-cache-size=32 --param l1-cache-line-size=32 --param l2-cache-size=512 \
+		-funsafe-math-optimizations
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
