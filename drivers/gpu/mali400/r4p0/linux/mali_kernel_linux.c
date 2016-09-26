@@ -188,7 +188,7 @@ static int mali_driver_runtime_idle(struct device *dev);
 
 extern void mali_platform_power_mode_change(int power_mode);
 
-#if defined(MALI_FAKE_PLATFORM_DEVICE)
+//#if defined(MALI_FAKE_PLATFORM_DEVICE)
 #if defined(CONFIG_MALI_DT)
 extern int mali_platform_device_init(struct platform_device *device);
 extern int mali_platform_device_deinit(struct platform_device *device);
@@ -196,7 +196,7 @@ extern int mali_platform_device_deinit(struct platform_device *device);
 extern int mali_platform_device_register(void);
 extern int mali_platform_device_unregister(void);
 #endif
-#endif
+//#endif
 
 /* Linux power management operations provided by the Mali device driver */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29))

@@ -47,6 +47,58 @@ ifeq ($(USING_GPU_UTILIZATION), 1)
     endif
 endif
 
+ifeq ($(CONFIG_MALI400_UMP),y)
+	export EXTRA_DEFINES += -DCONFIG_MALI400_UMP=1
+	ifeq ($(USE_UMPV2),1)
+		UMP_SYMVERS_FILE ?= ../umpv2/Module.symvers
+	else
+		UMP_SYMVERS_FILE ?= ../ump/Module.symvers
+	endif
+	KBUILD_EXTRA_SYMBOLS = $(realpath $(UMP_SYMVERS_FILE))
+	$(warning $(KBUILD_EXTRA_SYMBOLS))
+endif
+
+ifeq ($(CONFIG_MALI400_PROFILING),y)
+ifeq ($(CONFIG_TRACEPOINTS),)
+	$(warning CONFIG_TRACEPOINTS required for profiling)
+else
+	export EXTRA_DEFINES += -DCONFIG_MALI400_PROFILING=1
+endif
+endif
+
+ifeq ($(CONFIG_MALI400_INTERNAL_PROFILING),y)
+export EXTRA_DEFINES += -DCONFIG_MALI400_INTERNAL_PROFILING=1
+endif
+
+ifeq ($(CONFIG_MALI400_HEATMAPS_ENABLED),y)
+export EXTRA_DEFINES += -DCONFIG_MALI400_HEATMAPS_ENABLED
+endif
+
+ifeq ($(CONFIG_MALI_DMA_BUF_MAP_ON_ATTACH),y)
+export EXTRA_DEFINES += -DCONFIG_MALI_DMA_BUF_MAP_ON_ATTACH
+endif
+
+ifeq ($(CONFIG_MALI_SHARED_INTERRUPTS),y)
+export EXTRA_DEFINES += -DCONFIG_MALI_SHARED_INTERRUPTS
+endif
+
+ifeq ($(CONFIG_MALI_DVFS),y)
+export EXTRA_DEFINES += -DCONFIG_MALI_DVFS
+endif
+
+ifeq ($(CONFIG_MALI_PMU_PARALLEL_POWER_UP),y)
+export EXTRA_DEFINES += -DCONFIG_MALI_PMU_PARALLEL_POWER_UP
+endif
+
+export EXTRA_DEFINES += -DCONFIG_MALI_DT
+
+ifeq ($(CONFIG_MALI_PLATFORM_SC8830),y)
+	MALI_PLATFORM := sc8830
+	TARGET_PLATFORM := sc8830
+endif
+
+EXTRA_DEFINES += -DCONFIG_MALI400=1
+
 mali-y += \
 	linux/mali_osk_atomics.o \
 	linux/mali_osk_irq.o \
@@ -113,10 +165,6 @@ mali-y += \
 	linux/mali_pmu_power_up_down.o \
 	__malidrv_build_info.o
 
-ifneq ($(MALI_PLATFORM_FILES),)
-	mali-y += $(MALI_PLATFORM_FILES:.c=.o)
-endif
-
 mali-$(CONFIG_MALI400_PROFILING) += linux/mali_ukk_profiling.o
 mali-$(CONFIG_MALI400_PROFILING) += linux/mali_osk_profiling.o
 
@@ -156,7 +204,15 @@ ccflags-$(CONFIG_MALI400_UMP) += -I$(src)/../ump/include/ump
 ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
-ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/platform -I$(src)/platform/$(MALI_PLATFORM)
+ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/platform 
+
+export EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
+export MALI_PLATFORM_FILES = $(wildcard platform/$(MALI_PLATFORM)/*.c)
+
+ifneq ($(MALI_PLATFORM),)
+mali-y += platform/$(MALI_PLATFORM)/mali_platform.o
+ccflags-y += -I$(src)/platform/$(MALI_PLATFORM)
+endif
 
 # Get subversion revision number, fall back to only ${MALI_RELEASE_NAME} if no svn info is available
 MALI_RELEASE_NAME=$(shell cat $(src)/.version 2> /dev/null)
