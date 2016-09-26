@@ -673,7 +673,6 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 	unsigned long long duration;
 	int ret;
 
-	char name[256]={0};
 #ifndef CONFIG_BOOT_PERF
 	pr_debug("calling  %pF @ %i\n", fn, task_pid_nr(current));
 #endif
