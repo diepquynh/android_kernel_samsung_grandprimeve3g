@@ -22,25 +22,6 @@ MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
 MALI_UPPER_HALF_SCHEDULING ?= 1
 MALI_ENABLE_CPU_CYCLES ?= 0
 
-# For customer releases the Linux Device Drivers will be provided as ARM proprietary and GPL releases:
-# The ARM proprietary product will only include the license/proprietary directory
-# The GPL product will only include the license/gpl directory
-ifeq ($(wildcard $(src)/linux/license/gpl/*),)
-    ccflags-y += -I$(src)/linux/license/proprietary
-    ifeq ($(CONFIG_MALI400_PROFILING),y)
-        $(error Profiling is incompatible with non-GPL license)
-    endif
-    ifeq ($(CONFIG_PM_RUNTIME),y)
-        $(error Runtime PM is incompatible with non-GPL license)
-    endif
-    ifeq ($(CONFIG_DMA_SHARED_BUFFER),y)
-        $(error DMA-BUF is incompatible with non-GPL license)
-    endif
-    $(error Linux Device integration is incompatible with non-GPL license)
-else
-    ccflags-y += -I$(src)/linux/license/gpl
-endif
-
 ifeq ($(USING_GPU_UTILIZATION), 1)
     ifeq ($(USING_DVFS), 1)
         $(error USING_GPU_UTILIZATION conflict with USING_DVFS you can read the Integration Guide to choose which one do you need)
@@ -204,7 +185,7 @@ ccflags-$(CONFIG_MALI400_UMP) += -I$(src)/../ump/include/ump
 ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
-ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/platform 
+ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/linux/license/gpl -I$(src)/platform 
 
 export EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
 export MALI_PLATFORM_FILES = $(wildcard platform/$(MALI_PLATFORM)/*.c)
