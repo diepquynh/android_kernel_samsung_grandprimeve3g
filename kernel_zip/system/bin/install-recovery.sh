@@ -1,3 +1,4 @@
+#!/system/bin/sh
 # Init.d support
 
 export PATH=/sbin:/system/sbin:/system/bin:/system/xbin
