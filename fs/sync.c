@@ -324,7 +324,7 @@ static int do_fsync(unsigned int fd, int datasync)
 		if (IS_ERR(path))
 			path = "(unknown)";
 #ifdef CONFIG_ASYNC_FSYNC
-		else if (async_fsync(f, fd)) {
+		else if (async_fsync(f.file, fd)) {
 			if (!fsync_workqueue)
 				fsync_workqueue =
 					create_singlethread_workqueue("fsync");
@@ -340,7 +340,7 @@ static int do_fsync(unsigned int fd, int datasync)
 					sizeof(fwork->pathname) - 1);
 				INIT_WORK(&fwork->work, do_afsync_work);
 				queue_work(fsync_workqueue, &fwork->work);
-				fput(f);
+				fput(f.file);
 				return 0;
 			}
 		}

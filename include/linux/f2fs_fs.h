@@ -31,7 +31,6 @@
 
 /* 0, 1(node nid), 2(meta nid) are reserved node id */
 #define F2FS_RESERVED_NODE_NUM		3
->>>>>>> 07ade28... Merge Motorola motorola-kernel f2fs driver
 
 #define F2FS_ROOT_INO(sbi)	(sbi->root_ino_num)
 #define F2FS_NODE_INO(sbi)	(sbi->node_ino_num)
@@ -99,13 +98,14 @@ struct f2fs_super_block {
 /*
  * For checkpoint
  */
+#define CP_FASTBOOT_FLAG	0x00000020
+#define CP_FSCK_FLAG		0x00000010
 #define CP_ERROR_FLAG		0x00000008
 #define CP_COMPACT_SUM_FLAG	0x00000004
 #define CP_ORPHAN_PRESENT_FLAG	0x00000002
 #define CP_UMOUNT_FLAG		0x00000001
 #define F2FS_CP_PACKS		2	/* # of checkpoint packs */
 
->>>>>>> 07ade28... Merge Motorola motorola-kernel f2fs driver
 struct f2fs_checkpoint {
 	__le64 checkpoint_ver;		/* checkpoint block version number */
 	__le64 user_block_count;	/* # of user blocks */
@@ -186,7 +186,6 @@ struct f2fs_extent {
 
 #define MAX_INLINE_DATA		(sizeof(__le32) * (DEF_ADDRS_PER_INODE - \
 						F2FS_INLINE_XATTR_ADDRS - 1))
->>>>>>> 07ade28... Merge Motorola motorola-kernel f2fs driver
 
 struct f2fs_inode {
 	__le16 i_mode;			/* file mode */
