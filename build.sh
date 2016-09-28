@@ -48,15 +48,7 @@ function build_kernel() {
 	make -j${JOBS}
 	make modules
 	make dtbs
-	echo -e "$red Building external modules...$nocol"
-	#make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
-
-	if [ ! -e ${KERNEL_ZIP}/system/lib/modules ]; then
-		mkdir -p ${KERNEL_ZIP}/system/lib/modules
-	fi;
-
 	find ${KERNEL_PATH}/drivers -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
-	#find ${EXTERNAL_MODULE_PATH} -name "*.ko" -exec mv -f {} ${KERNEL_ZIP}/system/lib/modules \;
 	find ${KERNEL_PATH} -name "zImage" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 
 	echo -e "$red Making flashable zip...$nocol";
@@ -68,6 +60,7 @@ if [ "${1}" = "clean" ]; then
 	echo -e "$red Cleaning build environment...$nocol"
 	make mrproper;
 	rm ${KERNEL_ZIP_NAME}.zip
+	echo -e "$yellow Done!$nocol"
 else
 	BUILD_START=$(date +"%s")
 	build_kernel
