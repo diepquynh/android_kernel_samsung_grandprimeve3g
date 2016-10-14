@@ -13,20 +13,20 @@ config CLUSTER_PLUG
 config MSM_HOTPLUG
 	bool "MSM hotplug driver"
 	depends on HOTPLUG_CPU
-	default y
+	default n
 	help
 	  The MSM hotplug driver controls on-/offlining of additional cores based on current cpu load.
 
 config BRICKED_HOTPLUG
  	bool "Enable kernel based mpdecision"
  	depends on MSM_RUN_QUEUE_STATS
- 	default y
+ 	default n
  	help
  	  This enables kernel based multi core control. 
 
 config ALUCARD_HOTPLUG
 	bool "Enable alucard-hotplug cpu hotplug driver"
- 	default y
+ 	default n
  	help
  	  Generic Alucard-hotplug cpu hotplug driver for ARM SOCs
 
@@ -39,20 +39,20 @@ config MSM_SLEEPER
 config INTELLI_PLUG
  	bool "Hotplug for Razor Reborn"
  	depends on MSM_RUN_QUEUE_STATS
- 	default y
+ 	default n
  	help
  	  This enables kernel based multi core control.
 
 config ASMP
 	bool "Multi-core automatic hotplug support"
 	depends on SMP
-	default y
+	default n
 	help
 	  Automatically hotplugs the multiple cpu cores on and off based on cpu load and suspend state
 
 config THUNDERPLUG_CONTROL
  	bool "Enable plugging down/up of cores using powersuspend"
-	default y
+	default n
  	help
  	  This driver uses powersuspend to take down the cpu cores on a octa core device.
 
@@ -64,7 +64,7 @@ config MAKO_HOTPLUG
 
 config MSM_RUN_QUEUE_STATS
 	bool "Enable collection and exporting of MSM Run Queue stats to userspace"
-	default y
+	default n
 	help
 	This option enables the driver to periodically collecting the statistics
 	of kernel run queue information and calculate the load of the system.
