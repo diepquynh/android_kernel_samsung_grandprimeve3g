@@ -82,7 +82,7 @@ static struct mutex cpufreq_vddarm_lock;
 enum clocking_levels {
 	NOC, UC0=NOC,	 	/* no underclock */
 	UC1, UC2, UC3, UC4,	/* underclock */
-	UC5, UC6, UC7, UC8, UC9
+	UC5, UC6, UC7, UC8, UC9,
 	MIN_CL=UC9,	 	/* minimum clock speed */
 	EC,
 };
