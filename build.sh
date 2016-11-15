@@ -12,11 +12,11 @@ set -e -o pipefail
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
 NAME=CORE_kernel
-VERSION=v2.3
+VERSION=v2.4
 
-export CROSS_COMPILE=/home/Remilia/toolchain/sabermod-6.0/bin/arm-eabi-
+export CROSS_COMPILE=/home/Remilia/toolchain/uber-6.0/bin/arm-eabi-
 export ARCH=arm
-export LOCALVERSION=-`echo ${VERSION}`
+export LOCALVERSION=-${VERSION}
 
 KERNEL_PATH=$(pwd)
 KERNEL_ZIP=${KERNEL_PATH}/kernel_zip
