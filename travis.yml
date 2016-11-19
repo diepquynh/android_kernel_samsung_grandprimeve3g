@@ -1,0 +1,15 @@
+sudo: required
+language: c
+cache: ccache
+script:
+- git clone "https://bitbucket.org/UBERTC/arm-eabi-6.0" "uber-6.0"
+- export exportedtcpath=$(pwd)/uber-6.0/bin/arm-eabi-
+- export exportedchoice=3
+- ./build.sh
+deploy:
+  provider: releases
+  skip_cleanup: true
+  file:
+    - "CORE_kernel_v2.4.zip"
+  on:
+    tags: true
