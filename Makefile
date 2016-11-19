@@ -244,8 +244,7 @@ HOSTCXX      = g++
 HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -fomit-frame-pointer -std=gnu89 \
 	       -fgcse-las -fgcse-sm -fipa-pta -fomit-frame-pointer -frename-registers \
 	       -ftree-loop-im -ftree-loop-ivcanon -funsafe-loop-optimizations -funswitch-loops -fweb \
-	       -Wno-error=array-bounds -Wno-error=clobbered -Wno-error=maybe-uninitialized \
-	       -Wno-error=strict-overflow
+	       -Wno-error=array-bounds -Wno-error=clobbered -Wno-error=strict-overflow
 HOSTCXXFLAGS = -Ofast
 
 # Decide whether to build built-in, modular, or both.
