@@ -259,6 +259,13 @@ config SPRD_DEBUG_SCHED_LOG
 	help
 	  SPRD Scheduler Logging Feature for Debug use.
 
+config FORCE_FAST_CHARGE
+	bool "Force faster charge rate for AC/USB"
+	default y
+	help
+	  This allows users to override default charge rate for both USB and AC
+	  charger input current
+
 config GPS_LSI_S5N6420
 bool "LSI_GPS_CHIPSET_HARRIER"
 default n

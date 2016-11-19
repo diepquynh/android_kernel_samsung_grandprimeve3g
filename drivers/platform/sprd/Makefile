@@ -67,3 +67,6 @@ endif
 obj-$(CONFIG_SEC_DEBUG) += sec_common.o sec_debug.o sec_gaf.o sec_getlog.o sec-reboot.o
 obj-$(CONFIG_SEC_LOG) += sec_log.o
 obj-$(CONFIG_SEC_BSP) += sec_bsp.o
+
+# Fast charging
+obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o

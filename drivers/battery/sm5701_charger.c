@@ -41,6 +41,11 @@
 #ifdef CONFIG_USB_HOST_NOTIFY
 #include <linux/usb_notify.h>
 #endif
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#endif
+
 extern int vcell_val;
 extern int curr_val;
 extern int soc_val;
@@ -316,10 +321,20 @@ static u8 SM5701_set_fastchg_current(
 {
 	u8 data = 0;
 
-	if(fast_charging_current < 100)
-		fast_charging_current = 100;
-	else if (fast_charging_current > 1600)
-		fast_charging_current = 1600;
+#ifdef CONFIG_FORCE_FAST_CHARGE
+	if (force_fast_charge > 0 && fast_charging_current > 0) {
+		fast_charging_current = 1950; // sec_battery.c line 2449
+		pr_info("USB fast charging is ON\n");
+	} else {
+		pr_info("USB fast charging is OFF\n");
+#endif
+		if(fast_charging_current < 100)
+			fast_charging_current = 100;
+		else if (fast_charging_current > 1600)
+			fast_charging_current = 1600;
+#ifdef CONFIG_FORCE_FAST_CHARGE
+	}
+#endif
 
 	data = (fast_charging_current - 100) / 25;
 
