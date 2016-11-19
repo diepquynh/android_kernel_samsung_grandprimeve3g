@@ -20,11 +20,11 @@
 /include/ "skeleton.dtsi"
 /include/ "sprd-scx35_2.dtsi"
 /include/ "sprd-scx35_sc7730.dtsi"
-# 1 "/home/a1/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/gpio/gpio.h" 1
+# 1 "/home/Remilia/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/gpio/gpio.h" 1
 # 27 "arch/arm/boot/dts/sprd-scx35_grandprimeve3g_rev01.dts" 2
-# 1 "/home/a1/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/video/gen-panel.h" 1
+# 1 "/home/Remilia/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/video/gen-panel.h" 1
 # 28 "arch/arm/boot/dts/sprd-scx35_grandprimeve3g_rev01.dts" 2
-# 1 "/home/a1/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/interrupt-controller/irq.h" 1
+# 1 "/home/Remilia/kernel_gpve/arch/arm/boot/dts/include/dt-bindings/interrupt-controller/irq.h" 1
 # 29 "arch/arm/boot/dts/sprd-scx35_grandprimeve3g_rev01.dts" 2
 
 / {
