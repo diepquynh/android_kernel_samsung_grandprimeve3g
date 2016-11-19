@@ -99,7 +99,7 @@ function main() {
 	echo "4. Make flashable ZIP package";
 	echo "Leave empty to exit this script (it'll show invalid choice)";
 	if [ ${exportedchoice} != "" ]; then
-		${choice}=${exportedchoice};
+		choice=${exportedchoice};
 	else
 		read -n 1 -p "Select your choice: " -s choice;
 	fi;
