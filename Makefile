@@ -241,8 +241,16 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -fomit-frame-pointer -std=gnu89
-HOSTCXXFLAGS = -Ofast
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -fomit-frame-pointer -std=gnu89 \
+	       -fgcse-las -fgcse-sm -fipa-pta -fomit-frame-pointer -frename-registers \
+	       -ftree-loop-im -ftree-loop-ivcanon -funsafe-loop-optimizations -funswitch-loops -fweb \
+	       -Wno-error=array-bounds -Wno-error=clobbered -Wno-error=maybe-uninitialized \
+	       -Wno-error=strict-overflow
+HOSTCXXFLAGS = -Ofast -fgcse-las -fgcse-sm -fipa-pta -fomit-frame-pointer -frename-registers \
+	       -ftree-loop-im -ftree-loop-ivcanon -funsafe-loop-optimizations -funswitch-loops -fweb \
+	       -Wno-error=array-bounds -Wno-error=clobbered -Wno-error=maybe-uninitialized \
+	       -Wno-error=strict-overflow
+
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
 
@@ -379,7 +387,11 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-shift-overflow \
 		   -Wno-bool-compare \
 		   -std=gnu89 \
-		   -munaligned-access
+		   -munaligned-access \
+                   -fgcse-las -fgcse-sm -fipa-pta -fomit-frame-pointer -frename-registers \
+		   -ftree-loop-im -ftree-loop-ivcanon -funsafe-loop-optimizations -funswitch-loops -fweb \
+		   -Wno-error=array-bounds -Wno-error=clobbered -Wno-error=maybe-uninitialized \
+		   -Wno-error=strict-overflow
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -685,7 +697,7 @@ KBUILD_CFLAGS += $(KCFLAGS)
 
 # Use --build-id when available.
 LDFLAGS_BUILD_ID = $(patsubst -Wl$(comma)%,%,\
-			      $(call cc-ldoption, -Wl$(comma)--build-id,))
+			      $(call cc-ldoption, -Wl$(comma)--build-id,--sort-common,))
 KBUILD_LDFLAGS_MODULE += $(LDFLAGS_BUILD_ID)
 LDFLAGS_vmlinux += $(LDFLAGS_BUILD_ID)
 
