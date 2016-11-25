@@ -26,8 +26,10 @@ extern bool power_suspend_active;
 extern bool dyn_fsync_active;
 #endif
 
+#ifdef CONFIG_ASYNC_FSYNC
 bool fsync_enabled = true;
 module_param(fsync_enabled, bool, 0755);
+#endif
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
