@@ -21,7 +21,7 @@ KERNEL_PATH=$(pwd)
 KERNEL_ZIP=${KERNEL_PATH}/kernel_zip
 KERNEL_ZIP_NAME=${NAME}_${VERSION}.zip
 KERNEL_IMAGE=${KERNEL_ZIP}/tools/zImage
-#DT_IMG=${KERNEL_ZIP}/tools/dt.img
+DT_IMG=${KERNEL_ZIP}/tools/dt.img
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
 
 JOBS=`grep processor /proc/cpuinfo | wc -l`
@@ -76,9 +76,9 @@ function clean() {
 		rm ${KERNEL_IMAGE};
 	fi;
 
-#	if [ -e ${DT_IMG} ]; then
-#		rm ${DT_IMG};
-#	fi;
+	if [ -e ${DT_IMG} ]; then
+		rm ${DT_IMG};
+	fi;
 
 	echo -e "$yellow";
 	echo -e "Done!$nocol";
