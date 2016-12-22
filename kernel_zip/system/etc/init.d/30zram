@@ -5,4 +5,3 @@ echo 0 > /proc/sys/vm/page-cluster;
 echo $(($a*1024*1024)) > /sys/block/zram0/disksize;
 mkswap /dev/block/zram0;
 swapon -p 05 /dev/block/zram0;
-echo $(($b)) > /proc/sys/vm/swappiness
