@@ -958,7 +958,7 @@ static struct sk_buff *tun_alloc_skb(struct tun_file *tfile,
 }
 
 /* set skb frags from iovec, this can move to core network code for reuse */
-static int zerocopy_sg_from_iovec(struct sk_buff *skb, const struct iovec *from,
+int zerocopy_sg_from_iovec(struct sk_buff *skb, const struct iovec *from,
 				  int offset, size_t count)
 {
 	int len = iov_length(from, count) - offset;
