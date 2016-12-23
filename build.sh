@@ -46,7 +46,10 @@ function build() {
 	echo -e "$red";
 	echo -e "Building kernel...$nocol";
 	make -j${JOBS};
+	make -j${JOBS} dtbs;
+	./scripts/mkdtimg.sh -i ${KERNEL_PATH}/arch/arm/boot/dts/ -o dt.img;
 	find ${KERNEL_PATH} -name "zImage" -exec mv -f {} ${KERNEL_ZIP}/tools \;
+	find ${KERNEL_PATH} -name "dt.img" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 
 	BUILD_END=$(date +"%s");
 	DIFF=$(($BUILD_END - $BUILD_START));
