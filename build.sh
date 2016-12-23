@@ -12,7 +12,7 @@ set -e -o pipefail
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
 NAME=CORE_kernel
-VERSION=v2.5
+VERSION=v3.0
 
 export ARCH=arm
 export LOCALVERSION=-${VERSION}
