@@ -1,7 +1,38 @@
 #!/system/bin/sh
 
-a=`getprop zram.disksize 769`
+# Swapoff all first
+if swap_files=$(grep "/" /proc/swaps | busybox awk '{print $1}'); then
+	for i in $swap_files; do
+		swapoff $i
+	done
+fi
+
+# Set page-cluster to lowest to maximize performance
 echo 0 > /proc/sys/vm/page-cluster;
-echo $(($a*1024*1024)) > /sys/block/zram0/disksize;
-mkswap /dev/block/zram0;
-swapon -p 05 /dev/block/zram0;
+
+# How many CPU cores do we have?
+cpu_sysfs_paths=$(ls /sys/devices/system/cpu | grep cpu | busybox wc -l)
+num_cpu=$(expr ${cpu_sysfs_paths} - 2) # Except cpufreq and cpuidle sysfs path
+
+# Remove all zRAMs first
+for i in $(seq ${num_cpu}); do
+	num=$((i - 1));
+	echo ${num} > /sys/class/zram-control/hot_remove;
+done;
+
+# Calculate memory to use for zram (1/2 of ram)
+totalmem=$(free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
+mem=$(((totalmem / 2 / ${count}) * 1024))
+
+# Now let's start
+for i in $(seq ${num_cpu}); do
+	num=$((i - 1));
+
+	cat /sys/class/zram-control;
+	echo ${mem} > /sys/block/zram${num}/disksize;
+	mkswap /dev/block/zram${num};
+	swapon -p 05 /dev/block/zram${num};
+done;
+
+# Set maximum swappiness
+echo 100 > /proc/sys/vm/swappiness;
