@@ -21,7 +21,7 @@ for i in $(seq ${num_cpu}); do
 done;
 
 # Calculate memory to use for zram (1/2 of ram)
-totalmem=$(free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
+totalmem=$(busybox free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
 mem=$(((totalmem / 2 / ${num_cpu}) * 1024))
 
 # Now let's start
