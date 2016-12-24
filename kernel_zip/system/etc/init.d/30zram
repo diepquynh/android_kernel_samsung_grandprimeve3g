@@ -22,13 +22,13 @@ done;
 
 # Calculate memory to use for zram (1/2 of ram)
 totalmem=$(free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
-mem=$(((totalmem / 2 / ${count}) * 1024))
+mem=$(((totalmem / 2 / ${num_cpu}) * 1024))
 
 # Now let's start
 for i in $(seq ${num_cpu}); do
 	num=$((i - 1));
 
-	cat /sys/class/zram-control;
+	cat /sys/class/zram-control/hot_add;
 	echo ${mem} > /sys/block/zram${num}/disksize;
 	mkswap /dev/block/zram${num};
 	swapon -p 05 /dev/block/zram${num};
