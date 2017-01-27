@@ -53,6 +53,10 @@ extern int sec_vf_adc_current_check(void);
 
 #define SIOP_INPUT_LIMIT_CURRENT 500
 
+#ifdef CONFIG_THUNDERCHARGE_CONTROL
+#include "thundercharge_control.h"
+#endif
+
 extern int sec_chg_dt_init(struct device_node *np,
 			 struct device *dev,
 			 sec_battery_platform_data_t *pdata);
@@ -267,6 +271,10 @@ static u8 SM5701_set_vbuslimit_current(
 		__func__, data);
 	}
 
+#ifdef CONFIG_THUNDERCHARGE_CONTROL
+input_current = custom_ac_current;
+#endif
+
 	if(input_current <= 100)
 		data &= ~SM5701_VBUSCNTL_VBUSLIMIT;
 	else if(input_current <= 500)
@@ -280,6 +288,8 @@ static u8 SM5701_set_vbuslimit_current(
 	SM5701_reg_write(charger->SM5701->i2c, SM5701_VBUSCNTL, data);
 
 	SM5701_reg_read(charger->SM5701->i2c, SM5701_VBUSCNTL, &data);
+        
+        pr_info("thundercharge: pulling ( AC Current ) %d mA\n", input_current);
 	pr_info("%s : SM5701_VBUSCNTL (Input current limit) : 0x%02x\n",
 		__func__, data);
 
@@ -695,9 +705,9 @@ static int sec_chg_set_property(struct power_supply *psy,
 		container_of(psy, struct SM5701_charger_data, psy_chg);
 	union power_supply_propval value;
 	union power_supply_propval chg_mode;
-//	int set_charging_current, set_charging_current_max;
-//	const int usb_charging_current = charger->pdata->charging_current[
-//		POWER_SUPPLY_TYPE_USB].fast_charging_current;
+	int set_charging_current, set_charging_current_max;
+	const int usb_charging_current = charger->pdata->charging_current[
+		POWER_SUPPLY_TYPE_USB].fast_charging_current;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -711,12 +721,10 @@ static int sec_chg_set_property(struct power_supply *psy,
 			/* Disable Charger */
 			charger->nchgen = true;
 			charger->aicl_on = false;
-#if 0
 			set_charging_current = 0;
 			set_charging_current_max =
 				charger->pdata->charging_current[
 				POWER_SUPPLY_TYPE_USB].input_current_limit;
-#endif
 			pr_info("%s : Disable Charger, Battery Supply!\n", __func__);
 			SM5701_otg_control(charger, 0);
 			// nCHG_EN is logic low so set 1 to disable charger
@@ -738,17 +746,20 @@ static int sec_chg_set_property(struct power_supply *psy,
 			/* decrease the charging current according to siop level */
 
 		// If siop is used set charging current according to the following
-#if 0
 			set_charging_current =
 				charger->charging_current * charger->siop_level / 100;
 			if (set_charging_current > 0 &&
 					set_charging_current < usb_charging_current)
+#ifdef CONFIG_THUNDERCHARGE_CONTROL
+				set_charging_current_max = custom_usb_current;
+#else
 				set_charging_current = usb_charging_current;
 
 				set_charging_current_max =
 					charger->charging_current_max;
 #endif
 		}
+                pr_info("thundercharge: pulling ( USB Current ) %d mA\n", set_charging_current_max);   
 		pr_info("%s : STATUS OF CHARGER ON(0)/OFF(1): %d\n", __func__, charger->nchgen);
 		/* SM5701_toggle_charger(charger, charger->is_charging); */
 

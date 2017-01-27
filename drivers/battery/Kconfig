@@ -415,6 +415,12 @@ config CHARGER_SPRD4SAMSUNG27X3
 	 This driver source code implemented
 	 all functions for sprd27X3 charger.
 
+config THUNDERCHARGE_CONTROL
+	bool "Enable ThunderCharge Current Controlling mechanism"
+	depends on BATTERY_SAMSUNG
+	help
+	 Say Y here to enable ability to adjust charger current
+
 config STORE_MODE
        bool "enable store mode"
        default n
