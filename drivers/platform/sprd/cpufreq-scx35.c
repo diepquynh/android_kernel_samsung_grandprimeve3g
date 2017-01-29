@@ -80,25 +80,35 @@ struct cpufreq_conf *sprd_cpufreq_conf = NULL;
 static struct mutex cpufreq_vddarm_lock;
 
 enum clocking_levels {
-	NOC,
-	UC1, UC2, UC3,
-	MIN_CL=UC3,
+	NOC, UC1, UC2, UC3,
+	UC4, UC5, UC6, UC7, UC8,
+	MIN_CL=UC8,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
 		{NOC, 1300000},
-		{UC1, 1150000},
-		{UC2, 900000},
-		{UC3, 800000},
+		{UC1, 1200000},
+		{UC2, 1100000},
+		{UC3, 1000000},
+		{UC4, 900000},
+		{UC5, 800000},
+		{UC6, 700000},
+		{UC7, 600000},
+		{UC8, 500000},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 		[NOC]  = 950000,
-		[UC1]  = 900000,
-		[UC2]  = 850000,
-		[UC3]  = 800000,
-		[EC]   = 800000,
+		[UC1]  = 925000,
+		[UC2]  = 900000,
+		[UC3]  = 875000,
+		[UC4]  = 850000,
+		[UC5]  = 825000,
+		[UC6]  = 800000,
+		[UC7]  = 775000,
+		[UC8]  = 750000,
+		[EC]   = 750000,
         },
 };
 
