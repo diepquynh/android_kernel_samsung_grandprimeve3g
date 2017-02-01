@@ -1,4 +1,3 @@
-CFLAGS_ring_buffer.o := -fno-strict-aliasing
 
 # Do not instrument the tracer itself:
 

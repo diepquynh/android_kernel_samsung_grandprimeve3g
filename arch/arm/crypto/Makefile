@@ -2,8 +2,6 @@
 # Arch-specific CryptoAPI modules.
 #
 
-CFLAGS_KERNEL := -fno-strict-aliasing
-
 obj-$(CONFIG_CRYPTO_AES_ARM) += aes-arm.o
 obj-$(CONFIG_CRYPTO_SHA1_ARM) += sha1-arm.o
 

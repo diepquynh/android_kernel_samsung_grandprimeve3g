@@ -1,7 +1,6 @@
 #
 # Makefile for sensor chip drivers.
 #
-CFLAGS_thermal_core.o := -fno-strict-aliasing
 
 obj-$(CONFIG_THERMAL)		+= thermal_sys.o
 obj-$(CONFIG_THERMAL)		+= sprd_thm.o
