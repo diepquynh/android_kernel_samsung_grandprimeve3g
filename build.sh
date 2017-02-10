@@ -4,14 +4,14 @@
 #  Written by System S/W Group, S/W Platform R&D Team,
 #  Mobile Communication Division.
 #
-#  Edited by Nguyen Tuan Quyen (koquantam)
+#  Edited by Remilia Scarlet (remilia15)
 ##
 
 set -e -o pipefail
 
 PLATFORM=sc8830
 DEFCONFIG=grandprimeve3g-dt_defconfig
-NAME=CORE_kernel
+NAME=RZ_kernel
 VERSION=v3.0
 
 export ARCH=arm
@@ -38,7 +38,7 @@ function build() {
 	BUILD_START=$(date +"%s");
 	echo -e "$cyan"
 	echo "***********************************************";
-	echo "              Compiling CORE(TM) kernel          	     ";
+	echo "              Compiling RZ kernel          	     ";
 	echo -e "***********************************************$nocol";
 	echo -e "$red";
 	echo -e "Initializing defconfig...$nocol";
@@ -108,7 +108,7 @@ function main() {
 	fi;
 
 	echo -e "***************************************************************";
-	echo "      CORE(TM) kernel for Samsung Galaxy Grand Prime SM-G531H";
+	echo "      RZ Kernel for Samsung Galaxy Grand Prime SM-G531H";
 	echo -e "***************************************************************";
 	echo "Choices:";
 	echo "1. Cleanup source";
