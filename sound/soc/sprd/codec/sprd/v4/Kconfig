@@ -7,3 +7,8 @@ config SND_SOC_SPRD_AUDIO_USE_INTER_HP_PA_V4
 	help
 	  Say Y if you want use sprdtrume internal headphone pa
 
+config SOUND_CONTROL_HAX_GPL
+	tristate "SPRD sound control hax"
+	default y
+	help
+	  FauxSound SPRD chipset sound control hacks

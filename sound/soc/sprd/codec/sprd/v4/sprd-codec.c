@@ -4759,6 +4759,11 @@ static struct snd_soc_codec_driver soc_codec_dev_sprd_codec = {
 	.num_controls = ARRAY_SIZE(sprd_codec_snd_controls),
 };
 
+#ifdef CONFIG_SOUND_CONTROL_HAX_GPL
+struct snd_kcontrol_new *gpl_faux_snd_controls_ptr =
+		(struct snd_kcontrol_new *)sprd_codec_snd_controls;
+#endif
+
 static int sprd_codec_probe(struct platform_device *pdev)
 {
 	struct sprd_codec_priv *sprd_codec;
