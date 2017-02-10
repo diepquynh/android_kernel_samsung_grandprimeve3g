@@ -10,7 +10,7 @@
 set -e -o pipefail
 
 PLATFORM=sc8830
-DEFCONFIG=grandprimeve3g-dt_defconfig
+DEFCONFIG=rz_gpve_defconfig
 NAME=RZ_kernel
 VERSION=v3.0
 
