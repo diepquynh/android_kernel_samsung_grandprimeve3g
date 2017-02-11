@@ -44,7 +44,7 @@ struct notifier_block lcd_worker;
 #define DEF_SAMPLING_MS			(500)
 
 #ifdef CONFIG_USES_MALI_MP2_GPU
-#define GPU_HOTPLUG_ENABLED             (1)
+#define GPU_HOTPLUG_ENABLED             (0)
 #define DEFAULT_MIN_GPU_LOAD_THRESHOLD  (65)
 
 extern void gpu_enable(int num);
