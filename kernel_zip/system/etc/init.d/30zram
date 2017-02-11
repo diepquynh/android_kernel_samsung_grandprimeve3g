@@ -22,7 +22,7 @@ done;
 
 # Calculate memory to use for zram (1/2 of ram)
 totalmem=$(busybox free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
-mem=$(((totalmem / 2 / ${num_cpu}) * 1024))
+mem=$(((totalmem * 3 / 2 / ${num_cpu}) * 1024))
 
 # Now let's start
 for i in $(seq ${num_cpu}); do
@@ -35,4 +35,4 @@ for i in $(seq ${num_cpu}); do
 done;
 
 # Set maximum swappiness
-echo 100 > /proc/sys/vm/swappiness;
+echo 150 > /proc/sys/vm/swappiness;
