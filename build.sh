@@ -12,7 +12,7 @@ set -e -o pipefail
 PLATFORM=sc8830
 DEFCONFIG=rz_gpve_defconfig
 NAME=RZ_kernel
-VERSION=v3.0
+VERSION=v3.1
 
 export ARCH=arm
 export LOCALVERSION=-${VERSION}
