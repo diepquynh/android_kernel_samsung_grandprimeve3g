@@ -12,14 +12,14 @@ menuconfig MALI400
 choice
 	depends on MALI400
 	prompt "Select MALI VER"
-	default MALI_VER_R4P0
-	config MALI_VER_R4P0
-	  bool "Mali400 Version R4P0"
+	default MALI_VER_R4P1
+	config MALI_VER_R4P1
+	  bool "Mali400 Version R4P1"
 	  help
 	    Choose this option to select DDK version.
 
-if MALI_VER_R4P0
-source "drivers/gpu/mali400/r4p0/Kconfig"
+if MALI_VER_R4P1
+source "drivers/gpu/mali400/r4p1/Kconfig"
 endif
 
 endchoice
