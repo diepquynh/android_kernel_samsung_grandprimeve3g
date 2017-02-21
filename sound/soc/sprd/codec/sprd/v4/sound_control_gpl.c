@@ -28,14 +28,15 @@ extern struct snd_kcontrol_new *gpl_faux_snd_controls_ptr;
 #define SOUND_CONTROL_MAJOR_VERSION	2
 #define SOUND_CONTROL_MINOR_VERSION	1
 
-#define CAMCORDER_MIC_OFFSET    20
-#define HANDSET_MIC_OFFSET      21
-#define SPEAKER_OFFSET          10
-#define HEADPHONE_L_OFFSET      8
-#define HEADPHONE_R_OFFSET      9
+#define CAMCORDER_MIC_OFFSET    13
+#define HANDSET_MIC_OFFSET      15
+#define SPEAKER_L_OFFSET        0
+#define SPEAKER_R_OFFSET        1
+#define HEADPHONE_L_OFFSET      2
+#define HEADPHONE_R_OFFSET      3
 
-#define HEADPHONE_PA_L_OFFSET	6
-#define HEADPHONE_PA_R_OFFSET	7
+#define HEADPHONE_PA_L_OFFSET	4
+#define HEADPHONE_PA_R_OFFSET	5
 
 static ssize_t cam_mic_gain_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -100,35 +101,49 @@ static ssize_t mic_gain_store(struct kobject *kobj, struct kobj_attribute *attr,
 	return (count);
 }
 
+
 static ssize_t speaker_gain_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	struct soc_mixer_control *l_mixer_ptr;
+	struct soc_mixer_control *l_mixer_ptr, *r_mixer_ptr;
 
 	l_mixer_ptr =
-		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_OFFSET].
+		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_L_OFFSET].
+			private_value;
+	r_mixer_ptr =
+		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_R_OFFSET].
 			private_value;
 
-	return sprintf(buf, "%d", l_mixer_ptr->max);
+	return sprintf(buf, "%d %d",
+			l_mixer_ptr->max,
+			r_mixer_ptr->max);
 }
 
 static ssize_t speaker_gain_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	int l_max;
-	int l_delta;
-	struct soc_mixer_control *l_mixer_ptr;
+	int l_max, r_max;
+	int l_delta, r_delta;
+	struct soc_mixer_control *l_mixer_ptr, *r_mixer_ptr;
 
 	l_mixer_ptr =
-		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_OFFSET].
+		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_L_OFFSET].
+			private_value;
+	r_mixer_ptr =
+		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[SPEAKER_R_OFFSET].
 			private_value;
 
-	sscanf(buf, "%d", &l_max);
+	sscanf(buf, "%d %d", &l_max, &r_max);
 
 	l_delta = l_max - l_mixer_ptr->platform_max;
 	l_mixer_ptr->platform_max = l_max;
 	l_mixer_ptr->max = l_max;
 	l_mixer_ptr->min += l_delta;
 
-	return (count);
+	r_delta = r_max - r_mixer_ptr->platform_max;
+	r_mixer_ptr->platform_max = r_max;
+	r_mixer_ptr->max = r_max;
+	r_mixer_ptr->min += r_delta;
+ 
+	return count;
 }
 
 static ssize_t headphone_gain_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
