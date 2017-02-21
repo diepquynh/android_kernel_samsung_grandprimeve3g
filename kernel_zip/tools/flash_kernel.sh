@@ -16,5 +16,5 @@
 cd /tmp/
 /sbin/busybox dd if=/dev/block/mmcblk0p20 of=./boot.img
 ./unpackbootimg -i /tmp/boot.img
-./mkbootimg --kernel /tmp/zImage --ramdisk /tmp/boot.img-ramdisk.gz --cmdline "console=ttyS1,115200n8" --base 0x00000000 --pagesize 2048 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dt /tmp/dt.img -o /tmp/newboot.img
+./mkbootimg --kernel /tmp/Image --ramdisk /tmp/boot.img-ramdisk.gz --cmdline "console=ttyS1,115200n8" --base 0x00000000 --pagesize 2048 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dt /tmp/dt.img -o /tmp/newboot.img
 /sbin/busybox dd if=/tmp/newboot.img of=/dev/block/mmcblk0p20

@@ -20,7 +20,7 @@ export LOCALVERSION=-${VERSION}
 KERNEL_PATH=$(pwd)
 KERNEL_ZIP=${KERNEL_PATH}/kernel_zip
 KERNEL_ZIP_NAME=${NAME}_${VERSION}.zip
-KERNEL_IMAGE=${KERNEL_ZIP}/tools/zImage
+KERNEL_IMAGE=${KERNEL_ZIP}/tools/Image
 DT_IMG=${KERNEL_ZIP}/tools/dt.img
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
 
@@ -48,7 +48,7 @@ function build() {
 	make -j${JOBS};
 	make -j${JOBS} dtbs;
 	./scripts/mkdtimg.sh -i ${KERNEL_PATH}/arch/arm/boot/dts/ -o dt.img;
-	find ${KERNEL_PATH} -name "zImage" -exec mv -f {} ${KERNEL_ZIP}/tools \;
+	find ${KERNEL_PATH} -name "Image" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 	find ${KERNEL_PATH} -name "dt.img" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 
 	BUILD_END=$(date +"%s");
