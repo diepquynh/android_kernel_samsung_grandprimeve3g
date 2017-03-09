@@ -66,22 +66,20 @@ function make_zip() {
 	mv ${KERNEL_ZIP_NAME} ${KERNEL_PATH};
 }
 
+function rm_if_exist() {
+	if [ -e $1 ]; then
+		rm $1;
+	fi;
+}
+
 function clean() {
 	echo -e "$red";
 	echo -e "Cleaning build environment...$nocol";
 	make mrproper;
 
-	if [ -e ${KERNEL_ZIP_NAME} ]; then
-		rm ${KERNEL_ZIP_NAME};
-	fi;
-
-	if [ -e ${KERNEL_IMAGE} ]; then
-		rm ${KERNEL_IMAGE};
-	fi;
-
-	if [ -e ${DT_IMG} ]; then
-		rm ${DT_IMG};
-	fi;
+	rm_if_exist ${KERNEL_ZIP_NAME};
+	rm_if_exist ${KERNEL_IMAGE};
+	rm_if_exist ${DT_IMG};
 
 	echo -e "$yellow";
 	echo -e "Done!$nocol";
@@ -92,7 +90,7 @@ function main() {
 	read -p "Please specify Toolchain path: " tcpath;
 	if [ "${tcpath}" == "" ]; then
 		echo -e "$red"
-		export CROSS_COMPILE=/home/remilia/toolchain/uber-4.8/bin/arm-eabi-;
+		export CROSS_COMPILE=/home/remilia/toolchain/uber-6.0/bin/arm-eabi-;
 		echo -e "No toolchain path found. Using default local one:$nocol ${CROSS_COMPILE}";
 	else
 		export CROSS_COMPILE=${tcpath};
@@ -102,7 +100,7 @@ function main() {
 	if [ "${USE_CCACHE}" == "1" ]; then
 		CCACHE_PATH=/usr/bin/ccache;
 		export CROSS_COMPILE="${CCACHE_PATH} ${CROSS_COMPILE}";
-		export JOBS=16;
+		export JOBS=2;
 		echo -e "$red";
 		echo -e "You have enabled ccache through *export USE_CCACHE=1*, now using ccache...$nocol";
 	fi;
