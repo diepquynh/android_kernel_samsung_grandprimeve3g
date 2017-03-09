@@ -132,3 +132,4 @@ gen_crc32table
 gen_init_cpio
 initramfs_data.cpio
 firmware/*
+output/*
