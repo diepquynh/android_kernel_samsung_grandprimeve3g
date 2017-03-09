@@ -10,7 +10,7 @@ dtimg="dt.img"
 status="none"
 declare -a dts_array
 
-TOOL_DTC_FOLDER=$(pwd)/scripts/dtc
+TOOL_DTC_FOLDER=$(pwd)/output/scripts/dtc
 TOOL_DTC=$TOOL_DTC_FOLDER/dtc
 TOOL_DTBTOOL=$(pwd)/scripts/dtbTool
 
@@ -54,9 +54,9 @@ echo "output: $dtimg"
 
 for dts_file in ${dts_array[@]}; do
 	if [ -e $dts_file ]; then
-		$TOOL_DTC -I dts -O dtb $dts_file -o $(pwd)/arch/arm/boot/dts/$dts_file.dtb
+		$TOOL_DTC -I dts -O dtb $dts_file -o $(pwd)/output/arch/arm/boot/dts/$dts_file.dtb
 	fi
 done
 
-$TOOL_DTBTOOL -o $dtimg $(pwd)/arch/arm/boot/dts/ -p $TOOL_DTC_FOLDER/
+$TOOL_DTBTOOL -o $dtimg $(pwd)/output/arch/arm/boot/dts/ -p $TOOL_DTC_FOLDER/
 

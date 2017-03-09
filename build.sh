@@ -23,6 +23,7 @@ KERNEL_ZIP_NAME=${NAME}_${VERSION}.zip
 KERNEL_IMAGE=${KERNEL_ZIP}/tools/Image
 DT_IMG=${KERNEL_ZIP}/tools/dt.img
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
+OUTPUT_PATH=${KERNEL_PATH}/output
 
 JOBS=`grep processor /proc/cpuinfo | wc -l`
 
@@ -41,12 +42,17 @@ function build() {
 	echo "              Compiling RZ kernel          	     ";
 	echo -e "***********************************************$nocol";
 	echo -e "$red";
+
+	if [ ! -e ${OUTPUT_PATH} ]; then
+		mkdir ${OUTPUT_PATH};
+	fi;
+
 	echo -e "Initializing defconfig...$nocol";
-	make ${DEFCONFIG};
+	make O=output ${DEFCONFIG};
 	echo -e "$red";
 	echo -e "Building kernel...$nocol";
-	make -j${JOBS};
-	make -j${JOBS} dtbs;
+	make O=output -j${JOBS};
+	make O=output -j${JOBS} dtbs;
 	./scripts/mkdtimg.sh -i ${KERNEL_PATH}/arch/arm/boot/dts/ -o dt.img;
 	find ${KERNEL_PATH} -name "Image" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 	find ${KERNEL_PATH} -name "dt.img" -exec mv -f {} ${KERNEL_ZIP}/tools \;
@@ -75,10 +81,10 @@ function rm_if_exist() {
 function clean() {
 	echo -e "$red";
 	echo -e "Cleaning build environment...$nocol";
-	make mrproper;
+	make -j${JOBS} mrproper;
 
 	rm_if_exist ${KERNEL_ZIP_NAME};
-	rm_if_exist ${KERNEL_IMAGE};
+	rm_if_exist ${OUTPUT_PATH};
 	rm_if_exist ${DT_IMG};
 
 	echo -e "$yellow";
