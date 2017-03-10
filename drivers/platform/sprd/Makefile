@@ -19,7 +19,12 @@ obj-$(CONFIG_PM) += pm.o
 ifeq ($(CONFIG_PM),y)
 	obj-$(CONFIG_ARCH_SCX35) += pm-scx35.o standby-scx35.o pm_debug_scx35.o
 endif
+
 obj-$(CONFIG_CPU_FREQ) += cpufreq-scx35.o
+ifeq ($(CONFIG_SPRD_OC),y)
+CFLAGS_cpufreq-scx35.o += -DSPRD_OC
+endif
+
 obj-$(CONFIG_SPRD_VIBRATOR_2723) += sprd_vibrator_2723.o
 ifeq ($(CONFIG_64BIT),y)
 obj-$(CONFIG_SPRD_SYSDUMP)  += sysdump64.o

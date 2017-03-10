@@ -259,6 +259,12 @@ config SPRD_DEBUG_SCHED_LOG
 	help
 	  SPRD Scheduler Logging Feature for Debug use.
 
+config SPRD_OC
+	bool "CPU overclock features"
+	default n
+	help
+	  Enable CPU overclocking capability
+
 config GPS_LSI_S5N6420
 bool "LSI_GPS_CHIPSET_HARRIER"
 default n
