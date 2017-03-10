@@ -88,7 +88,7 @@ enum clocking_levels {
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
-		{OC1, 1500000},
+		{OC1, 1540000},
 		{NOC, 1300000},
 		{UC1, 1200000},
 		{UC2, 1100000},
