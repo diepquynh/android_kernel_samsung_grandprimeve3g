@@ -74,7 +74,7 @@ function make_zip() {
 
 function rm_if_exist() {
 	if [ -e $1 ]; then
-		rm $1;
+		rm -rf $1;
 	fi;
 }
 
