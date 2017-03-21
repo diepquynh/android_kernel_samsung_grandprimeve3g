@@ -54,7 +54,7 @@
 #define TRANSITION_LATENCY	(100 * 1000) /* ns */
 
 #define MAX_VOLT (1125 * 1000)
-#define MIN_VOLT (1050 * 1000)
+#define MIN_VOLT (825 * 1000)
 
 static DEFINE_MUTEX(freq_lock);
 struct cpufreq_freqs global_freqs;
