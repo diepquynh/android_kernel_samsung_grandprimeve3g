@@ -81,7 +81,7 @@ static struct mutex cpufreq_vddarm_lock;
 
 enum clocking_levels {
 #ifdef SPRD_OC
-	OC3, OC2, OC1,
+	OC4, OC3, OC2, OC1,
 #endif
 	NOC, UC1, UC2, UC3, UC4,
 	UC5, UC6, UC7, UC8, UC9,
@@ -91,11 +91,12 @@ enum clocking_levels {
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
 #ifdef SPRD_OC
-		{OC3, 1540000},
-		{OC2, 1497600},
-		{OC1, 1401600},
+		{OC4, 1536000},
+		{OC3, 1497600},
+		{OC2, 1401600},
+		{OC1, 1363200},
 #endif
-		{NOC, 1363200},
+		{NOC, 1300000},
 		{UC1, 1248000},
 		{UC2, 1209600},
 		{UC3, 1152000},
@@ -109,9 +110,10 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC3]  = 1125000,
-		[OC2]  = 1100000,
-		[OC1]  = 1075000,
+		[OC4]  = 1125000,
+		[OC3]  = 1100000,
+		[OC2]  = 1075000,
+		[OC1]  = 1050000,
 #endif
 		[NOC]  = 1050000,
 		[UC1]  = 1025000,
@@ -442,7 +444,7 @@ static void sprd_set_cpufreq_limit(void)
 {
 	cpufreq_min_limit = sprd_cpufreq_conf->freq_tbl[MIN_CL].frequency;
 #ifdef SPRD_OC
-	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[OC3].frequency;
+	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[OC4].frequency;
 #else
 	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[NOC].frequency;
 #endif
