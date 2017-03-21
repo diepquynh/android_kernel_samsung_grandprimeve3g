@@ -48,10 +48,10 @@
 #define GR_GEN1			(REG_GLB_GEN1)
 #endif
 
-#define FREQ_TABLE_SIZE 	15
+#define FREQ_TABLE_SIZE 	16
 #define DVFS_BOOT_TIME	(30 * HZ)
 #define SHARK_TDPLL_FREQUENCY	(768000)
-#define TRANSITION_LATENCY	(100 * 1000) /* ns */
+#define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
 #define MAX_VOLT (1125 * 1000)
 #define MIN_VOLT (825 * 1000)
@@ -84,8 +84,8 @@ enum clocking_levels {
 	OC4, OC3, OC2, OC1,
 #endif
 	NOC, UC1, UC2, UC3, UC4,
-	UC5, UC6, UC7, UC8, UC9,
-	MIN_CL=UC9,
+	UC5, UC6, UC7, UC8, UC9, UCX,
+	MIN_CL=UCX,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
@@ -103,9 +103,10 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 		{UC4, 1094400},
 		{UC5, 998400},
 		{UC6, 800000},
-		{UC7, 533333},
-		{UC8, 400000},
-		{UC9, 200000},
+		{UC7, SHARK_TDPLL_FREQUENCY},
+		{UC8, 533333},
+		{UC9, 400000},
+		{UCX, 200000},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
@@ -122,9 +123,10 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 		[UC4]  = 950000,
 		[UC5]  = 925000,
 		[UC6]  = 900000,
-		[UC7]  = 875000,
-		[UC8]  = 850000,
-		[UC9]  = 825000,
+		[UC7]  = 900000,
+		[UC8]  = 875000,
+		[UC9]  = 850000,
+		[UCX]  = 825000,
 		[EC]   = 825000,
         },
 };
