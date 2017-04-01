@@ -37,9 +37,9 @@
 
 #define DEF_FREQUENCY_UP_THRESHOLD				(65)
 #define DEF_FREQUENCY_DOWN_THRESHOLD				(35)
-#define FREQ_STEP_DOWN						(200000)
-#define FREQ_SLEEP_MAX						(200000)
-#define FREQ_AWAKE_MIN						(400000)
+#define FREQ_STEP_DOWN						(576000)
+#define FREQ_SLEEP_MAX						(576000)
+#define FREQ_AWAKE_MIN						(652800)
 #define FREQ_STEP_UP_SLEEP_PERCENT				(20)
 
 /*

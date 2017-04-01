@@ -48,13 +48,13 @@
 #define GR_GEN1			(REG_GLB_GEN1)
 #endif
 
-#define FREQ_TABLE_SIZE 	16
+#define FREQ_TABLE_SIZE 	20
 #define DVFS_BOOT_TIME	(30 * HZ)
 #define SHARK_TDPLL_FREQUENCY	(768000)
 #define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
-#define MAX_VOLT (1125 * 1000)
-#define MIN_VOLT (825 * 1000)
+#define MAX_VOLT (1045 * 1000)
+#define MIN_VOLT (820 * 1000)
 
 static DEFINE_MUTEX(freq_lock);
 struct cpufreq_freqs global_freqs;
@@ -83,9 +83,9 @@ enum clocking_levels {
 #ifdef SPRD_OC
 	OC4, OC3, OC2, OC1,
 #endif
-	NOC, UC1, UC2, UC3, UC4,
-	UC5, UC6, UC7, UC8, UC9, UCX,
-	MIN_CL=UCX,
+	NOC, UC1, UC2, UC3, UC4, UC5,
+	UC6, UC7, UC8, UC9, UCX, UCX1,
+	MIN_CL=UCX1,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
@@ -97,37 +97,39 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 		{OC1, 1363200},
 #endif
 		{NOC, 1300000},
-		{UC1, 1248000},
-		{UC2, 1209600},
-		{UC3, 1152000},
-		{UC4, 1094400},
-		{UC5, 998400},
-		{UC6, 800000},
-		{UC7, SHARK_TDPLL_FREQUENCY},
-		{UC8, 533333},
-		{UC9, 400000},
-		{UCX, 200000},
+		{UC1, 1267200},
+		{UC2, 1190400},
+		{UC3, 1113600},
+		{UC4, 1036800},
+		{UC5, 960000},
+		{UC6, 883200},
+		{UC7, 800000},
+		{UC8, SHARK_TDPLL_FREQUENCY},
+		{UC9, 729600},
+		{UCX, 652000},
+		{UCX1,576000},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC4]  = 1125000,
-		[OC3]  = 1100000,
-		[OC2]  = 1075000,
-		[OC1]  = 1050000,
+		[OC4]  = 1045000,
+		[OC3]  = 1030000,
+		[OC2]  = 1015000,
+		[OC1]  = 1000000,
 #endif
-		[NOC]  = 1050000,
-		[UC1]  = 1025000,
-		[UC2]  = 1000000,
-		[UC3]  = 975000,
-		[UC4]  = 950000,
-		[UC5]  = 925000,
-		[UC6]  = 900000,
-		[UC7]  = 900000,
-		[UC8]  = 875000,
+		[NOC]  = 985000,
+		[UC1]  = 970000,
+		[UC2]  = 955000,
+		[UC3]  = 940000,
+		[UC4]  = 925000,
+		[UC5]  = 910000,
+		[UC6]  = 895000,
+		[UC7]  = 880000,
+		[UC8]  = 865000,
 		[UC9]  = 850000,
-		[UCX]  = 825000,
-		[EC]   = 825000,
+		[UCX]  = 835000,
+		[UCX1] = 820000,
+		[EC]   = 820000,
         },
 };
 
