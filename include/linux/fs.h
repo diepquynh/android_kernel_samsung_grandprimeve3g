@@ -1550,10 +1550,8 @@ struct file_operations {
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
 	int (*show_fdinfo)(struct seq_file *m, struct file *f);
-<<<<<<< HEAD
+
 	/* get_lower_file is for stackable file system */
-=======
->>>>>>> 5545878... sdcardfs: Flag files as non-mappable
 	struct file* (*get_lower_file)(struct file *f);
 };
 
