@@ -92,7 +92,7 @@ function clean() {
 }
 
 function main() {
-	reset;
+	clear;
 	read -p "Please specify Toolchain path: " tcpath;
 	if [ "${tcpath}" == "" ]; then
 		echo -e "$red"
@@ -106,7 +106,7 @@ function main() {
 	if [ "${USE_CCACHE}" == "1" ]; then
 		CCACHE_PATH=/usr/bin/ccache;
 		export CROSS_COMPILE="${CCACHE_PATH} ${CROSS_COMPILE}";
-		export JOBS=2;
+		export JOBS=8;
 		echo -e "$red";
 		echo -e "You have enabled ccache through *export USE_CCACHE=1*, now using ccache...$nocol";
 	fi;
