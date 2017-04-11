@@ -138,8 +138,6 @@ config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
-source "drivers/cpufreq/Kconfig.default_governor"
-
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -292,8 +290,6 @@ config SCX35_1300MHZ
         default n
         help
           enable the 1300MHZ
-
-source "drivers/cpufreq/Kconfig.governors"
 
 menu "x86 CPU frequency scaling drivers"
 depends on X86
