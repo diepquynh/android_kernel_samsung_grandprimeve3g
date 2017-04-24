@@ -53,7 +53,7 @@
 #define SHARK_TDPLL_FREQUENCY	(768000)
 #define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
-#define MAX_VOLT (1045 * 1000)
+#define MAX_VOLT (1015 * 1000)
 #define MIN_VOLT (820 * 1000)
 
 static DEFINE_MUTEX(freq_lock);
@@ -83,9 +83,9 @@ enum clocking_levels {
 #ifdef SPRD_OC
 	OC4, OC3, OC2, OC1,
 #endif
-	NOC, UC1, UC2, UC3, UC4, UC5,
-	UC6, UC7, UC8, UC9, UCX, UCX1,
-	MIN_CL=UCX1,
+	NOC, UC1, UC2, UC3, UC4,
+	UC5, UC6, UC7, UC8, UC9,
+	MIN_CL=UC9,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
@@ -106,29 +106,25 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 		{UC7, 800000},
 		{UC8, SHARK_TDPLL_FREQUENCY},
 		{UC9, 729600},
-		{UCX, 652000},
-		{UCX1,576000},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC4]  = 1045000,
-		[OC3]  = 1030000,
-		[OC2]  = 1015000,
-		[OC1]  = 1000000,
+		[OC4]  = 1015000,
+		[OC3]  = 1000000,
+		[OC2]  = 985000,
+		[OC1]  = 970000,
 #endif
-		[NOC]  = 985000,
-		[UC1]  = 970000,
-		[UC2]  = 955000,
-		[UC3]  = 940000,
-		[UC4]  = 925000,
-		[UC5]  = 910000,
-		[UC6]  = 895000,
-		[UC7]  = 880000,
-		[UC8]  = 865000,
-		[UC9]  = 850000,
-		[UCX]  = 835000,
-		[UCX1] = 820000,
+		[NOC]  = 955000,
+		[UC1]  = 940000,
+		[UC2]  = 925000,
+		[UC3]  = 910000,
+		[UC4]  = 895000,
+		[UC5]  = 880000,
+		[UC6]  = 865000,
+		[UC7]  = 850000,
+		[UC8]  = 835000,
+		[UC9]  = 820000,
 		[EC]   = 820000,
         },
 };
