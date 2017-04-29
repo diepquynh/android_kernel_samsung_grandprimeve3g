@@ -53,6 +53,9 @@ enum ION_SPRD_CUSTOM_CMD {
 	/*for new MemoryHeapIon*/
 	ION_SPRD_CUSTOM_MAP,
 	ION_SPRD_CUSTOM_UNMAP,
+	ION_SPRD_CUSTOM_MAP_KERNEL,
+	ION_SPRD_CUSTOM_UNMAP_KERNEL,
+	ION_SPRD_CUSTOM_INVALIDATE,
 };
 
 enum SPRD_DEVICE_SYNC_TYPE {
@@ -94,6 +97,16 @@ struct ion_map_data {
 };
 
 struct ion_unmap_data {
+	int fd_buffer;
+};
+
+struct ion_kmap_data {
+	int fd_buffer;
+	unsigned long kaddr;
+	size_t size;
+};
+
+struct ion_kunmap_data {
 	int fd_buffer;
 };
 

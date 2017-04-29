@@ -461,7 +461,89 @@ long sprd_ion_ioctl(struct file *filp, unsigned int cmd,
 	case ION_SPRD_CUSTOM_FENCE_DUP:
 	{
 		break;
+	}
+	case ION_SPRD_CUSTOM_MAP_KERNEL:
+	{
+		struct ion_kmap_data data;
+		struct ion_handle *handle;
+		struct ion_buffer *buffer;
+		void *kaddr;
 
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data))) {
+			pr_err("%s, kernel map, copy_from_user error!\n", __func__);
+			return -EFAULT;
+		}
+
+		handle = ion_import_dma_buf(client, data.fd_buffer);
+		if (IS_ERR(handle)) {
+			pr_err("%s, kernel map, handle=0x%lx error!\n",
+					__func__, (unsigned long)handle);
+			return PTR_ERR(handle);
+		}
+
+		buffer = ion_handle_buffer(handle);
+
+		kaddr = ion_map_kernel(client, handle);
+		if (IS_ERR(kaddr)) {
+			pr_err("%s, kernel map, kaddr=0x%llx error!\n",
+					__func__, (uint64_t)kaddr);
+			ion_free(client, handle);
+			return PTR_ERR(kaddr);
+		}
+
+		data.kaddr = (uint64_t)kaddr;
+		data.size = buffer->size;
+
+		ion_free(client, handle);
+
+		if (copy_to_user((void __user *)arg,
+				&data, sizeof(data))) {
+			pr_err("%s, kernel map, copy_to_user error!\n", __func__);
+			return -EFAULT;
+		}
+		break;
+	}
+	case ION_SPRD_CUSTOM_UNMAP_KERNEL:
+	{
+		struct ion_kunmap_data data;
+		struct ion_handle *handle;
+
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data))) {
+			pr_err("%s, kernel map, copy_from_user error!\n", __func__);
+			return -EFAULT;
+		}
+
+		handle = ion_import_dma_buf(client, data.fd_buffer);
+		if (IS_ERR(handle)) {
+			pr_err("%s, kernel map, handle=0x%lx error!\n",
+					__func__, (unsigned long)handle);
+			return PTR_ERR(handle);
+		}
+
+		ion_unmap_kernel(client, handle);
+
+		ion_free(client, handle);
+		break;
+	}
+	case ION_SPRD_CUSTOM_INVALIDATE:
+	{
+		struct dma_buf *dmabuf;
+		struct ion_buffer *buffer;
+
+		dmabuf = dma_buf_get((int)arg);
+		if (IS_ERR(dmabuf)) {
+			pr_err("%s: dmabuf is error and dmabuf is %p, fd=%d\n",
+					__func__, dmabuf, (int)arg);
+			return PTR_ERR(dmabuf);
+		}
+
+		buffer = dmabuf->priv;
+
+		dma_sync_sg_for_cpu(NULL, buffer->sg_table->sgl,
+				       buffer->sg_table->nents,
+				       DMA_FROM_DEVICE);
+		dma_buf_put(dmabuf);
+		break;
 	}
 	default:
 		pr_err("sprd_ion Do not support cmd: %d\n", cmd);
@@ -715,7 +797,89 @@ static long sprd_heap_ioctl(struct ion_client *client, unsigned int cmd,
 	case ION_SPRD_CUSTOM_FENCE_DUP:
 	{
 		break;
-		
+	}
+	case ION_SPRD_CUSTOM_MAP_KERNEL:
+	{
+		struct ion_kmap_data data;
+		struct ion_handle *handle;
+		struct ion_buffer *buffer;
+		void *kaddr;
+
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data))) {
+			pr_err("%s, kernel map, copy_from_user error!\n", __func__);
+			return -EFAULT;
+		}
+
+		handle = ion_import_dma_buf(client, data.fd_buffer);
+		if (IS_ERR(handle)) {
+			pr_err("%s, kernel map, handle=0x%lx error!\n",
+					__func__, (unsigned long)handle);
+			return PTR_ERR(handle);
+		}
+
+		buffer = ion_handle_buffer(handle);
+
+		kaddr = ion_map_kernel(client, handle);
+		if (IS_ERR(kaddr)) {
+			pr_err("%s, kernel map, kaddr=0x%lx error!\n",
+					__func__, (uint64_t)kaddr);
+			ion_free(client, handle);
+			return PTR_ERR(kaddr);
+		}
+
+		data.kaddr = (uint64_t)kaddr;
+		data.size = buffer->size;
+
+		ion_free(client, handle);
+
+		if (copy_to_user((void __user *)arg,
+				&data, sizeof(data))) {
+			pr_err("%s, kernel map, copy_to_user error!\n", __func__);
+			return -EFAULT;
+		}
+		break;
+	}
+	case ION_SPRD_CUSTOM_UNMAP_KERNEL:
+	{
+		struct ion_kunmap_data data;
+		struct ion_handle *handle;
+
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data))) {
+			pr_err("%s, kernel map, copy_from_user error!\n", __func__);
+			return -EFAULT;
+		}
+
+		handle = ion_import_dma_buf(client, data.fd_buffer);
+		if (IS_ERR(handle)) {
+			pr_err("%s, kernel map, handle=0x%lx error!\n",
+					__func__, (unsigned long)handle);
+			return PTR_ERR(handle);
+		}
+
+		ion_unmap_kernel(client, handle);
+
+		ion_free(client, handle);
+		break;
+	}
+	case ION_SPRD_CUSTOM_INVALIDATE:
+	{
+		struct dma_buf *dmabuf;
+		struct ion_buffer *buffer;
+
+		dmabuf = dma_buf_get((int)arg);
+		if (IS_ERR(dmabuf)) {
+			pr_err("%s: dmabuf is error and dmabuf is %p, fd=%d\n",
+					__func__, dmabuf, (int)arg);
+			return PTR_ERR(dmabuf);
+		}
+
+		buffer = dmabuf->priv;
+
+		dma_sync_sg_for_cpu(NULL, buffer->sg_table->sgl,
+				       buffer->sg_table->nents,
+				       DMA_FROM_DEVICE);
+		dma_buf_put(dmabuf);
+		break;
 	}
 	default:
 		pr_err("sprd_ion Do not support cmd: %d\n", cmd);
