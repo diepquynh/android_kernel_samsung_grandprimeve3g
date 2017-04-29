@@ -284,7 +284,7 @@ static void gpu_dfs_context_init(void)
 	for(i=0;i<gpu_dfs_ctx.freq_list_len;i++)
 	{
 		gpu_dfs_ctx.dfs_freq_list[i]->index=i;
-		MALI_DEBUG_PRINT(4,("index:%3d freq:%6d freq_select:%3d  div_select:%3d up:%6d  down:%6d\n",
+		MALI_DEBUG_PRINT(2,("index:%3d freq:%6d freq_select:%3d  div_select:%3d up:%6d  down:%6d\n",
         gpu_dfs_ctx.dfs_freq_list[i]->index,gpu_dfs_ctx.dfs_freq_list[i]->freq,
 		gpu_dfs_ctx.dfs_freq_list[i]->freq_select, gpu_dfs_ctx.dfs_freq_list[i]->div_select,
 		gpu_dfs_ctx.dfs_freq_list[i]->up_threshold,gpu_dfs_ctx.dfs_freq_list[i]->down_threshold));

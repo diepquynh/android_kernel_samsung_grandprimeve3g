@@ -108,7 +108,7 @@ struct mali_dlbu_core *mali_dlbu_create(const _mali_osk_resource_t *resource)
 {
 	struct mali_dlbu_core *core = NULL;
 
-	MALI_DEBUG_PRINT(4, ("Mali DLBU: Creating Mali dynamic load balancing unit: %s\n", resource->description));
+	MALI_DEBUG_PRINT(2, ("Mali DLBU: Creating Mali dynamic load balancing unit: %s\n", resource->description));
 
 	core = _mali_osk_malloc(sizeof(struct mali_dlbu_core));
 	if (NULL != core) {

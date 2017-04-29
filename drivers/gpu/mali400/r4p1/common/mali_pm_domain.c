@@ -42,7 +42,7 @@ struct mali_pm_domain *mali_pm_domain_create(u32 pmu_mask)
 	domain = mali_pm_domain_get_from_mask(pmu_mask);
 	if (NULL != domain) return domain;
 
-	MALI_DEBUG_PRINT(4,
+	MALI_DEBUG_PRINT(2,
 			 ("Mali PM domain: Creating Mali PM domain (mask=0x%08X)\n",
 			  pmu_mask));
 

@@ -1,7 +1,18 @@
+#config MALI400
+#	tristate "Mali-300/400/450 support"
+#	depends on ARM
+#	select DMA_SHARED_BUFFER
+#	---help---
+#	  This enables support for the ARM Mali-300, Mali-400, and Mali-450
+#	  GPUs.
+#
+#	  To compile this driver as a module, choose M here: the module will be
+#	  called mali.
+
 config MALI_PLATFORM_SC8830
 	bool "Enable Mali support for SC8830 platform"
 	depends on MALI400
-    default y
+        default y
 	---help---
 	  This enables Mali support for SC8830 platform.
 

@@ -208,7 +208,7 @@ real_setting:
 	do_gettimeofday(&stop);
 
 	elapse_time = timeval_to_ns(&stop) - timeval_to_ns(&start);
-	MALI_DEBUG_PRINT(4, ("Using ARM power policy:  eclapse time = %d\n", elapse_time));
+	MALI_DEBUG_PRINT(2, ("Using ARM power policy:  eclapse time = %d\n", elapse_time));
 #endif
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2015 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2014 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -45,7 +45,7 @@ void (*mali_utilization_callback)(struct mali_gpu_utilization_data *data) = NULL
 static u32 mali_control_first_timeout = 100;
 static struct mali_gpu_utilization_data mali_util_data = {0, };
 
-struct mali_gpu_utilization_data *mali_utilization_calculate(u64 *start_time, u64 *time_period, mali_bool *need_add_timer)
+struct mali_gpu_utilization_data *mali_utilization_calculate(u64 *start_time, u64 *time_period)
 {
 	u64 time_now;
 	u32 leading_zeroes;
@@ -65,7 +65,6 @@ struct mali_gpu_utilization_data *mali_utilization_calculate(u64 *start_time, u6
 	*time_period = time_now - *start_time;
 
 	if (accumulated_work_time_gpu == 0 && work_start_time_gpu == 0) {
-		mali_control_timer_pause();
 		/*
 		 * No work done for this period
 		 * - No need to reschedule timer
@@ -81,7 +80,8 @@ struct mali_gpu_utilization_data *mali_utilization_calculate(u64 *start_time, u6
 
 		mali_utilization_data_unlock();
 
-		*need_add_timer = MALI_FALSE;
+		/* Stop add timer until the next job submited */
+		mali_control_timer_suspend(MALI_FALSE);
 
 		mali_executor_hint_disable(MALI_EXECUTOR_HINT_GP_BOUND);
 
@@ -172,8 +172,6 @@ struct mali_gpu_utilization_data *mali_utilization_calculate(u64 *start_time, u6
 
 	mali_utilization_data_unlock();
 
-	*need_add_timer = MALI_TRUE;
-
 	MALI_DEBUG_PRINT(4, ("last_utilization_gpu = %d \n", last_utilization_gpu));
 	MALI_DEBUG_PRINT(4, ("last_utilization_gp = %d \n", last_utilization_gp));
 	MALI_DEBUG_PRINT(4, ("last_utilization_pp = %d \n", last_utilization_pp));
@@ -189,13 +187,13 @@ _mali_osk_errcode_t mali_utilization_init(void)
 	if (_MALI_OSK_ERR_OK == _mali_osk_device_data_get(&data)) {
 		if (NULL != data.utilization_callback) {
 			mali_utilization_callback = data.utilization_callback;
-			MALI_DEBUG_PRINT(4, ("Mali GPU Utilization: Utilization handler installed \n"));
+			MALI_DEBUG_PRINT(2, ("Mali GPU Utilization: Utilization handler installed \n"));
 		}
 	}
 #endif /* defined(USING_GPU_UTILIZATION) */
 
 	if (NULL == mali_utilization_callback) {
-		MALI_DEBUG_PRINT(4, ("Mali GPU Utilization: No platform utilization handler installed\n"));
+		MALI_DEBUG_PRINT(2, ("Mali GPU Utilization: No platform utilization handler installed\n"));
 	}
 
 	utilization_data_lock = _mali_osk_spinlock_irq_init(_MALI_OSK_LOCKFLAG_ORDERED, _MALI_OSK_LOCK_ORDER_UTILIZATION);
@@ -419,15 +417,13 @@ void mali_utilization_data_unlock(void)
 	_mali_osk_spinlock_irq_unlock(utilization_data_lock);
 }
 
-void mali_utilization_data_assert_locked(void)
-{
-	MALI_DEBUG_ASSERT_LOCK_HELD(utilization_data_lock);
-}
-
 u32 _mali_ukk_utilization_gp_pp(void)
 {
 	return last_utilization_gpu;
 }
+#ifdef CONFIG_THUNDERPLUG_CONTROL
+EXPORT_SYMBOL(_mali_ukk_utilization_gp_pp);
+#endif
 
 u32 _mali_ukk_utilization_gp(void)
 {

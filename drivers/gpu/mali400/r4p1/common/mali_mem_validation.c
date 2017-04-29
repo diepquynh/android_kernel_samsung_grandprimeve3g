@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2015 ARM Limited. All rights reserved.
+ * Copyright (C) 2011-2014 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -38,7 +38,7 @@ _mali_osk_errcode_t mali_mem_validation_add_range(u32 start, u32 size)
 
 	mali_mem_validator.phys_base = start;
 	mali_mem_validator.size = size;
-	MALI_DEBUG_PRINT(4, ("Memory Validator installed for Mali physical address base=0x%08X, size=0x%08X\n",
+	MALI_DEBUG_PRINT(2, ("Memory Validator installed for Mali physical address base=0x%08X, size=0x%08X\n",
 			     mali_mem_validator.phys_base, mali_mem_validator.size));
 
 	return _MALI_OSK_ERR_OK;

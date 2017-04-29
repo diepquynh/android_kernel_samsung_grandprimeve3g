@@ -1,9 +1,9 @@
 /**
- * Copyright (C) 2010-2015 ARM Limited. All rights reserved.
- * 
+ * Copyright (C) 2010-2014 ARM Limited. All rights reserved.
+ *
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
- * 
+ *
  * A copy of the licence is included with the program, and can also be obtained from Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
@@ -40,8 +40,6 @@
 #include "mali_kernel_license.h"
 #include "mali_memory.h"
 #include "mali_memory_dma_buf.h"
-#include "mali_memory_manager.h"
-#include "mali_memory_swap_alloc.h"
 #if defined(CONFIG_MALI400_INTERNAL_PROFILING)
 #include "mali_profiling_internal.h"
 #endif
@@ -94,9 +92,9 @@ int gpu_boost_level=0;
 module_param(gpu_boost_level, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
 MODULE_PARM_DESC(gpu_boost_level, "GPU gpu_boost_level");
 
-int gpu_boost_sf_level=0;
+int gpu_boost_sf_level = 0;
 module_param(gpu_boost_sf_level, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
-MODULE_PARM_DESC(gpu_boost_sf_level, "GPU gpu_boost_sf_level");
+MODULE_PARM_DESC(gpu_boost_sf_level, "GPU gpu boost surfaceflinger level");
 
 extern int mali_max_job_runtime;
 module_param(mali_max_job_runtime, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH);
@@ -131,10 +129,6 @@ MODULE_PARM_DESC(mali_max_pp_cores_group_1, "Limit the number of PP cores to use
 extern int mali_max_pp_cores_group_2;
 module_param(mali_max_pp_cores_group_2, int, S_IRUSR | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(mali_max_pp_cores_group_2, "Limit the number of PP cores to use from second PP group (Mali-450 only).");
-
-extern unsigned int mali_mem_swap_out_threshold_value;
-module_param(mali_mem_swap_out_threshold_value, uint, S_IRUSR | S_IRGRP | S_IROTH);
-MODULE_PARM_DESC(mali_mem_swap_out_threshold_value, "Threshold value used to limit how much swappable memory cached in Mali driver.");
 
 #if defined(CONFIG_MALI_DVFS)
 /** the max fps the same as display vsync default 60, can set by module insert parameter */
@@ -235,7 +229,7 @@ struct of_device_id base_dt_ids[] = {
 	{.compatible = "arm,mali-300"},
 	{.compatible = "arm,mali-400"},
 	{.compatible = "arm,mali-450"},
-	{.compatible = "arm,mali-470"},
+	{.compatible = "arm,mali-utgard"},
 	{},
 };
 
@@ -395,33 +389,17 @@ void mali_init_cpu_time_counters_on_all_cpus(int print_only)
 }
 #endif
 
-#ifdef CONFIG_E_SHOW_MEM
-static int mali_e_show_mem_handler(struct notifier_block *nb,
-                       unsigned long val, void *data)
-{
-	printk("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-	printk("Enhanced Mem-info :MALI\n");
-	mali_session_memory_tracking_printk();
-	return 0;
-}
-
-
-static struct notifier_block mali_e_show_mem_notifier = {
-	.notifier_call = mali_e_show_mem_handler,
-};
-#endif
-
 int mali_module_init(void)
 {
 	int err = 0;
 
-	MALI_DEBUG_PRINT(4, ("Inserting Mali v%d device driver. \n", _MALI_API_VERSION));
+	MALI_DEBUG_PRINT(2, ("Inserting Mali v%d device driver. \n", _MALI_API_VERSION));
 //	MALI_DEBUG_PRINT(2, ("Compiled: %s, time: %s.\n", __DATE__, __TIME__));
-	MALI_DEBUG_PRINT(4, ("Driver revision: %s\n", SVN_REV_STRING));
+	MALI_DEBUG_PRINT(2, ("Driver revision: %s\n", SVN_REV_STRING));
 
 #if MALI_ENABLE_CPU_CYCLES
 	mali_init_cpu_time_counters_on_all_cpus(0);
-	MALI_DEBUG_PRINT(4, ("CPU cycle counter setup complete\n"));
+	MALI_DEBUG_PRINT(2, ("CPU cycle counter setup complete\n"));
 	/* Printing the current cpu counters */
 	mali_init_cpu_time_counters_on_all_cpus(1);
 #endif
@@ -429,7 +407,7 @@ int mali_module_init(void)
 	/* Initialize module wide settings */
 #ifdef MALI_FAKE_PLATFORM_DEVICE
 #ifndef CONFIG_MALI_DT
-	MALI_DEBUG_PRINT(4, ("mali_module_init() registering device\n"));
+	MALI_DEBUG_PRINT(2, ("mali_module_init() registering device\n"));
 	err = mali_platform_device_register();
 	if (0 != err) {
 		return err;
@@ -437,7 +415,7 @@ int mali_module_init(void)
 #endif
 #endif
 
-	MALI_DEBUG_PRINT(4, ("mali_module_init() registering driver\n"));
+	MALI_DEBUG_PRINT(2, ("mali_module_init() registering driver\n"));
 
 	err = platform_driver_register(&mali_platform_driver);
 
@@ -472,9 +450,6 @@ int mali_module_init(void)
 					  0, 0, 0);
 #endif
 
-#ifdef CONFIG_E_SHOW_MEM
-	register_e_show_mem_notifier(&mali_e_show_mem_notifier);
-#endif
 	MALI_PRINT(("Mali device driver loaded\n"));
 
 	return 0; /* Success */
@@ -482,15 +457,15 @@ int mali_module_init(void)
 
 void mali_module_exit(void)
 {
-	MALI_DEBUG_PRINT(4, ("Unloading Mali v%d device driver.\n", _MALI_API_VERSION));
+	MALI_DEBUG_PRINT(2, ("Unloading Mali v%d device driver.\n", _MALI_API_VERSION));
 
-	MALI_DEBUG_PRINT(4, ("mali_module_exit() unregistering driver\n"));
+	MALI_DEBUG_PRINT(2, ("mali_module_exit() unregistering driver\n"));
 
 	platform_driver_unregister(&mali_platform_driver);
 
 #if defined(MALI_FAKE_PLATFORM_DEVICE)
 #ifndef CONFIG_MALI_DT
-	MALI_DEBUG_PRINT(4, ("mali_module_exit() unregistering device\n"));
+	MALI_DEBUG_PRINT(2, ("mali_module_exit() unregistering device\n"));
 	mali_platform_device_unregister();
 #endif
 #endif
@@ -507,9 +482,6 @@ void mali_module_exit(void)
 	_mali_internal_profiling_term();
 #endif
 
-#ifdef CONFIG_E_SHOW_MEM
-	unregister_e_show_mem_notifier(&mali_e_show_mem_notifier);
-#endif
 	MALI_PRINT(("Mali device driver unloaded\n"));
 }
 
@@ -517,7 +489,7 @@ static int mali_probe(struct platform_device *pdev)
 {
 	int err;
 
-	MALI_DEBUG_PRINT(4, ("mali_probe(): Called for platform device %s\n", pdev->name));
+	MALI_DEBUG_PRINT(2, ("mali_probe(): Called for platform device %s\n", pdev->name));
 
 	if (NULL != mali_platform_device) {
 		/* Already connected to a device, return error */
@@ -526,6 +498,18 @@ static int mali_probe(struct platform_device *pdev)
 	}
 
 	mali_platform_device = pdev;
+
+#ifdef CONFIG_64BIT
+	static u64 mali_dma_mask = DMA_BIT_MASK(32);
+	pdev->dev.dma_mask = &mali_dma_mask;
+#endif
+
+	err = mali_executor_initialize();
+	if (_MALI_OSK_ERR_OK != err)
+	{
+		MALI_PRINT_ERROR(("mali_executor_initialize failed.\n"));
+		return -EFAULT;
+	}
 
 #ifdef CONFIG_MALI_DT
 	/* If we use DT to initialize our DDK, we have to prepare somethings. */
@@ -546,7 +530,7 @@ static int mali_probe(struct platform_device *pdev)
 				err = mali_sysfs_register(mali_dev_name);
 
 				if (0 == err) {
-					MALI_DEBUG_PRINT(4, ("mali_probe(): Successfully initialized driver for platform device %s\n", pdev->name));
+					MALI_DEBUG_PRINT(2, ("mali_probe(): Successfully initialized driver for platform device %s\n", pdev->name));
 
 					return 0;
 				} else {
@@ -569,7 +553,7 @@ static int mali_probe(struct platform_device *pdev)
 
 static int mali_remove(struct platform_device *pdev)
 {
-	MALI_DEBUG_PRINT(4, ("mali_remove() called for platform device %s\n", pdev->name));
+	MALI_DEBUG_PRINT(2, ("mali_remove() called for platform device %s\n", pdev->name));
 	mali_sysfs_unregister();
 	mali_miscdevice_unregister();
 	mali_terminate_subsystems();
@@ -685,7 +669,8 @@ static int mali_driver_runtime_resume(struct device *dev)
 
 static int mali_driver_runtime_idle(struct device *dev)
 {
-	/* Nothing to do */
+	MALI_DEBUG_PRINT(5, ("%s:%d \n",__FUNCTION__, __LINE__));
+	pm_runtime_suspend(dev);
 	return 0;
 }
 #endif
@@ -710,8 +695,6 @@ static int mali_open(struct inode *inode, struct file *filp)
 
 	/* link in our session data */
 	filp->private_data = (void *)session_data;
-
-	filp->f_mapping = mali_mem_swap_get_global_swap_file()->f_mapping;
 
 	return 0;
 }
@@ -817,11 +800,6 @@ static int mali_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, 
 		err = request_high_priority_wrapper(session_data, (_mali_uk_request_high_priority_s __user *)arg);
 		break;
 
-	case MALI_IOC_PENDING_SUBMIT:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_pending_submit_s), sizeof(u64)));
-		err = pending_submit_wrapper(session_data, (_mali_uk_pending_submit_s __user *)arg);
-		break;
-
 #if defined(CONFIG_MALI400_PROFILING)
 	case MALI_IOC_PROFILING_ADD_EVENT:
 		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_profiling_add_event_s), sizeof(u64)));
@@ -833,67 +811,36 @@ static int mali_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, 
 		err = profiling_report_sw_counters_wrapper(session_data, (_mali_uk_sw_counters_report_s __user *)arg);
 		break;
 
-	case MALI_IOC_PROFILING_STREAM_FD_GET:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_profiling_stream_fd_get_s), sizeof(u64)));
-		err = profiling_get_stream_fd_wrapper(session_data, (_mali_uk_profiling_stream_fd_get_s __user *)arg);
+
+	case MALI_IOC_PROFILING_MEMORY_USAGE_GET:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_profiling_memory_usage_get_s), sizeof(u64)));
+		err = profiling_memory_usage_get_wrapper(session_data, (_mali_uk_profiling_memory_usage_get_s __user *)arg);
 		break;
 
-	case MALI_IOC_PROILING_CONTROL_SET:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_profiling_control_set_s), sizeof(u64)));
-		err = profiling_control_set_wrapper(session_data, (_mali_uk_profiling_control_set_s __user *)arg);
-		break;
 #else
 
 	case MALI_IOC_PROFILING_ADD_EVENT:          /* FALL-THROUGH */
 	case MALI_IOC_PROFILING_REPORT_SW_COUNTERS: /* FALL-THROUGH */
+	case MALI_IOC_PROFILING_MEMORY_USAGE_GET:   /* FALL-THROUGH */
 		MALI_DEBUG_PRINT(2, ("Profiling not supported\n"));
 		err = -ENOTTY;
 		break;
+
 #endif
-
-	case MALI_IOC_PROFILING_MEMORY_USAGE_GET:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_profiling_memory_usage_get_s), sizeof(u64)));
-		err = mem_usage_get_wrapper(session_data, (_mali_uk_profiling_memory_usage_get_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_ALLOC:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_alloc_mem_s), sizeof(u64)));
-		err = mem_alloc_wrapper(session_data, (_mali_uk_alloc_mem_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_FREE:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_free_mem_s), sizeof(u64)));
-		err = mem_free_wrapper(session_data, (_mali_uk_free_mem_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_BIND:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_bind_mem_s), sizeof(u64)));
-		err = mem_bind_wrapper(session_data, (_mali_uk_bind_mem_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_UNBIND:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_unbind_mem_s), sizeof(u64)));
-		err = mem_unbind_wrapper(session_data, (_mali_uk_unbind_mem_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_COW:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_cow_mem_s), sizeof(u64)));
-		err = mem_cow_wrapper(session_data, (_mali_uk_cow_mem_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_COW_MODIFY_RANGE:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_cow_modify_range_s), sizeof(u64)));
-		err = mem_cow_modify_range_wrapper(session_data, (_mali_uk_cow_modify_range_s __user *)arg);
-		break;
-
-	case MALI_IOC_MEM_RESIZE:
-		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_mem_resize_s), sizeof(u64)));
-		err = mem_resize_mem_wrapper(session_data, (_mali_uk_mem_resize_s __user *)arg);
-		break;
 
 	case MALI_IOC_MEM_WRITE_SAFE:
 		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_mem_write_safe_s), sizeof(u64)));
 		err = mem_write_safe_wrapper(session_data, (_mali_uk_mem_write_safe_s __user *)arg);
+		break;
+
+	case MALI_IOC_MEM_MAP_EXT:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_map_external_mem_s), sizeof(u64)));
+		err = mem_map_ext_wrapper(session_data, (_mali_uk_map_external_mem_s __user *)arg);
+		break;
+
+	case MALI_IOC_MEM_UNMAP_EXT:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_unmap_external_mem_s), sizeof(u64)));
+		err = mem_unmap_ext_wrapper(session_data, (_mali_uk_unmap_external_mem_s __user *)arg);
 		break;
 
 	case MALI_IOC_MEM_QUERY_MMU_PAGE_TABLE_DUMP_SIZE:
@@ -906,15 +853,51 @@ static int mali_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, 
 		err = mem_dump_mmu_page_table_wrapper(session_data, (_mali_uk_dump_mmu_page_table_s __user *)arg);
 		break;
 
-	case MALI_IOC_MEM_DMA_BUF_GET_SIZE:
+#if defined(CONFIG_MALI400_UMP)
+
+	case MALI_IOC_MEM_ATTACH_UMP:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_attach_ump_mem_s), sizeof(u64)));
+		err = mem_attach_ump_wrapper(session_data, (_mali_uk_attach_ump_mem_s __user *)arg);
+		break;
+
+	case MALI_IOC_MEM_RELEASE_UMP:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_release_ump_mem_s), sizeof(u64)));
+		err = mem_release_ump_wrapper(session_data, (_mali_uk_release_ump_mem_s __user *)arg);
+		break;
+
+#else
+
+	case MALI_IOC_MEM_ATTACH_UMP:
+	case MALI_IOC_MEM_RELEASE_UMP: /* FALL-THROUGH */
+		MALI_DEBUG_PRINT(2, ("UMP not supported\n"));
+		err = -ENOTTY;
+		break;
+#endif
+
 #ifdef CONFIG_DMA_SHARED_BUFFER
+	case MALI_IOC_MEM_ATTACH_DMA_BUF:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_attach_dma_buf_s), sizeof(u64)));
+		err = mali_attach_dma_buf(session_data, (_mali_uk_attach_dma_buf_s __user *)arg);
+		break;
+
+	case MALI_IOC_MEM_RELEASE_DMA_BUF:
+		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_release_dma_buf_s), sizeof(u64)));
+		err = mali_release_dma_buf(session_data, (_mali_uk_release_dma_buf_s __user *)arg);
+		break;
+
+	case MALI_IOC_MEM_DMA_BUF_GET_SIZE:
 		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_dma_buf_get_size_s), sizeof(u64)));
 		err = mali_dma_buf_get_size(session_data, (_mali_uk_dma_buf_get_size_s __user *)arg);
+		break;
 #else
+
+	case MALI_IOC_MEM_ATTACH_DMA_BUF:   /* FALL-THROUGH */
+	case MALI_IOC_MEM_RELEASE_DMA_BUF:  /* FALL-THROUGH */
+	case MALI_IOC_MEM_DMA_BUF_GET_SIZE: /* FALL-THROUGH */
 		MALI_DEBUG_PRINT(2, ("DMA-BUF not supported\n"));
 		err = -ENOTTY;
-#endif
 		break;
+#endif
 
 	case MALI_IOC_PP_START_JOB:
 		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_pp_start_job_s), sizeof(u64)));
@@ -986,6 +969,7 @@ static int mali_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, 
 		BUILD_BUG_ON(!IS_ALIGNED(sizeof(_mali_uk_soft_job_signal_s), sizeof(u64)));
 		err = soft_job_signal_wrapper(session_data, (_mali_uk_soft_job_signal_s __user *)arg);
 		break;
+
 	case MALI_IOC_MEM_INIT:
 		err = mem_init_wrapper(session_data, (_mali_uk_init_mem_s __user *)arg);
 		break;

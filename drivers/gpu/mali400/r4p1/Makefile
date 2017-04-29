@@ -12,8 +12,8 @@
 
 # set up defaults if not defined by the user
 TIMESTAMP ?= default
-OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 16
-USING_GPU_UTILIZATION ?= 0
+OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB = 64
+USING_GPU_UTILIZATION = 0
 PROFILING_SKIP_PP_JOBS ?= 0
 PROFILING_SKIP_PP_AND_GP_JOBS ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP ?= 0
@@ -22,24 +22,37 @@ MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
 MALI_UPPER_HALF_SCHEDULING ?= 1
 MALI_ENABLE_CPU_CYCLES ?= 0
 
-ifeq ($(USING_GPU_UTILIZATION),1)
-    ifeq ($(CONFIG_MALI_DVFS),y)
+ifeq ($(USING_GPU_UTILIZATION), 1)
+    ifeq ($(USING_DVFS), 1)
         $(error USING_GPU_UTILIZATION conflict with USING_DVFS you can read the Integration Guide to choose which one do you need)
     endif
 endif
 
-ifeq ($(CONFIG_MALI400_PROFILING),y)
-	ifeq ($(CONFIG_TRACEPOINTS),)
-		$(warning CONFIG_TRACEPOINTS required for profiling)
+ifeq ($(CONFIG_MALI400_UMP),y)
+	export EXTRA_DEFINES += -DCONFIG_MALI400_UMP=1
+	ifeq ($(USE_UMPV2),1)
+		UMP_SYMVERS_FILE ?= ../umpv2/Module.symvers
 	else
-		export EXTRA_DEFINES += -DCONFIG_MALI400_PROFILING=1
-		ifeq ($(CONFIG_MALI400_INTERNAL_PROFILING),y)
-			export EXTRA_DEFINES += -DCONFIG_MALI400_INTERNAL_PROFILING=1
-		endif
-		ifeq ($(CONFIG_MALI_HEATMAPS_ENABLED),y)
-			export EXTRA_DEFINES += -DCONFIG_MALI400_HEATMAPS_ENABLED
-		endif
+		UMP_SYMVERS_FILE ?= ../ump/Module.symvers
 	endif
+	KBUILD_EXTRA_SYMBOLS = $(realpath $(UMP_SYMVERS_FILE))
+	$(warning $(KBUILD_EXTRA_SYMBOLS))
+endif
+
+ifeq ($(CONFIG_MALI400_PROFILING),y)
+ifeq ($(CONFIG_TRACEPOINTS),)
+	$(warning CONFIG_TRACEPOINTS required for profiling)
+else
+	export EXTRA_DEFINES += -DCONFIG_MALI400_PROFILING=1
+endif
+endif
+
+ifeq ($(CONFIG_MALI400_INTERNAL_PROFILING),y)
+export EXTRA_DEFINES += -DCONFIG_MALI400_INTERNAL_PROFILING=1
+endif
+
+ifeq ($(CONFIG_MALI400_HEATMAPS_ENABLED),y)
+export EXTRA_DEFINES += -DCONFIG_MALI400_HEATMAPS_ENABLED
 endif
 
 ifeq ($(CONFIG_MALI_DMA_BUF_MAP_ON_ATTACH),y)
@@ -61,8 +74,8 @@ endif
 export EXTRA_DEFINES += -DCONFIG_MALI_DT
 
 ifeq ($(CONFIG_MALI_PLATFORM_SC8830),y)
-	export MALI_PLATFORM := sc8830
-	export TARGET_PLATFORM := sc8830
+	MALI_PLATFORM := sc8830
+	TARGET_PLATFORM := sc8830
 endif
 
 EXTRA_DEFINES += -DCONFIG_MALI400=1
@@ -80,20 +93,11 @@ mali-y += \
 	linux/mali_osk_mali.o \
 	linux/mali_osk_notification.o \
 	linux/mali_osk_time.o \
-	linux/mali_osk_timers.o \
-	linux/mali_osk_bitmap.o
+	linux/mali_osk_timers.o
 
 mali-y += linux/mali_memory.o linux/mali_memory_os_alloc.o
 mali-y += linux/mali_memory_external.o
 mali-y += linux/mali_memory_block_alloc.o
-mali-y += linux/mali_memory_swap_alloc.o
-
-mali-y += \
-	linux/mali_memory_manager.o \
-	linux/mali_memory_virtual.o \
-	linux/mali_memory_util.o \
-	linux/mali_memory_cow.o \
-	linux/mali_memory_defer_bind.o
 
 mali-y += \
 	linux/mali_ukk_mem.o \
@@ -107,6 +111,7 @@ mali-y += \
 mali-y += \
 	common/mali_kernel_core.o \
 	linux/mali_kernel_linux.o \
+	common/mali_kernel_descriptor_mapping.o \
 	common/mali_session.o \
 	linux/mali_device_pause_resume.o \
 	common/mali_kernel_vsync.o \
@@ -180,14 +185,14 @@ ccflags-$(CONFIG_MALI400_UMP) += -I$(src)/../ump/include/ump
 ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
-ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/linux/license/gpl -I$(src)/platform -Wno-date-time
+ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/linux/license/gpl -I$(src)/platform 
 
 export EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
 export MALI_PLATFORM_FILES = $(wildcard platform/$(MALI_PLATFORM)/*.c)
 
 ifneq ($(MALI_PLATFORM),)
-mali-y += platform/sc8830/mali_platform.o
-ccflags-y += -I$(src)/platform/sc8830
+mali-y += platform/$(MALI_PLATFORM)/mali_platform.o
+ccflags-y += -I$(src)/platform/$(MALI_PLATFORM)
 endif
 
 # Get subversion revision number, fall back to only ${MALI_RELEASE_NAME} if no svn info is available
