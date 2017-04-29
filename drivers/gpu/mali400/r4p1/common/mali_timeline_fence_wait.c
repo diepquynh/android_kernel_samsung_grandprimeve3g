@@ -163,10 +163,9 @@ mali_bool mali_timeline_fence_wait(struct mali_timeline_system *system, struct m
 
 	/* Wait for the tracker to be activated or time out. */
 	if (MALI_TIMELINE_FENCE_WAIT_TIMEOUT_NEVER == timeout) {
-		_mali_osk_wait_queue_wait_event(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait);
-	} else {
-		_mali_osk_wait_queue_wait_event_timeout(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait, timeout);
+		timeout = 3000;
 	}
+	_mali_osk_wait_queue_wait_event_timeout(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait, timeout);
 
 	ret = wait->activated;
 

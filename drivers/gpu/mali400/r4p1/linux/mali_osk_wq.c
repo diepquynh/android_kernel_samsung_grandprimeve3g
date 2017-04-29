@@ -135,12 +135,14 @@ void _mali_osk_wq_delete_work(_mali_osk_wq_work_t *work)
 {
 	mali_osk_wq_work_object_t *work_object = (mali_osk_wq_work_object_t *)work;
 	_mali_osk_wq_flush();
+	MALI_DEBUG_PRINT(4, ("_mali_osk_wq_delete_work: Delete work_object = %p\n", work_object));
 	kfree(work_object);
 }
 
 void _mali_osk_wq_delete_work_nonflush(_mali_osk_wq_work_t *work)
 {
 	mali_osk_wq_work_object_t *work_object = (mali_osk_wq_work_object_t *)work;
+	MALI_DEBUG_PRINT(4, ("_mali_osk_wq_delete_work_nonflush: Delete work_object = %p\n", work_object));
 	kfree(work_object);
 }
 
@@ -212,6 +214,7 @@ mali_osk_wq_delayed_work_object_t *_mali_osk_wq_delayed_create_work(_mali_osk_wq
 void _mali_osk_wq_delayed_delete_work_nonflush(_mali_osk_wq_delayed_work_t *work)
 {
 	mali_osk_wq_delayed_work_object_t *work_object = (mali_osk_wq_delayed_work_object_t *)work;
+	MALI_DEBUG_PRINT(4, ("_mali_osk_wq_delayed_delete_work_nonflush: Delete work_object = %p\n", work_object));
 	kfree(work_object);
 }
 
@@ -224,6 +227,22 @@ void _mali_osk_wq_delayed_cancel_work_async(_mali_osk_wq_delayed_work_t *work)
 void _mali_osk_wq_delayed_cancel_work_sync(_mali_osk_wq_delayed_work_t *work)
 {
 	mali_osk_wq_delayed_work_object_t *work_object = (mali_osk_wq_delayed_work_object_t *)work;
+
+	/*print work inform*/
+	MALI_DEBUG_PRINT(4, ("Start print work_object = %p \n", work_object));
+	MALI_DEBUG_PRINT(4, ("timeline->delayed_work->data = %p\n", work_object->data));
+	if(work_object->work.timer.entry.prev==0x6b6b6b6b)
+	{
+		MALI_DEBUG_PRINT(2, ("timeline->delayed_work->timer.entry.prev= %p\n", work_object->work.timer.entry.prev));
+	}
+	else
+	{
+		MALI_DEBUG_PRINT(4, ("timeline->delayed_work->timer.entry.prev= %p\n", work_object->work.timer.entry.prev));
+	}
+	MALI_DEBUG_PRINT(4, ("timeline->delayed_work->timer.entry.next= %p\n", work_object->work.timer.entry.next));
+	MALI_DEBUG_PRINT(4, ("timeline->delayed_work->timer.expires= %ld\n", work_object->work.timer.expires));
+	MALI_DEBUG_PRINT(4, ("End print\n"));
+
 	cancel_delayed_work_sync(&work_object->work);
 }
 
