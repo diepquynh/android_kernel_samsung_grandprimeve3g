@@ -136,7 +136,7 @@ abort_resume:
 	mutex_unlock(&power_suspend_lock);
 }
 
-static bool power_suspended = false;
+bool power_suspended = false;
 
 void set_power_suspend_state(int new_state)
 {
@@ -155,7 +155,7 @@ void set_power_suspend_state(int new_state)
 		pr_info("[POWERSUSPEND] state deactivated.\n");
 		#endif
 		state = new_state;
-                power_suspended = false;	
+                power_suspended = false;
           	queue_work(suspend_work_queue, &power_resume_work);
 	}
 	spin_unlock_irqrestore(&state_lock, irqflags);
