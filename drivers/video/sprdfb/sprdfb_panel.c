@@ -17,6 +17,10 @@
 #include <linux/delay.h>
 #include <linux/fb.h>
 
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
+#endif
+
 #include "sprdfb.h"
 #include "sprdfb_panel.h"
 #include "sprdfb_dispc_reg.h"
@@ -554,6 +558,10 @@ void sprdfb_panel_suspend(struct sprdfb_device *dev)
 		panel_reset(dev);
 	}
 
+#ifdef CONFIG_POWERSUSPEND
+	set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
+#endif
+
 	/* 2. clk/data lane enter ulps */
 	if (dev->panel->if_ctrl->panel_if_enter_ulps)
 		dev->panel->if_ctrl->panel_if_enter_ulps(dev);
@@ -601,8 +609,12 @@ void sprdfb_panel_resume(struct sprdfb_device *dev, bool from_deep_sleep)
 		/* 0. power on */
 		if (dev->panel->ops->panel_power){
 			dev->panel->ops->panel_power(dev->panel, 1);
-         pr_info("<#2> set LCD_LDO_EN high\n");
+		        pr_info("<#2> set LCD_LDO_EN high\n");
 		}
+#ifdef CONFIG_POWERSUSPEND
+		set_power_suspend_state_panel_hook(POWER_SUSPEND_INACTIVE);
+#endif
+
 		/* 1. turn on mipi */
 		panel_init(dev);
 
