@@ -29,7 +29,7 @@
 
 static DEFINE_MUTEX(fsync_mutex);
 
-bool power_suspend_active __read_mostly = false;
+bool power_suspend_active __read_mostly = true;
 bool dyn_fsync_active __read_mostly = true;
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj,
