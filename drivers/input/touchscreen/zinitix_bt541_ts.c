@@ -117,7 +117,7 @@ enum key_event {
 
 /* ESD Protection */
 /*second : if 0, no use. if you have to use, 3 is recommended*/
-#define ESD_TIMER_INTERVAL			1
+#define ESD_TIMER_INTERVAL			3
 #define SCAN_RATE_HZ				100
 #define CHECK_ESD_TIMER				3
 
@@ -1064,7 +1064,7 @@ static void esd_timeout_handler(unsigned long data)
 	struct bt541_ts_info *info = (struct bt541_ts_info *)data;
 
 	info->p_esd_timeout_tmr = NULL;
-	queue_work(esd_tmr_workqueue, &info->tmr_work);
+	queue_work(system_power_efficient_wq, &info->tmr_work);
 }
 
 static void esd_timer_start(u16 sec, struct bt541_ts_info *info)
@@ -5174,7 +5174,9 @@ static int bt541_ts_probe(struct i2c_client *client,
 	spin_lock_init(&info->lock);
 	INIT_WORK(&info->tmr_work, ts_tmr_work);
 	esd_tmr_workqueue =
-		create_singlethread_workqueue("esd_tmr_workqueue");
+		alloc_workqueue("esd_tmr_workqueue",
+ 			WQ_HIGHPRI | WQ_UNBOUND | WQ_FREEZABLE |
+ 			WQ_MEM_RECLAIM, 0);
 
 	if (!esd_tmr_workqueue) {
 		dev_err(&client->dev, "Failed to create esd tmr work queue\n");
