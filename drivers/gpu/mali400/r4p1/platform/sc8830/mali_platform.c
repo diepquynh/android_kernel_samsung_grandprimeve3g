@@ -293,7 +293,9 @@ int mali_platform_device_init(struct platform_device *pdev)
 
 	mali_clock_on();
 
-	gpu_dfs_ctx.gpu_dfs_workqueue = create_singlethread_workqueue("gpu_dfs");
+	gpu_dfs_ctx.gpu_dfs_workqueue = alloc_workqueue("gpu_dfs",
+							WQ_HIGHPRI | WQ_MEM_RECLAIM |
+							WQ_POWER_EFFICIENT, 0);
 
 	err = platform_device_add_data(pdev, &mali_gpu_data, sizeof(mali_gpu_data));
 
