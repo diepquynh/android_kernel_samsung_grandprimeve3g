@@ -37,7 +37,7 @@
 //#define ANDROID_TOUCH_DECLARED
 
 /* uncomment if dt2w_scr_suspended is updated automagically */
-#define WAKE_HOOKS_DEFINED
+//#define WAKE_HOOKS_DEFINED
 
 #ifndef WAKE_HOOKS_DEFINED
 #ifndef CONFIG_HAS_EARLYSUSPEND
