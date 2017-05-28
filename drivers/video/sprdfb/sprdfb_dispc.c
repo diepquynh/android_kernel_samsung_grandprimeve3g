@@ -37,6 +37,12 @@
 #include <linux/dma-mapping.h>
 //#define SHARK_LAYER_COLOR_SWITCH_FEATURE // bug212892
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+#include <linux/input/doubletap2wake.h>
+#endif
+#endif
+
 #ifndef CONFIG_OF
 #ifdef CONFIG_FB_SCX15
 #define DISPC_CLOCK_PARENT ("clk_192m")
@@ -1435,6 +1441,11 @@ static int32_t sprdfb_dispc_suspend(struct sprdfb_device *dev)
 	}else{
 		printk(KERN_ERR "sprdfb: [%s]: Invalid device status %d\n", __FUNCTION__, dev->enable);
 	}
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	dt2w_scr_suspended = true;
+#endif
+#endif
 	return 0;
 }
 
@@ -1469,6 +1480,12 @@ static int32_t sprdfb_dispc_resume(struct sprdfb_device *dev)
       sprdfb_panel_start(dev);
 	}
 	printk(KERN_INFO "sprdfb: [%s], leave dev->enable= %d\n",__FUNCTION__, dev->enable);
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	dt2w_scr_suspended = false;
+#endif
+#endif
 
 	return 0;
 }
