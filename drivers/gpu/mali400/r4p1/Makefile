@@ -186,7 +186,7 @@ ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
 ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/linux/license/gpl -I$(src)/platform
-ccflags-y += -Ofast -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4
+ccflags-y += -O3 -ffast-math -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4
 
 export EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
 export MALI_PLATFORM_FILES = $(wildcard platform/$(MALI_PLATFORM)/*.c)
