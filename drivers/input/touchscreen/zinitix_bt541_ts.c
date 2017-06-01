@@ -3066,7 +3066,7 @@ static void get_config_ver(void *device_data)
 			strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
+	dev_info(&client->dev, "%s: %s(%s)\n", __func__, finfo->cmd_buff,
 			(int)strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 
 	return;
@@ -4102,6 +4102,7 @@ static void run_ref_calibration(void *device_data)
 	   printk(KERN_INFO "other process occupied.. (%d)\n", info->work_state);
 	   enable_irq(info->irq);
 	   up(&info->work_lock);
+	   return false;
 	}
 
 #if ESD_TIMER_INTERVAL
