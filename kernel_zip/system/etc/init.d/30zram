@@ -11,8 +11,7 @@ fi
 echo 0 > /proc/sys/vm/page-cluster;
 
 # How many CPU cores do we have?
-cpu_sysfs_paths=$(ls /sys/devices/system/cpu | grep cpu | busybox wc -l)
-num_cpu=$(expr ${cpu_sysfs_paths} - 2) # Except cpufreq and cpuidle sysfs path
+num_cpu=$(($(cat /sys/devices/system/cpu/kernel_max) + 1))
 
 # Remove all zRAMs first
 for i in $(seq ${num_cpu}); do
