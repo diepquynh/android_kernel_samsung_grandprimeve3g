@@ -52,6 +52,21 @@
 #include <linux/power_supply.h>
 extern void (*tsp_charger_status_cb)(int);
 
+#if IST30XX_CHECK_BATT_TEMP
+#include <linux/battery/sec_battery.h>
+
+#define BATTERY_TEMP_MAGIC      (0x7E000039)
+#define IST30XX_MAX_CHK_CNT     2   // 500msec unit
+union power_supply_propval temperature;
+s16 ist30xx_batt_temp = 0;
+int ist30xx_batt_chk_cnt = 0;
+int ist30xx_batt_chk_max_cnt = IST30XX_MAX_CHK_CNT;
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+
 #define TOUCH_BOOSTER	1
 
 #if TOUCH_BOOSTER
@@ -711,6 +726,19 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 	if (unlikely(!data->irq_enabled))
 		goto irq_end;
 
+#if IST30XX_CHECK_BATT_TEMP
+	if (ist30xx_batt_chk_cnt >= ist30xx_batt_chk_max_cnt) {
+		psy_do_property("battery", get,
+			POWER_SUPPLY_PROP_TEMP, temperature);
+		ist30xx_batt_temp = temperature.intval / 10;
+		ist30xx_write_reg(data->client, IST30XX_HIB_BATT_TEMP , 
+			(((u32)ist30xx_batt_temp & 0xFFFF) << 8) | BATTERY_TEMP_MAGIC);
+		tsp_info("battery temperature: %d\n", ist30xx_batt_temp);
+		tsp_verb("battery temperature: %d\n", ist30xx_batt_temp);
+		ist30xx_batt_chk_cnt = 0;
+	}
+#endif
+
 	ms = get_milli_second();
 
 	if (intr_debug_size > 0) {
@@ -982,14 +1010,28 @@ static void ist30xx_early_suspend(struct early_suspend *h)
 	struct ist30xx_data *data = container_of(h, struct ist30xx_data,
 						 early_suspend);
 
-	ist30xx_suspend(&data->client->dev);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+        if (!dt2w_switch) {
+#endif
+		ist30xx_suspend(&data->client->dev);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	}
+#endif
+
 }
 static void ist30xx_late_resume(struct early_suspend *h)
 {
 	struct ist30xx_data *data = container_of(h, struct ist30xx_data,
 						 early_suspend);
 
-	ist30xx_resume(&data->client->dev);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if (!dt2w_switch) {
+#endif
+		ist30xx_resume(&data->client->dev);
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	}
+#endif
+
 }
 #endif
 
@@ -1189,6 +1231,19 @@ static void noise_work_func(struct work_struct *work)
 
 	data->scan_retry = 0;
 	data->scan_count = scan_count;
+
+#if IST30XX_CHECK_BATT_TEMP
+	if (ist30xx_batt_chk_cnt >= ist30xx_batt_chk_max_cnt) {
+		psy_do_property("battery", get,
+			POWER_SUPPLY_PROP_TEMP, temperature);
+		ist30xx_batt_temp = temperature.intval /10;
+		ist30xx_write_reg(data->client, IST30XX_HIB_BATT_TEMP , 
+			(((u32)ist30xx_batt_temp & 0xFFFF) << 8) | BATTERY_TEMP_MAGIC);
+
+		tsp_verb("battery temperature: %d\n", ist30xx_batt_temp);
+		ist30xx_batt_chk_cnt = 0;
+	}
+#endif
 	return;
 
 retry_timer:
@@ -1271,6 +1326,9 @@ void timer_handler(unsigned long timer_data)
 	}
 
 restart_timer:
+#if IST30XX_CHECK_BATT_TEMP    
+	ist30xx_batt_chk_cnt++;
+#endif
 	mod_timer(&event_timer, get_jiffies_64() + EVENT_TIMER_INTERVAL);
 }
 

@@ -103,6 +103,7 @@
 #else
 #define IST30XX_JIG_MODE			(0) // fixed
 #endif
+#define IST30XX_CHECK_BATT_TEMP (0)
 
 #define SEC_FACTORY_MODE		(1)
 /* IST30XX FUNCTION ENABLE & DISABLE */
@@ -204,6 +205,7 @@
 #define IST30XX_HIB_TOUCH_STATUS	IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x00)
 #define IST30XX_HIB_INTR_MSG		IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x04)
 #define IST30XX_HIB_COORD		IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x08)
+#define IST30XX_HIB_BATT_TEMP	IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x38)
 #define IST30XX_HIB_CMD			IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x3C)
 #define IST30XX_HIB_RW_STATUS	IST30XX_HA_ADDR(IST30XX_HIB_BASE | 0x40)
 
@@ -495,6 +497,7 @@ int ist30xx_get_ver_info(struct ist30xx_data *data);
 
 int ist30xx_read_reg(struct i2c_client *client, u32 reg, u32 *buf);
 int ist30xx_read_cmd(struct ist30xx_data *data, u32 cmd, u32 *buf);
+int ist30xx_write_reg(struct i2c_client *client, u32 cmd, u32 val);
 int ist30xx_write_cmd(struct i2c_client *client, u32 cmd, u32 val);
 int ist30xx_read_buf(struct i2c_client *client, u32 cmd, u32 *buf, u16 len);
 int ist30xx_write_buf(struct i2c_client *client, u32 cmd, u32 *buf, u16 len);

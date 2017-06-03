@@ -271,6 +271,30 @@ int ist30xx_read_cmd(struct ist30xx_data *data, u32 cmd, u32 *buf)
 	return ret;
 }
 
+int ist30xx_write_reg(struct i2c_client *client, u32 cmd, u32 val)
+{
+	int ret;
+
+	struct i2c_msg msg;
+	u8 msg_buf[IST30XX_ADDR_LEN + IST30XX_DATA_LEN];
+
+	put_unaligned_be32(cmd, msg_buf);
+	put_unaligned_be32(val, msg_buf + IST30XX_ADDR_LEN);
+
+	msg.addr = client->addr;
+	msg.flags = 0;
+	msg.len = IST30XX_ADDR_LEN + IST30XX_DATA_LEN;
+	msg.buf = msg_buf;
+
+	ret = i2c_transfer(client->adapter, &msg, WRITE_CMD_MSG_LEN);
+	if (ret != WRITE_CMD_MSG_LEN) {
+		tsp_err("%s: i2c failed (%d), cmd: %x(%x)\n", __func__, ret, cmd, val);
+		return -EIO;
+	}
+
+	return 0;
+}
+
 int ist30xx_write_cmd(struct i2c_client *client, u32 cmd, u32 val)
 {
 	int ret;
