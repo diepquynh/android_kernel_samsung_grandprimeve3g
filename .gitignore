@@ -133,3 +133,4 @@ gen_init_cpio
 initramfs_data.cpio
 firmware/*
 output/*
+dt_img/dt_img_gpve.img
