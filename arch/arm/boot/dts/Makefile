@@ -21,7 +21,8 @@ endif
 dtb-$(CONFIG_MACH_GTEL3G) += sprd-scx35_gtel3g.dtb
 dtb-$(CONFIG_MACH_COREPRIMEVE3G) += sprd-scx35_coreprimeve3g.dtb \
 				sprd-scx35_coreprimeve3g_rev01.dtb \
-				sprd-scx35_coreprimeve3g_rev02.dtb
+				sprd-scx35_coreprimeve3g_rev02.dtb \
+				sprd-scx35_coreprimeve3g_rev03.dtb
 
 DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
 ifneq ($(DTB_NAMES),)
