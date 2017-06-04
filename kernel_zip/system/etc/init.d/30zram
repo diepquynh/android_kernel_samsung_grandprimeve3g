@@ -14,7 +14,7 @@ echo 0 > /proc/sys/vm/page-cluster;
 num_cpu=$(($(cat /sys/devices/system/cpu/kernel_max) + 1))
 
 # Remove all zRAMs first
-for i in $(seq ${num_cpu}); do
+for i in $(busybox seq ${num_cpu}); do
 	num=$((i - 1));
 	echo ${num} > /sys/class/zram-control/hot_remove;
 done;
@@ -24,7 +24,7 @@ totalmem=$(busybox free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/ 
 mem=$(((totalmem / 2 / ${num_cpu}) * 1024))
 
 # Now let's start
-for i in $(seq ${num_cpu}); do
+for i in $(busybox seq ${num_cpu}); do
 	num=$((i - 1));
 
 	cat /sys/class/zram-control/hot_add;
@@ -34,4 +34,4 @@ for i in $(seq ${num_cpu}); do
 done;
 
 # Set maximum swappiness
-echo 100 > /proc/sys/vm/swappiness;
+echo 130 > /proc/sys/vm/swappiness;
