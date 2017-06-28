@@ -26,3 +26,10 @@ config SPRDWL_ENHANCED_PM
 	  Say Y to enable enhanced power management. This feature
 	  will put a limit on downloading when screen goes off, and
 	  will restore when screen goes on.
+
+config SPRDWL_POWER_CONTROL
+	depends on SPRDWL && HAS_EARLYSUSPEND
+	bool "Enable Wi-Fi Power Control"
+	default y if HAS_EARLYSUSPEND=y
+	help
+	  Say Y to enable Wi-Fi Power Control.

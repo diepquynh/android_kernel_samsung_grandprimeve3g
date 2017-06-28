@@ -230,6 +230,75 @@ nvm_read_err:
 	return -1;
 }
 
+bool wifi_configure_file_check(const char *path)
+{
+	struct file *filp;
+	struct file *filp_2;
+	const char *path_2 = "/system/etc/connectivity_configure.ini";
+	unsigned char *p_buf = NULL;
+	unsigned short len = 0;
+	loff_t pos;
+
+	mm_segment_t fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	filp = filp_open(path, O_RDONLY, S_IRUSR);
+	if (IS_ERR(filp)) {
+		pr_err("%s,Unable to load '%s' err=%ld.\n", __func__, path, PTR_ERR(filp));
+		filp =
+		    filp_open(path, O_RDWR | O_CREAT | O_TRUNC,
+			      S_IRUSR | S_IWUSR);
+		if (IS_ERR(filp)) {
+			pr_err("%s,Unable to Creat '%s' err=%ld.\n",
+			       __func__, path, PTR_ERR(filp));
+			goto file_create_error;
+		}
+	} else {
+		pr_err("%s,connectivity_calibration.ini check oK.\n", __func__);
+		goto file_check_done;
+	}
+
+	filp_2 = filp_open(path_2, O_RDONLY, S_IRUSR);
+	if (IS_ERR(filp)) {
+		pr_err("%s,Unable to load '%s'.\n", __func__, path_2);
+		goto file2_open_error;
+	}
+
+	len = i_size_read(file_inode(filp_2));
+	if (!(len > 0 && len < 62 * 1024)) {
+		pr_err("%s file size error %d\n", __func__, len);
+		goto file_close;
+	}
+	p_buf = kmalloc(len, GFP_KERNEL);
+	if (p_buf == NULL) {
+		pr_err("%s Out of memory loading '%s'.\n", __func__, path);
+		goto file_close;
+	}
+	pos = 0;
+	if (vfs_read(filp_2, p_buf, len, &pos) != len) {
+		pr_err("%s Failed to read '%s'.\n", __func__, path);
+		kfree(p_buf);
+		goto file_close;
+	}
+
+	vfs_write(filp, p_buf, len, &filp->f_pos);
+	kfree(p_buf);
+	filp_close(filp_2, NULL);
+file_check_done:
+	filp_close(filp, NULL);
+	set_fs(fs);
+	pr_info("%s Done  '%s'.\n", __func__, path);
+	return TRUE;
+
+file_close:
+	filp_close(filp_2, NULL);
+file2_open_error:
+	filp_close(filp, NULL);
+file_create_error:
+	set_fs(fs);
+	return FALSE;
+}
+
 bool wifi_cali_file_check(const char *path)
 {
 	struct file *filp;
@@ -320,13 +389,21 @@ void sprdwl_nvm_init(void)
 	|| (defined CONFIG_MACH_KANAS_TD) \
 	|| (defined CONFIG_MACH_SP5735C1EA) \
 	|| (defined CONFIG_MACH_SP5735EA)
-	char *WIFI_CONFIG_FILE[] = {
+	char *WIFI_CONFIG_FILE_PRODUCT[] = {
+		"/productinfo/connectivity_configure_hw100.ini",
+		"/productinfo/connectivity_configure_hw102.ini",
+		"/productinfo/connectivity_configure_hw104.ini"
+	};
+	char *WIFI_CONFIG_FILE_SYSTEM[] = {
 		"/system/etc/connectivity_configure_hw100.ini",
 		"/system/etc/connectivity_configure_hw102.ini",
 		"/system/etc/connectivity_configure_hw104.ini"
 	};
 #else
-	char *WIFI_CONFIG_FILE[] = {
+	char *WIFI_CONFIG_FILE_PRODUCT[] = {
+		"/productinfo/connectivity_configure.ini"
+	};
+	char *WIFI_CONFIG_FILE_SYSTEM[] = {
 		"/system/etc/connectivity_configure.ini"
 	};
 #endif
@@ -356,11 +433,23 @@ void sprdwl_nvm_init(void)
 #endif
 	pr_info("#### %s get2 board type len %d %s type %d ####\n",
 		__func__, len, board_type_str, board_type);
-	ret = wifi_nvm_parse(WIFI_CONFIG_FILE[board_type]);
-	if (0 != ret) {
-		pr_err("%s(),parse:%s, err!\n", __func__,
-		       WIFI_CONFIG_FILE[board_type]);
-		return;
+
+	if (wifi_configure_file_check(WIFI_CONFIG_FILE_PRODUCT[board_type]) == TRUE) {
+		pr_info("%s(),read %s success\n",__func__, WIFI_CONFIG_FILE_PRODUCT[board_type]);
+		pr_info("%s(),load %s \n",__func__, WIFI_CONFIG_FILE_PRODUCT[board_type]);
+		ret = wifi_nvm_parse(WIFI_CONFIG_FILE_PRODUCT[board_type]);
+		if (0 != ret) {
+		    pr_err("%s(),parse:%s, err!\n", __func__, WIFI_CONFIG_FILE_PRODUCT[board_type]);
+		    return;
+		}
+	} else {/* read file from product failed */
+		pr_err("%s(),read %s fail\n",__func__, WIFI_CONFIG_FILE_PRODUCT[board_type]);
+		pr_err("%s(),load %s \n",__func__, WIFI_CONFIG_FILE_SYSTEM[board_type]);
+		ret = wifi_nvm_parse(WIFI_CONFIG_FILE_SYSTEM[board_type]);
+		if (0 != ret) {
+		    pr_err("%s(),parse:%s, err!\n", __func__, WIFI_CONFIG_FILE_SYSTEM[board_type]);
+		    return;
+		}
 	}
 
 	if (wifi_cali_file_check(WIFI_CALI_FILE_PRODUCT) == TRUE) {

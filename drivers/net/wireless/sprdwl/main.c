@@ -42,6 +42,11 @@
 #include <linux/atomic.h>
 
 #include <linux/sprd_2351.h>
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
+#include <linux/device.h>
+#endif
 
 #include "sprdwl.h"
 #include "cfg80211.h"
@@ -83,140 +88,125 @@ struct sprdwl_vif *sprdwl_get_report_vif(struct sprdwl_priv *priv)
 		return priv->cur_vif;
 }
 
-static int sprdwl_rx_handler(struct napi_struct *napi, int budget)
+static void sprdwl_rx_handler(struct sprdwl_vif *vif)
 {
-	struct sprdwl_vif *vif = container_of(napi, struct sprdwl_vif, napi);
 	struct net_device *ndev = vif->ndev;
 	struct wlan_sblock_recv_data *data;
 	struct sblock blk;
 	struct sk_buff *skb;
 	u16 decryp_data_len = 0;
-	u32 work_done, length = 0;
+	u32 length = 0;
 	int ret;
 #ifdef CONFIG_SPRDWL_FW_ZEROCOPY
 	u8 offset = 0;
 #endif
-	for (work_done = 0; work_done < budget; work_done++) {
-		ret = sblock_receive(WLAN_CP_ID, WLAN_SBLOCK_CH, &blk, 0);
-		if (ret) {
-			/*netdev_dbg(ndev,
-				   "got %d packets, no more sblock to read\n",
-				   work_done);*/
-			break;
-		}
+	ret = sblock_receive(WLAN_CP_ID, WLAN_SBLOCK_CH, &blk, 0);
+	if (ret)
+		return;
 #ifdef CONFIG_SPRDWL_FW_ZEROCOPY
-		offset = *(u8 *)blk.addr;
-		length = blk.length - 2 - offset;
+	offset = *(u8 *)blk.addr;
+	length = blk.length - 2 - offset;
 #else
-		length = blk.length;
+	length = blk.length;
 #endif
-		/*16 bytes align */
-		skb = dev_alloc_skb(length + NET_IP_ALIGN);
-		if (!skb) {
-			netdev_err(ndev, "Failed to allocate skbuff!\n");
-			ndev->stats.rx_dropped++;
-			goto rx_failed;
-		}
+	/*16 bytes align */
+	skb = dev_alloc_skb(length + NET_IP_ALIGN);
+	if (!skb) {
+		netdev_err(ndev, "Failed to allocate skbuff!\n");
+		ndev->stats.rx_dropped++;
+		goto rx_failed;
+	}
 #ifdef CONFIG_SPRDWL_FW_ZEROCOPY
-		data = (struct wlan_sblock_recv_data *)(blk.addr + 2 + offset);
+	data = (struct wlan_sblock_recv_data *)(blk.addr + 2 + offset);
 #else
-		data = (struct wlan_sblock_recv_data *)blk.addr;
+	data = (struct wlan_sblock_recv_data *)blk.addr;
 #endif
 
-		if (data->is_encrypted == 1) {
-			if (vif->sm_state == SPRDWL_CONNECTED &&
-			    vif->prwise_crypto == SPRDWL_CIPHER_WAPI &&
-			    vif->key_len[GROUP][vif->key_index[GROUP]] != 0 &&
-			    vif->key_len[PAIRWISE][vif->key_index[PAIRWISE]] !=
-			    0) {
-				u8 snap_header[6] = { 0xaa, 0xaa, 0x03,
-					0x00, 0x00, 0x00
-				};
-				skb_reserve(skb, NET_IP_ALIGN);
-				decryp_data_len = wlan_rx_wapi_decryption(vif,
-						   (u8 *)&data->u2.encrypt,
-						   data->u1.encrypt.header_len,
-						   (length -
-						   sizeof(data->is_encrypted) -
-						   sizeof(data->u1) -
-						   data->u1.encrypt.header_len),
-						   (skb->data + 12));
-				if (decryp_data_len == 0) {
-					netdev_err(ndev,
-						   "Failed to decrypt WAPI data!\n");
-					ndev->stats.rx_dropped++;
-					dev_kfree_skb(skb);
-					goto rx_failed;
-				}
-				if (memcmp((skb->data + 12), snap_header,
-					   sizeof(snap_header)) == 0) {
-					skb_reserve(skb, 6);
-					/* copy the eth address from eth header,
-					 * but not copy eth type
-					 */
-					memcpy(skb->data,
-					       data->u2.encrypt.
-					       mac_header.addr1, ETH_ALEN);
-					memcpy(skb->data + ETH_ALEN,
-					       data->u2.encrypt.
-					       mac_header.addr2, ETH_ALEN);
-					skb_put(skb, (decryp_data_len + 6));
-				} else {
-					/* copy eth header */
-					memcpy(skb->data,
-					       data->u2.encrypt.
-					       mac_header.addr3, ETH_ALEN);
-					memcpy(skb->data + ETH_ALEN,
-					       data->u2.encrypt.
-					       mac_header.addr2, ETH_ALEN);
-					skb_put(skb, (decryp_data_len + 12));
-				}
-			} else {
-				netdev_err(ndev, "wrong encryption data!\n");
+	if (data->is_encrypted == 1) {
+		if (vif->sm_state == SPRDWL_CONNECTED &&
+		    vif->prwise_crypto == SPRDWL_CIPHER_WAPI &&
+		    vif->key_len[GROUP][vif->key_index[GROUP]] != 0 &&
+		    vif->key_len[PAIRWISE][vif->key_index[PAIRWISE]] != 0) {
+			u8 snap_header[6] = { 0xaa, 0xaa, 0x03,
+					      0x00, 0x00, 0x00};
+			skb_reserve(skb, NET_IP_ALIGN);
+			decryp_data_len =
+				wlan_rx_wapi_decryption(vif,
+					(u8 *)&data->u2.encrypt,
+					data->u1.encrypt.header_len,
+					(length -
+					 sizeof(data->is_encrypted) -
+					 sizeof(data->u1) -
+					 data->u1.encrypt.header_len),
+					 (skb->data + 12));
+			if (decryp_data_len == 0) {
+				netdev_err(ndev, "Failed to decrypt WAPI data!\n");
 				ndev->stats.rx_dropped++;
 				dev_kfree_skb(skb);
 				goto rx_failed;
 			}
-		} else if (data->is_encrypted == 0) {
-			skb_reserve(skb, NET_IP_ALIGN);
-			/* dec the first encrypt byte */
-			memcpy(skb->data, (u8 *)&data->u2,
-			       (length - sizeof(data->is_encrypted) -
-				sizeof(data->u1)));
-			skb_put(skb,
-				(length - sizeof(data->is_encrypted) -
-				 sizeof(data->u1)));
+			if (memcmp((skb->data + 12), snap_header,
+				   sizeof(snap_header)) == 0) {
+				skb_reserve(skb, 6);
+				/* copy the eth address from eth header,
+				 * but not copy eth type
+				 */
+				memcpy(skb->data,
+				       data->u2.encrypt.mac_header.addr1,
+				       ETH_ALEN);
+				memcpy(skb->data + ETH_ALEN,
+				       data->u2.encrypt.mac_header.addr2,
+				       ETH_ALEN);
+				skb_put(skb, (decryp_data_len + 6));
+			} else {
+				/* copy eth header */
+				memcpy(skb->data,
+				       data->u2.encrypt.mac_header.addr3,
+				       ETH_ALEN);
+				memcpy(skb->data + ETH_ALEN,
+				       data->u2.encrypt.mac_header.addr2,
+				       ETH_ALEN);
+				skb_put(skb, (decryp_data_len + 12));
+			}
 		} else {
-			netdev_err(ndev, "wrong data fromat received!\n");
+			netdev_err(ndev, "wrong encryption data!\n");
 			ndev->stats.rx_dropped++;
 			dev_kfree_skb(skb);
 			goto rx_failed;
 		}
+	} else if (data->is_encrypted == 0) {
+		skb_reserve(skb, NET_IP_ALIGN);
+		/* dec the first encrypt byte */
+		memcpy(skb->data, (u8 *)&data->u2,
+		       (length - sizeof(data->is_encrypted) -
+		       sizeof(data->u1)));
+		skb_put(skb, (length - sizeof(data->is_encrypted) -
+			sizeof(data->u1)));
+	} else {
+		netdev_err(ndev, "wrong data fromat received!\n");
+		ndev->stats.rx_dropped++;
+		dev_kfree_skb(skb);
+		goto rx_failed;
+	}
 
 #ifdef DUMP_RECEIVE_PACKET
-		print_hex_dump(KERN_DEBUG, "RX packet: ", DUMP_PREFIX_OFFSET,
-			       16, 1, skb->data, skb->len, 0);
+	print_hex_dump(KERN_DEBUG, "RX packet: ", DUMP_PREFIX_OFFSET,
+		       16, 1, skb->data, skb->len, 0);
 #endif
-		skb->dev = ndev;
-		skb->protocol = eth_type_trans(skb, ndev);
-		/* CHECKSUM_UNNECESSARY not supported by our hardware */
-		/* skb->ip_summed = CHECKSUM_UNNECESSARY; */
+	skb->dev = ndev;
+	skb->protocol = eth_type_trans(skb, ndev);
+	/* CHECKSUM_UNNECESSARY not supported by our hardware */
+	/* skb->ip_summed = CHECKSUM_UNNECESSARY; */
 
-		ndev->stats.rx_packets++;
-		ndev->stats.rx_bytes += skb->len;
+	ndev->stats.rx_packets++;
+	ndev->stats.rx_bytes += skb->len;
 
-		napi_gro_receive(napi, skb);
+	netif_rx_ni(skb);
 
 rx_failed:
-		ret = sblock_release(WLAN_CP_ID, WLAN_SBLOCK_CH, &blk);
-		if (ret)
-			netdev_err(ndev,
-				   "Failed to release sblock(%d)!\n", ret);
-	}
-	if (work_done < budget)
-		napi_complete(napi);
-
-	return work_done;
+	ret = sblock_release(WLAN_CP_ID, WLAN_SBLOCK_CH, &blk);
+	if (ret)
+		netdev_err(ndev, "Failed to release sblock(%d)!\n", ret);
 }
 
 #ifdef CONFIG_SPRDWL_FW_ZEROCOPY
@@ -257,7 +247,7 @@ static void sprdwl_handler(int event, void *data)
 		break;
 	case SBLOCK_NOTIFY_RECV:
 		/* netdev_dbg(vif->ndev, "SBLOCK_NOTIFY_RECV is received\n"); */
-		napi_schedule(&vif->napi);
+		sprdwl_rx_handler(vif);
 		break;
 	case SBLOCK_NOTIFY_STATUS:
 		netdev_dbg(vif->ndev, "SBLOCK_NOTIFY_STATUS is received\n");
@@ -378,7 +368,6 @@ static int sprdwl_open(struct net_device *ndev)
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 done:
 #endif /* CONFIG_SPRDWL_WIFI_DIRECT */
-	napi_enable(&vif->napi);
 	netif_start_queue(ndev);
 
 	return ret;
@@ -393,7 +382,6 @@ static int sprdwl_close(struct net_device *ndev)
 
 	netdev_info(ndev, "%s\n", __func__);
 	netif_stop_queue(ndev);
-	napi_disable(&vif->napi);
 	if (timer_pending(&vif->scan_timer))
 		del_timer_sync(&vif->scan_timer);
 	spin_lock_bh(&vif->scan_lock);
@@ -727,7 +715,6 @@ struct net_device *sprdwl_register_netdev(struct sprdwl_priv *priv,
 	spin_lock_bh(&priv->list_lock);
 	list_add_tail(&vif->list, &priv->vif_list);
 	spin_unlock_bh(&priv->list_lock);
-	netif_napi_add(ndev, &vif->napi, sprdwl_rx_handler, 64);
 
 	netdev_info(ndev, "virtual interface '%s'(%pM) added\n",
 		    ndev->name, ndev->dev_addr);
@@ -751,7 +738,6 @@ void sprdwl_unregister_netdev(struct net_device *ndev)
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 	cancel_work_sync(&vif->work);
 #endif
-	netif_napi_del(&vif->napi);
 	unregister_netdevice(ndev);
 }
 
@@ -794,14 +780,14 @@ static int sprdwl_init_misc(struct sprdwl_priv *priv)
 	ret = sprdwl_sipc_sblock_init(WLAN_SBLOCK_CH, sprdwl_handler, priv);
 	if (ret) {
 		pr_err("%s Failed to init data sblock %d for wifi:%d\n",
-			__func__, WLAN_SBLOCK_CH, ret);
+		       __func__, WLAN_SBLOCK_CH, ret);
 		goto err_dt_data_sblock;
 	}
 	ret = sprdwl_sipc_sblock_init(WLAN_EVENT_SBLOCK_CH,
-			wlan_sipc_sblock_handler, priv);
+				      wlan_sipc_sblock_handler, priv);
 	if (ret) {
 		pr_err("%s Failed to init event sblock %d for wifi:%d\n",
-			__func__, WLAN_EVENT_SBLOCK_CH, ret);
+		       __func__, WLAN_EVENT_SBLOCK_CH, ret);
 		goto err_dt_event_sblock;
 	}
 #endif
@@ -830,6 +816,120 @@ static void sprdwl_deinit_misc(struct sprdwl_priv *priv)
 	sprdwl_sipc_sblock_deinit(WLAN_EVENT_SBLOCK_CH);
 #endif
 }
+
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+/*apply an attribute file for application to control power. */
+static ssize_t sprdwl_power_show(struct kobject *kobj,
+				 struct attribute *attr, char *buf)
+{
+	struct sprdwl_priv *priv;
+	size_t count;
+	int ret;
+
+	priv = container_of(kobj, struct sprdwl_priv, sprdwl_power_obj);
+	count = 0;
+	count += sprintf(buf, "%d", priv->reduce_power);
+
+	/* set permission to allow media write the file*/
+	ret = sysfs_chmod_file(kobj, attr, S_IRUGO|S_IWUGO);
+	if (ret < 0)
+		wiphy_err(priv->wiphy, "set attribute file permission error\n");
+
+	wiphy_info(priv->wiphy, "%s success\n", __func__);
+	return count;
+}
+
+static int sprdwl_get_power_control_reason(const char *buf)
+{
+	int ret = -1;
+	if (strstr(buf, "videostreaming") != NULL)
+		ret = ONLINE_VIDEO;
+	return ret;
+}
+
+static ssize_t sprdwl_power_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buf, size_t count)
+{
+	int ret;
+	int reason;
+	bool state;
+	struct sprdwl_priv *priv;
+
+	priv = container_of(kobj, struct sprdwl_priv, sprdwl_power_obj);
+	state = buf[0] - '0';
+	wiphy_info(priv->wiphy, "buf is %s,state is %d\n", buf, state);
+
+	reason = sprdwl_get_power_control_reason(buf);
+	if (reason == -1) {
+		wiphy_err(priv->wiphy, "not a valid power control reason");
+		return reason;
+	}
+
+	if (state == false) {
+		wiphy_info(priv->wiphy, "user space no need reduce_power\n");
+		ret = sprdwl_set_power_control_cmd(priv->sipc, 0, reason);
+
+		if (ret)
+			wiphy_err(priv->wiphy,
+				  "later resume  failed(%d)!\n", ret);
+		else
+			priv->reduce_power = 0;
+	} else if (state == true) {
+		wiphy_info(priv->wiphy, "user space need reduce_power\n");
+		ret = sprdwl_set_power_control_cmd(priv->sipc, 1, reason);
+
+		if (ret)
+			wiphy_err(priv->wiphy,
+				  "early suspend failed(%d)!\n", ret);
+		else
+			priv->reduce_power = 1;
+	}
+	/* set attribute file permission to pass google CTS test*/
+	ret = sysfs_chmod_file(kobj, attr, S_IRUGO|S_IWUSR);
+	if (ret < 0)
+		wiphy_err(priv->wiphy, "set attribute file permission error\n");
+
+	return count;
+}
+
+static struct attribute sprdwl_power_control_attr = {
+	.name = "reduce_power",
+	.mode = S_IRUGO|S_IWUSR,
+};
+
+static const struct sysfs_ops sprdwl_power_control_ops = {
+	.show = sprdwl_power_show,
+	.store = sprdwl_power_store,
+};
+
+static struct kobj_type sprdwl_power_control_ktype = {
+	.sysfs_ops = &sprdwl_power_control_ops,
+};
+
+static int sprdwl_power_sys_init(struct sprdwl_priv *priv)
+{
+	int err;
+	struct kobject *parent = NULL;
+
+	parent = &(priv->wlan_vif->ndev->dev.kobj);
+
+	priv->reduce_power = 0;
+	err = kobject_init_and_add(&priv->sprdwl_power_obj,
+				   &sprdwl_power_control_ktype,
+				   parent, "sprd_power_control");
+	if (err)
+		return err;
+	err = sysfs_create_file(&priv->sprdwl_power_obj,
+				&sprdwl_power_control_attr);
+	return err;
+}
+
+static void sprdwl_power_sys_exit(struct sprdwl_priv *priv)
+{
+	sysfs_remove_file(&priv->sprdwl_power_obj, &sprdwl_power_control_attr);
+	kobject_del(&priv->sprdwl_power_obj);
+}
+#endif /* CONFIG_SPRDWL_POWER_CONTROL */
 
 /*Initialize WLAN device*/
 static int sprdwl_probe(struct platform_device *pdev)
@@ -889,6 +989,9 @@ static int sprdwl_probe(struct platform_device *pdev)
 		pr_err("%s Failed to init apcp trans(%d)!\n", __func__, ret);
 		goto err_apcp_tans;
 	}
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+	sprdwl_power_sys_init(priv);
+#endif
 	netdev_info(ndev, "%s successfully", __func__);
 	return 0;
 
@@ -921,6 +1024,9 @@ static int sprdwl_remove(struct platform_device *pdev)
 	npi_exit_netlink();
 	unregister_inetaddr_notifier(&sprdwl_inetaddr_cb);
 	platform_set_drvdata(pdev, NULL);
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+	sprdwl_power_sys_exit(priv);
+#endif
 	sprdwl_unregister_all_ifaces(priv);
 	sprdwl_unregister_wiphy(wiphy);
 

@@ -210,6 +210,12 @@ struct wlan_sipc_pmkid {
 	u8 pmkid[SPRDWL_PMKID_LEN];
 } __packed;
 
+/* wlan_sipc cqm rssi set struct */
+struct wlan_sipc_cqm_rssi {
+	s32 rssih;
+	u32 rssil;
+} __packed;
+
 /* wlan_sipc beacon struct */
 struct wlan_sipc_beacon {
 	u8 len;
@@ -280,6 +286,13 @@ struct wlan_softap_event {
 #endif	/* CONFIG_SPRDWL_WIFI_DIRECT */
 } __packed;
 
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+struct wlan_sipc_power_control {
+	u8 power_control_enable;
+	u8 reason;
+} __packed;
+#endif
+
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 struct wlan_sipc_scan_channels {
 	u8 channel_num;
@@ -344,8 +357,27 @@ struct wlan_sipc_p2p_enable {
 } __packed;
 #endif /* CONFIG_SPRDWL_WIFI_DIRECT */
 
+/* wlan_sipc mic failure struct */
+struct wlan_sipc_mic_failure {
+	u8 key_id;
+	u8 is_mcast;
+} __packed;
+
+/* wlan_sipc disassoc struct */
+struct wlan_sipc_disassoc {
+	u8 mac[ETH_ALEN];
+	u16 reason_code;
+} __packed;
+
+/* wlan_sipc ap sme struct */
+struct wlan_sipc_ap_sme {
+	/*0:authentication handled in supplicant*/
+	/*1:authentication handled in cp*/
+	u8 value;
+} __packed;
+
 /*FIXME*/
-#define WLAN_CP_ID			SIPC_ID_WCN
+#define WLAN_CP_ID		SIPC_ID_WCN
 #define WLAN_SBUF_ID		7
 #define WLAN_SBUF_CH		4
 #define WLAN_SBUF_NUM		64
@@ -410,6 +442,11 @@ enum wlan_sipc_cmd_id {
 	WIFI_CMD_SCAN_CHANNELS,
 	WIFI_CMD_P2P_ENABLE,
 
+	WIFI_CMD_SET_CQM_RSSI,
+	WIFI_CMD_SET_POWER_CONTROL,
+	WIFI_CMD_DISASSOC,
+	WIFI_CMD_SET_AP_SME,
+
 	WIFI_CMD_MAX
 };
 
@@ -431,8 +468,20 @@ enum wlan_sipc_event_id {
 	WIFI_EVENT_REPORT_FRAME,
 	WIFI_EVENT_MLME_TX_STATUS,
 
+	WIFI_EVENT_REPORT_MIC_FAIL,
+	WIFI_EVENT_REPORT_CQM_RSSI_LOW,
+	WIFI_EVENT_REPORT_CQM_RSSI_HIGH,
+	WIFI_EVENT_REPORT_CQM_RSSI_LOSS_BEACON,
 	WIFI_EVENT_MAX
 };
+
+/*for power control*/
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+enum power_control_reason {
+	NONE,
+	ONLINE_VIDEO
+};
+#endif
 
 /* wlan_sipc sipc privite data struct for cmd and event*/
 struct wlan_sipc {
@@ -492,18 +541,23 @@ extern int sprdwl_set_frag_cmd(struct wlan_sipc *sipc, u16 frag_threshold);
 extern int sprdwl_get_rssi_cmd(struct wlan_sipc *sipc, s8 *signal, s8 *noise);
 extern int sprdwl_get_txrate_cmd(struct wlan_sipc *sipc, s32 *rate);
 extern int sprdwl_start_ap_cmd(struct wlan_sipc *sipc, u8 *beacon, u16 len);
+extern int sprdwl_disassoc_cmd(struct wlan_sipc *sipc, u8 *mac,
+			       u16 reason_code);
 extern int sprdwl_set_wps_ie_cmd(struct wlan_sipc *sipc,
 				 u8 type, const u8 *ie, u8 len);
 extern int sprdwl_set_blacklist_cmd(struct wlan_sipc *sipc, u8 *addr, u8 flag);
 extern int sprdwl_get_ip_cmd(struct sprdwl_priv *priv, u8 *ip);
-int sprdwl_pm_enter_ps_cmd(struct net_device *ndev);
+extern int sprdwl_pm_enter_ps_cmd(struct net_device *ndev);
 extern int sprdwl_pm_exit_ps_cmd(struct wlan_sipc *sipc);
 
 extern int sprdwl_pm_early_suspend_cmd(struct wlan_sipc *sipc);
 extern int sprdwl_pm_later_resume_cmd(struct wlan_sipc *sipc);
+extern int sprdwl_set_cqm_rssi(struct wlan_sipc *sipc,
+			       s32 rssi_thold, u32 rssi_hyst);
 extern int sprdwl_set_regdom_cmd(struct wlan_sipc *sipc, u8 *regdom, u16 len);
 extern int sprdwl_mac_open_cmd(struct wlan_sipc *sipc, u8 mode, u8 *mac_addr);
 extern int sprdwl_mac_close_cmd(struct wlan_sipc *sipc, u8 mode);
+extern int sprdwl_set_ap_sme_cmd(struct wlan_sipc *sipc, u8 value);
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 extern int sprdwl_set_p2p_enable_cmd(struct wlan_sipc *sipc, int enable);
 extern int sprdwl_set_scan_chan_cmd(struct wlan_sipc *sipc,
@@ -511,9 +565,9 @@ extern int sprdwl_set_scan_chan_cmd(struct wlan_sipc *sipc,
 extern int sprdwl_set_p2p_ie_cmd(struct wlan_sipc *sipc, u8 type,
 				 const u8 *ie, u8 len);
 extern int sprdwl_set_tx_mgmt_cmd(struct wlan_sipc *sipc,
-				  struct ieee80211_channel *channel, u8 dont_wait_for_ack,
-				  unsigned int wait, u64 *cookie, const u8 *mac,
-				  size_t mac_len);
+				  struct ieee80211_channel *channel,
+				  u8 dont_wait_for_ack, u32 wait, u64 *cookie,
+				  const u8 *mac, size_t mac_len);
 extern int sprdwl_remain_chan_cmd(struct wlan_sipc *sipc,
 				  struct ieee80211_channel *channel,
 				  enum nl80211_channel_type channel_type,
@@ -521,6 +575,10 @@ extern int sprdwl_remain_chan_cmd(struct wlan_sipc *sipc,
 extern int sprdwl_cancel_remain_chan_cmd(struct wlan_sipc *sipc, u64 cookie);
 extern void register_frame_work_func(struct work_struct *work);
 #endif /* CONFIG_SPRDWL_WIFI_DIRECT */
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+extern int sprdwl_set_power_control_cmd(struct wlan_sipc *sipc,
+					u8 value, u8 reason);
+#endif
 extern int sprdwl_alloc_sipc_buf(struct sprdwl_priv *priv);
 extern void sprdwl_free_sipc_buf(struct sprdwl_priv *priv);
 extern void wlan_sipc_sblock_handler(int event, void *data);
@@ -530,8 +588,8 @@ extern struct wifi_nvm_data *get_gwifi_nvm_data(void);
 #ifdef CONFIG_OF
 extern void sprdwl_sipc_sblock_deinit(int sblock_ch);
 extern int sprdwl_sipc_sblock_init(int sblock_ch,
-				     void (*handler) (int event, void *data),
-				     void *data);
+				   void (*handler) (int event, void *data),
+				   void *data);
 extern void wlan_sipc_sblock_handler(int event, void *data);
 #endif
 #endif/*__SIPC_H__*/

@@ -198,8 +198,8 @@ static int npi_cmd_is_unsupport(const char *cmd_name)
 	int i = 0;
 
 	for (; i < INWPI_UNSUPPORT_CMD_MAX_COUNT; i++) {
-		if (NULL != rf_unsupport_cmd[i]
-		    && 0 == strcmp(cmd_name, rf_unsupport_cmd[i])) {
+		if (NULL != rf_unsupport_cmd[i] &&
+		    0 == strcmp(cmd_name, rf_unsupport_cmd[i])) {
 			pr_err("ADL %s(), return 1, i = %d, name = %s\n",
 			       __func__, i, cmd_name);
 			return 1;
@@ -493,9 +493,8 @@ static int npi_stop_cmd(struct sk_buff *skb_2, struct genl_info *info)
 	}
 
 out:
-	ret =
-	    npi_nl_send_generic(info, NLNPI_ATTR_REPLY_STATUS,
-				NLNPI_CMD_STOP, sizeof(ret), (u8 *) &ret);
+	ret = npi_nl_send_generic(info, NLNPI_ATTR_REPLY_STATUS,
+				  NLNPI_CMD_STOP, sizeof(ret), (u8 *)&ret);
 	return ret;
 }
 
@@ -517,9 +516,8 @@ static int npi_start_cmd(struct sk_buff *skb_2, struct genl_info *info)
 	}
 
 out:
-	ret =
-	    npi_nl_send_generic(info, NLNPI_ATTR_REPLY_STATUS,
-				NLNPI_CMD_START, sizeof(ret), (u8 *) &ret);
+	ret = npi_nl_send_generic(info, NLNPI_ATTR_REPLY_STATUS,
+				  NLNPI_CMD_START, sizeof(ret), (u8 *)&ret);
 	return ret;
 }
 

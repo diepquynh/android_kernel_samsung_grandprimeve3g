@@ -8,6 +8,6 @@ ccflags-y += -DDEBUG
 obj-$(CONFIG_SPRDWL) += sprdwl.o
 
 sprdwl-objs:= main.o cfg80211.o sipc.o \
-	      hostap_conf.o npi.o wifi_nvm.o \
+	      npi.o wifi_nvm.o \
 	      wapi.o \
 	      $(sprdwl-y)

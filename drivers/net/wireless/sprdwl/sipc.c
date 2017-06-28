@@ -594,8 +594,8 @@ int sprdwl_disconnect_cmd(struct wlan_sipc *sipc, u16 reason_code)
 }
 
 int sprdwl_add_key_cmd(struct wlan_sipc *sipc, const u8 *key_data,
-		       u8 key_len, u8 pairwise, u8 key_index, const u8 *key_seq,
-		       u8 cypher_type, const u8 *pmac)
+		       u8 key_len, u8 pairwise, u8 key_index,
+		       const u8 *key_seq, u8 cypher_type, const u8 *pmac)
 {
 	struct wlan_sipc_data *send_buf = sipc->send_buf;
 	struct wlan_sipc_add_key *add_key =
@@ -797,6 +797,34 @@ int sprdwl_start_ap_cmd(struct wlan_sipc *sipc, u8 *beacon, u16 len)
 	sipc->send_len = SPRDWL_CMD_HDR_SIZE + sizeof(beacon_ptr->len) + len;
 	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
 	ret = sprdwl_cmd_send_recv(sipc, CMD_TYPE_SET, WIFI_CMD_START_AP);
+
+	if (ret) {
+		pr_err("%s command error %d\n", __func__, ret);
+		mutex_unlock(&sipc->cmd_lock);
+		return -EIO;
+	}
+
+	mutex_unlock(&sipc->cmd_lock);
+
+	return 0;
+}
+
+int sprdwl_disassoc_cmd(struct wlan_sipc *sipc, u8 *mac, u16 reason_code)
+{
+	struct wlan_sipc_data *send_buf = sipc->send_buf;
+	struct wlan_sipc_disassoc *disassoc_ptr =
+	    (struct wlan_sipc_disassoc *)send_buf->u.cmd.variable;
+	int ret;
+
+	mutex_lock(&sipc->cmd_lock);
+
+	disassoc_ptr->reason_code = reason_code;
+	memcpy(disassoc_ptr->mac, mac, ETH_ALEN);
+
+	sipc->send_len =
+	    SPRDWL_CMD_HDR_SIZE + sizeof(struct wlan_sipc_disassoc);
+	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
+	ret = sprdwl_cmd_send_recv(sipc, CMD_TYPE_SET, WIFI_CMD_DISASSOC);
 
 	if (ret) {
 		pr_err("%s command error %d\n", __func__, ret);
@@ -1042,6 +1070,34 @@ int sprdwl_pm_later_resume_cmd(struct wlan_sipc *sipc)
 	return 0;
 }
 
+int sprdwl_set_cqm_rssi(struct wlan_sipc *sipc, s32 rssi_thold, u32 rssi_hyst)
+{
+	struct wlan_sipc_data *send_buf = sipc->send_buf;
+	struct wlan_sipc_cqm_rssi *cmd;
+	int ret;
+
+	mutex_lock(&sipc->cmd_lock);
+
+	cmd = (struct wlan_sipc_cqm_rssi *)send_buf->u.cmd.variable;
+	cmd->rssih = rssi_thold;
+	cmd->rssil = rssi_hyst;
+
+	sipc->send_len = SPRDWL_CMD_HDR_SIZE
+	    + sizeof(struct wlan_sipc_cqm_rssi);
+	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
+	ret = sprdwl_cmd_send_recv(sipc, CMD_TYPE_SET, WIFI_CMD_SET_CQM_RSSI);
+
+	if (ret) {
+		pr_err("%s command error %d\n", __func__, ret);
+		mutex_unlock(&sipc->cmd_lock);
+		return -EIO;
+	}
+
+	mutex_unlock(&sipc->cmd_lock);
+
+	return 0;
+}
+
 int sprdwl_set_regdom_cmd(struct wlan_sipc *sipc, u8 *regdom, u16 len)
 {
 	struct wlan_sipc_data *send_buf = sipc->send_buf;
@@ -1068,6 +1124,34 @@ int sprdwl_set_regdom_cmd(struct wlan_sipc *sipc, u8 *regdom, u16 len)
 
 	return 0;
 }
+
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+int sprdwl_set_power_control_cmd(struct wlan_sipc *sipc, u8 value, u8 reason)
+{
+	struct wlan_sipc_data *send_buf = sipc->send_buf;
+	struct wlan_sipc_power_control power_control;
+	int ret;
+
+	mutex_lock(&sipc->cmd_lock);
+
+	power_control.power_control_enable = value;
+	power_control.reason = reason;
+	memcpy(send_buf->u.cmd.variable, &power_control, sizeof(power_control));
+	sipc->send_len = SPRDWL_CMD_HDR_SIZE + sizeof(power_control);
+	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
+	ret = sprdwl_cmd_send_recv(sipc,
+				   CMD_TYPE_SET, WIFI_CMD_SET_POWER_CONTROL);
+
+	if (ret) {
+		pr_err("%s command error %d\n", __func__, ret);
+		mutex_unlock(&sipc->cmd_lock);
+		return -EIO;
+	}
+
+	mutex_unlock(&sipc->cmd_lock);
+	return 0;
+}
+#endif
 
 int sprdwl_mac_open_cmd(struct wlan_sipc *sipc, u8 mode, u8 *mac_addr)
 {
@@ -1165,8 +1249,7 @@ int sprdwl_set_p2p_enable_cmd(struct wlan_sipc *sipc, int enable)
 	mutex_lock(&sipc->cmd_lock);
 
 	p2p_enable.p2p_enable = enable;
-	memcpy(send_buf->u.cmd.variable,
-	       &p2p_enable, sizeof(p2p_enable));
+	memcpy(send_buf->u.cmd.variable, &p2p_enable, sizeof(p2p_enable));
 
 	sipc->send_len = SPRDWL_CMD_HDR_SIZE + sizeof(p2p_enable);
 	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
@@ -1253,9 +1336,9 @@ int sprdwl_set_p2p_ie_cmd(struct wlan_sipc *sipc,
 }
 
 int sprdwl_set_tx_mgmt_cmd(struct wlan_sipc *sipc,
-				  struct ieee80211_channel *channel, u8 dont_wait_for_ack,
-				  unsigned int wait, u64 *cookie, const u8 *mac,
-				  size_t mac_len)
+			   struct ieee80211_channel *channel,
+			   u8 dont_wait_for_ack, u32 wait, u64 *cookie,
+			   const u8 *mac, size_t mac_len)
 {
 	struct wlan_sipc_data *send_buf = sipc->send_buf;
 	struct wlan_sipc_mgmt_tx *mgmt_tx =
@@ -1361,6 +1444,30 @@ int sprdwl_remain_chan_cmd(struct wlan_sipc *sipc,
 	return 0;
 }
 
+int sprdwl_set_ap_sme_cmd(struct wlan_sipc *sipc, u8 value)
+{
+	struct wlan_sipc_data *send_buf = sipc->send_buf;
+	struct wlan_sipc_ap_sme *ap_sme_ptr =
+	    (struct wlan_sipc_ap_sme *)send_buf->u.cmd.variable;
+	int ret;
+
+	mutex_lock(&sipc->cmd_lock);
+
+	ap_sme_ptr->value = value;
+	sipc->send_len = SPRDWL_CMD_HDR_SIZE + sizeof(struct wlan_sipc_ap_sme);
+	sipc->recv_len = SPRDWL_CMD_RESP_HDR_SIZE;
+	ret = sprdwl_cmd_send_recv(sipc, CMD_TYPE_SET, WIFI_CMD_SET_AP_SME);
+
+	if (ret) {
+		pr_err("%s command error %d\n", __func__, ret);
+		mutex_unlock(&sipc->cmd_lock);
+		return -EIO;
+	}
+
+	mutex_unlock(&sipc->cmd_lock);
+	return 0;
+}
+
 void register_frame_work_func(struct work_struct *work)
 {
 	struct sprdwl_vif *vif = container_of(work, struct sprdwl_vif, work);
@@ -1410,7 +1517,7 @@ static void wlan_sipc_event_rx_handler(struct sprdwl_priv *priv)
 		return;
 	}
 
-	memcpy((u8 *) recv_buf, (u8 *) blk.addr, blk.length);
+	memcpy((u8 *)recv_buf, (u8 *)blk.addr, blk.length);
 
 	msg_hdr = le32_to_cpu(recv_buf->msg_hdr);
 	event_tag = le16_to_cpu(recv_buf->u.event.event_tag);
@@ -1468,7 +1575,6 @@ static void wlan_sipc_event_rx_handler(struct sprdwl_priv *priv)
 		sprdwl_event_softap(vif);
 		break;
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
-
 	case WIFI_EVENT_REMAIN_ON_CHAN_EXPIRED:
 		pr_debug("Recv p2p  remain on channel EXPIRED event\n");
 		sprdwl_event_remain_on_channel_expired(priv->p2p_vif);
@@ -1490,7 +1596,23 @@ static void wlan_sipc_event_rx_handler(struct sprdwl_priv *priv)
 		sprdwl_event_mlme_tx_status(priv->p2p_vif);
 		break;
 #endif /*CONFIG_SPRDWL_WIFI_DIRECT */
-
+	case WIFI_EVENT_REPORT_MIC_FAIL:
+		sprdwl_event_report_mic_failure(vif);
+		break;
+	case WIFI_EVENT_REPORT_CQM_RSSI_LOW:
+		vif->cqm = NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
+		sprdwl_event_report_cqm(vif);
+		break;
+	case WIFI_EVENT_REPORT_CQM_RSSI_HIGH:
+		vif->cqm = NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH;
+		sprdwl_event_report_cqm(vif);
+		break;
+	/* Walk around this event because wpa_supplicant doesn't support it */
+	case WIFI_EVENT_REPORT_CQM_RSSI_LOSS_BEACON:
+		vif->cqm = NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
+		vif->beacon_loss = 1;
+		sprdwl_event_report_cqm(vif);
+		break;
 	default:
 		pr_err("Recv sblock8 unknow event id %d\n", event_id);
 		break;

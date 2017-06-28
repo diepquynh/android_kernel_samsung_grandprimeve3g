@@ -68,7 +68,6 @@ struct sprdwl_vif {
 	struct net_device *ndev;	/* Linux net device */
 	struct sprdwl_priv *priv;
 	struct wireless_dev wdev;	/* Linux wireless device */
-	struct napi_struct napi;
 #ifdef CONFIG_SPRDWL_ENHANCED_PM
 	struct early_suspend early_suspend;
 #endif
@@ -83,6 +82,8 @@ struct sprdwl_vif {
 	int ssid_len;
 	u8 ssid[IEEE80211_MAX_SSID_LEN];
 	u8 bssid[ETH_ALEN];
+	enum nl80211_cqm_rssi_threshold_event cqm;
+	u8 beacon_loss;
 	/* encryption stuff */
 	u8 key_index[2];
 	u8 key[2][4][WLAN_MAX_KEY_LEN];
@@ -101,6 +102,7 @@ struct sprdwl_vif {
 struct sprdwl_priv {
 	struct wiphy *wiphy;
 	struct list_head vif_list;
+	/* Lock to avoid race in vif_list entries among add/del/traverse */
 	spinlock_t list_lock;
 	struct sprdwl_vif *cur_vif;
 	struct sprdwl_vif *wlan_vif;
@@ -114,7 +116,10 @@ struct sprdwl_priv {
 	struct wlan_sipc *sipc;	/* hook of sipc command ops */
 	enum cp2_status cp2_status;
 	enum wlan_mode mode;
-
+#ifdef CONFIG_SPRDWL_POWER_CONTROL
+	struct kobject sprdwl_power_obj;
+	bool reduce_power;
+#endif
 	/*FIXME concurrency issue*/
 	/*one netdev is allowed at the same time*/
 	struct mutex global_lock;

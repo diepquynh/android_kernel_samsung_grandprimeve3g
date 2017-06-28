@@ -647,7 +647,7 @@ static int sprdwl_cfg80211_change_iface(struct wiphy *wiphy,
 			ret = sprdwl_set_p2p_enable_cmd(priv->sipc, 1);
 			if (ret) {
 				wiphy_err(wiphy, "%s Failed to set p2p_enable!\n",
-						__func__);
+					  __func__);
 				return ret;
 			}
 			netdev_info(ndev, "%s set p2penable ok\n", __func__);
@@ -686,7 +686,7 @@ static int sprdwl_cfg80211_scan(struct wiphy *wiphy,
 
 	if (!sprdwl_is_valid_iftype(request->wdev->iftype)) {
 		wiphy_err(wiphy, "%s invalid interface type: %u\n",
-				__func__, request->wdev->iftype);
+			  __func__, request->wdev->iftype);
 		return -EOPNOTSUPP;
 	}
 
@@ -694,22 +694,22 @@ static int sprdwl_cfg80211_scan(struct wiphy *wiphy,
 	ret = sprdwl_set_p2p_enable_cmd(priv->sipc, vif == priv->p2p_vif);
 	if (ret) {
 		wiphy_err(wiphy, "%s Failed to set p2p_enable!\n",
-				__func__);
+			  __func__);
 		return ret;
 	}
 #endif
 	/* set wps ie */
 	if (request->ie_len > 0) {
 		if (request->ie_len > 255) {
-			wiphy_err(wiphy, "%s invalid len: %d\n", __func__,
-					request->ie_len);
+			wiphy_err(wiphy, "%s invalid len: %zu\n", __func__,
+				  request->ie_len);
 			return -EOPNOTSUPP;
 		}
 		ret = sprdwl_set_wps_ie_cmd(priv->sipc, WPS_REQ_IE,
 				request->ie, request->ie_len);
 		if (ret) {
-			wiphy_err(wiphy,
-					"%s Failed to set wps ie!\n", __func__);
+			wiphy_err(wiphy, "%s Failed to set WPS IE!\n",
+				  __func__);
 			return ret;
 		}
 	}
@@ -819,8 +819,7 @@ static int sprdwl_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 	ret = sprdwl_set_p2p_enable_cmd(priv->sipc, vif == priv->p2p_vif);
 	if (ret) {
-		wiphy_err(wiphy, "%s Failed to set p2p_enable!\n",
-				__func__);
+		wiphy_err(wiphy, "%s Failed to set p2p_enable!\n", __func__);
 		return ret;
 	}
 #endif
@@ -833,7 +832,7 @@ static int sprdwl_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 	/* Set wps ie */
 	if (sme->ie_len > 0) {
 		if (sme->ie_len > 255) {
-			wiphy_err(wiphy, "%s invalid len: %d\n", __func__,
+			wiphy_err(wiphy, "%s invalid len: %zu\n", __func__,
 				  sme->ie_len);
 			return -EOPNOTSUPP;
 		}
@@ -921,7 +920,7 @@ static int sprdwl_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 	sprdwl_set_cipher(vif, false, sme->crypto.cipher_group);
 	if (vif->prwise_crypto != SPRDWL_CIPHER_WAPI) {
 		wiphy_info(wiphy, "group cipher %#x\n",
-				sme->crypto.cipher_group);
+			   sme->crypto.cipher_group);
 		ret = sprdwl_set_cipher_cmd(priv->sipc, vif->grp_crypto,
 					    WIFI_CMD_GROUP_CIPHER);
 		if (ret < 0) {
@@ -1111,41 +1110,17 @@ static int sprdwl_cfg80211_add_key(struct wiphy *wiphy, struct net_device *ndev,
 
 	if (!sprdwl_is_ready(priv))
 		return -EIO;
-#ifdef CONFIG_SPRDWL_WIFI_DIRECT
-	if ((priv->mode == SPRDWL_AP_MODE) && (vif != priv->p2p_vif)) {
-#else /* CONFIG_SPRDWL_WIFI_DIRECT */
-	if (priv->mode == SPRDWL_AP_MODE) {
-#endif /* CONFIG_SPRDWL_WIFI_DIRECT */
-		u8 key[32];
-		memset(key, 0, sizeof(key));
-		ret = hostap_conf_load(HOSTAP_CONF_FILE_NAME, key);
-		if (ret != 0) {
-			wiphy_err(wiphy, "%s Failed to load hostapd conf!\n",
-				  __func__);
-			return ret;
-		}
-		ret = sprdwl_set_psk_cmd(priv->sipc, key, sizeof(key));
-		if (ret < 0) {
-			wiphy_err(wiphy, "%s Failed to set psk!\n", __func__);
-			return ret;
-		}
-#ifdef CONFIG_SPRDWL_WIFI_DIRECT
-	} else if ((priv->mode == SPRDWL_STATION_MODE) ||
-		   vif == priv->p2p_vif) {
-#else /* CONFIG_SPRDWL_WIFI_DIRECT */
-	} else if (priv->mode == SPRDWL_STATION_MODE) {
-#endif /* CONFIG_SPRDWL_WIFI_DIRECT */
-		vif->key_index[pairwise] = key_index;
-		vif->key_len[pairwise][key_index] = params->key_len;
-		memcpy(vif->key[pairwise][key_index], params->key,
-		       params->key_len);
-		ret = sprdwl_add_key(vif, pairwise, key_index, params->cipher,
-				     params->seq, mac_addr);
-		if (ret < 0) {
-			wiphy_err(wiphy,
-				  "%s Failed to add cipher key!\n", __func__);
-			return ret;
-		}
+
+	vif->key_index[pairwise] = key_index;
+	vif->key_len[pairwise][key_index] = params->key_len;
+	memcpy(vif->key[pairwise][key_index], params->key,
+	       params->key_len);
+	ret = sprdwl_add_key(vif, pairwise, key_index, params->cipher,
+			     params->seq, mac_addr);
+	if (ret < 0) {
+		wiphy_err(wiphy,
+			  "%s Failed to add cipher key!\n", __func__);
+		return ret;
 	}
 
 	return 0;
@@ -1469,6 +1444,19 @@ void sprdwl_event_scan_results(struct sprdwl_priv *priv, bool aborted)
 		aborted = true;
 		goto out;
 	}
+
+	if (vif->beacon_loss) {
+		bss = cfg80211_get_bss(wiphy, NULL,
+				       vif->bssid, vif->ssid, vif->ssid_len,
+				       WLAN_CAPABILITY_ESS,
+				       WLAN_CAPABILITY_ESS);
+		if (bss) {
+			cfg80211_unlink_bss(wiphy, bss);
+			wiphy_info(wiphy, "beacon loss: %pM", bss->bssid);
+			vif->beacon_loss = 0;
+		}
+	}
+
 	wiphy_info(wiphy, "%s got %d BSSes\n", __func__, i);
 
 out:
@@ -1542,7 +1530,7 @@ void sprdwl_event_connect_result(struct sprdwl_vif *vif)
 		wiphy_err(priv->wiphy, "%s no req_ie frame!\n", __func__);
 		goto freepos;
 	}
-	req_ie_len = *(u8 *) (bssid_ptr + bssid_len);
+	req_ie_len = *(u8 *)(bssid_ptr + bssid_len);
 	left -= sizeof(req_ie_len);
 	req_ie_ptr = bssid_ptr + bssid_len + sizeof(req_ie_len);
 	left -= req_ie_len;
@@ -1550,7 +1538,7 @@ void sprdwl_event_connect_result(struct sprdwl_vif *vif)
 		wiphy_err(priv->wiphy, "%s no resp_ie frame!\n", __func__);
 		goto freepos;
 	}
-	resp_ie_len = *(u8 *) (req_ie_ptr + req_ie_len);
+	resp_ie_len = *(u8 *)(req_ie_ptr + req_ie_len);
 	resp_ie_ptr = req_ie_ptr + req_ie_len + sizeof(resp_ie_ptr);
 
 	if (vif->sm_state == SPRDWL_CONNECTING) {
@@ -1639,6 +1627,40 @@ void sprdwl_event_disconnect(struct sprdwl_vif *vif)
 		netif_stop_queue(vif->ndev);
 	}
 	return;
+}
+
+void sprdwl_event_report_mic_failure(struct sprdwl_vif *vif)
+{
+	struct sprdwl_priv *priv = vif->priv;
+	struct wlan_sipc_mic_failure *mic_failure;
+	u8 *pos;
+
+	if (!vif) {
+		pr_err("%s: unlikly vif\n", __func__);
+		return;
+	}
+
+	pos = priv->sipc->event_buf->u.event.variable;
+	mic_failure = (struct wlan_sipc_mic_failure *)pos;
+	/* debug info,Pls remove it in the future */
+	wiphy_info(priv->wiphy,
+		   "%s is_mcast:0x%x key_id: 0x%x bssid: %pM\n",
+		   __func__, mic_failure->is_mcast, mic_failure->key_id,
+		   vif->bssid);
+
+	cfg80211_michael_mic_failure(vif->ndev, vif->bssid,
+				     (mic_failure->
+				      is_mcast ? NL80211_KEYTYPE_GROUP :
+				      NL80211_KEYTYPE_PAIRWISE),
+				     mic_failure->key_id, NULL, GFP_KERNEL);
+}
+
+void sprdwl_event_report_cqm(struct sprdwl_vif *vif)
+{
+	struct sprdwl_priv *priv = vif->priv;
+	wiphy_info(priv->wiphy, "%s %d\n", __func__, vif->cqm);
+
+	cfg80211_cqm_rssi_notify(vif->ndev, vif->cqm, GFP_KERNEL);
 }
 
 void sprdwl_event_ready(struct sprdwl_priv *priv)
@@ -1876,6 +1898,11 @@ static int sprdwl_cfg80211_start_ap(struct wiphy *wiphy,
 	memcpy(vif->ssid, info->ssid, info->ssid_len);
 	vif->ssid_len = info->ssid_len;
 
+	ret = sprdwl_set_ap_sme_cmd(priv->sipc, 0);
+	if (ret) {
+		wiphy_err(wiphy, "%s Failed to set ap sme cmd!\n", __func__);
+		return ret;
+	}
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 	if (!netif_carrier_ok(ndev)) {
 		netif_carrier_on(ndev);
@@ -1883,8 +1910,7 @@ static int sprdwl_cfg80211_start_ap(struct wiphy *wiphy,
 	}
 	ret = sprdwl_set_p2p_enable_cmd(priv->sipc, vif == priv->p2p_vif);
 	if (ret) {
-		wiphy_err(wiphy, "%s Failed to set p2p_enable!\n",
-				__func__);
+		wiphy_err(wiphy, "%s Failed to set p2p_enable!\n", __func__);
 		return ret;
 	}
 #endif
@@ -1960,6 +1986,25 @@ static int sprdwl_cfg80211_change_beacon(struct wiphy *wiphy,
 	return 0;
 }
 
+static int sprdwl_cfg80211_del_station(struct wiphy *wiphy,
+				       struct net_device *ndev, u8 *mac)
+{
+	struct sprdwl_priv *priv = wiphy_priv(wiphy);
+
+	if (!sprdwl_is_ready(priv))
+		return -EIO;
+
+	if (!mac) {
+		wiphy_dbg(wiphy, "Ignore NULL MAC address!\n");
+		goto out;
+	}
+
+	wiphy_info(wiphy, "%s %pM\n", __func__, mac);
+	sprdwl_disassoc_cmd(priv->sipc, mac, WLAN_REASON_DEAUTH_LEAVING);
+out:
+	return 0;
+}
+
 static int sprdwl_cfg80211_set_channel(struct wiphy *wiphy,
 				       struct net_device *ndev,
 				       struct ieee80211_channel *channel)
@@ -2021,11 +2066,11 @@ static int sprdwl_cfg80211_mgmt_tx(struct wiphy *wiphy,
 {
 	struct sprdwl_priv *priv = wiphy_priv(wiphy);
 	int ret = 0;
-	static u64 mgmt_index = 0;
+	static u64 mgmt_index;
 
 	mgmt_index++;
-	wiphy_info(wiphy, "%s, index: %lld, cookie: %lld \n", __func__,
-			mgmt_index, *cookie);
+	wiphy_info(wiphy, "%s, index: %lld, cookie: %lld\n", __func__,
+		   mgmt_index, *cookie);
 	*cookie = mgmt_index;
 
 	if (!sprdwl_is_ready(priv))
@@ -2035,11 +2080,13 @@ static int sprdwl_cfg80211_mgmt_tx(struct wiphy *wiphy,
 
 	/* send tx mgmt */
 	if (len > 0) {
-		ret = sprdwl_set_tx_mgmt_cmd(priv->sipc, chan, dont_wait_for_ack,
-				wait, cookie, buf, len);
+		ret = sprdwl_set_tx_mgmt_cmd(priv->sipc,
+					     chan, dont_wait_for_ack,
+					     wait, cookie, buf, len);
 		if (ret) {
-			if(dont_wait_for_ack == false)
-				cfg80211_mgmt_tx_status(wdev, *cookie, buf, len, 0,GFP_KERNEL);
+			if (dont_wait_for_ack == false)
+				cfg80211_mgmt_tx_status(wdev, *cookie, buf, len,
+							0, GFP_KERNEL);
 
 			wiphy_err(wiphy,
 				  "%s Failed to set tx mgmt!\n", __func__);
@@ -2126,17 +2173,6 @@ static int sprdwl_cfg80211_cancel_remain_on_channel(struct wiphy *wiphy,
 			  "%s Failed to cancel remain chan!\n", __func__);
 		return ret;
 	}
-
-	return 0;
-}
-
-static int sprdwl_cfg80211_del_station(struct wiphy *wiphy,
-				       struct net_device *ndev, u8 *mac)
-{
-	struct sprdwl_priv *priv = wiphy_priv(wiphy);
-
-	if (!sprdwl_is_ready(priv))
-		return -EIO;
 
 	return 0;
 }
@@ -2245,16 +2281,33 @@ void sprdwl_event_mlme_tx_status(struct sprdwl_vif *vif)
 	tx_status = (struct wlan_sipc_event_mgmt_tx_status *)priv->
 		sipc->event_buf->u.event.variable;
 
-	wiphy_info(wiphy, "%s index: %lld.\n", __func__,
-			tx_status->cookie);
+	wiphy_info(wiphy, "%s index: %lld\n", __func__, tx_status->cookie);
 
-
-	cfg80211_mgmt_tx_status(&vif->wdev, tx_status->cookie,
-			tx_status->buf, tx_status->len, tx_status->ack,
-			GFP_KERNEL);
+	cfg80211_mgmt_tx_status(&vif->wdev, tx_status->cookie, tx_status->buf,
+				tx_status->len, tx_status->ack, GFP_KERNEL);
 }
 
 #endif /*CONFIG_SPRDWL_WIFI_DIRECT */
+
+/* CFG802.11 operation handler for connection quality monitoring.
+ *
+ * This function subscribes/unsubscribes HIGH_RSSI and LOW_RSSI
+ * events to FW.
+ */
+int sprdwl_cfg80211_set_cqm_rssi_config(struct wiphy *wiphy,
+					struct net_device *ndev,
+					s32 rssi_thold, u32 rssi_hyst)
+{
+	struct sprdwl_priv *priv = wiphy_priv(wiphy);
+	int ret;
+
+	wiphy_info(wiphy, "%s rssi_thold %d rssi_hyst %d",
+		   __func__, rssi_thold, rssi_hyst);
+
+	ret = sprdwl_set_cqm_rssi(priv->sipc, rssi_thold, rssi_hyst);
+
+	return ret;
+}
 
 static struct cfg80211_ops sprdwl_cfg80211_ops = {
 	.add_virtual_intf = sprdwl_cfg80211_add_iface,
@@ -2271,17 +2324,18 @@ static struct cfg80211_ops sprdwl_cfg80211_ops = {
 	.set_pmksa = sprdwl_cfg80211_set_pmksa,
 	.del_pmksa = sprdwl_cfg80211_del_pmksa,
 	.flush_pmksa = sprdwl_cfg80211_flush_pmksa,
+	.set_cqm_rssi_config = sprdwl_cfg80211_set_cqm_rssi_config,
 	/* AP mode */
 	.start_ap = sprdwl_cfg80211_start_ap,
 	.change_beacon = sprdwl_cfg80211_change_beacon,
 	.stop_ap = sprdwl_cfg80211_stop_ap,
+	.del_station = sprdwl_cfg80211_del_station,
 	.libertas_set_mesh_channel = sprdwl_cfg80211_set_channel,
 	.mgmt_tx = sprdwl_cfg80211_mgmt_tx,
 	.mgmt_frame_register = sprdwl_cfg80211_mgmt_frame_register,
 #ifdef CONFIG_SPRDWL_WIFI_DIRECT
 	.remain_on_channel = sprdwl_cfg80211_remain_on_channel,
 	.cancel_remain_on_channel = sprdwl_cfg80211_cancel_remain_on_channel,
-	.del_station = sprdwl_cfg80211_del_station,
 #endif /*CONFIG_SPRDWL_WIFI_DIRECT */
 };
 
@@ -2357,8 +2411,8 @@ static void sprdwl_reg_notify(struct wiphy *wiphy,
 				continue;
 
 			freq_range = &reg_rule->freq_range;
-			if (last_start_freq != freq_range->start_freq_khz
-			    && i < n_rules) {
+			if (last_start_freq != freq_range->start_freq_khz &&
+			    i < n_rules) {
 				last_start_freq = freq_range->start_freq_khz;
 				memcpy(&rd->reg_rules[i], reg_rule,
 				       sizeof(struct ieee80211_reg_rule));
@@ -2394,6 +2448,7 @@ static const struct ieee80211_iface_limit sprdwl_iface_limits[] = {
 		.types = BIT(NL80211_IFTYPE_P2P_DEVICE)
 	}
 };
+
 static const struct ieee80211_iface_combination sprdwl_iface_combos[] = {
 	{
 		 .max_interfaces = 3,
@@ -2430,7 +2485,7 @@ static void sprdwl_setup_wiphy(struct wiphy *wiphy)
 	/*wiphy->bands[IEEE80211_BAND_5GHZ] = &sprdwl_band_5ghz;*/
 
 	wiphy->reg_notifier = sprdwl_reg_notify;
-#ifdef CONFIG_SPRDWL_WIFI_DIRECT
+
 	wiphy->interface_modes |= BIT(NL80211_IFTYPE_P2P_DEVICE) |
 	    BIT(NL80211_IFTYPE_P2P_CLIENT) | BIT(NL80211_IFTYPE_P2P_GO);
 	wiphy->flags |= WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
@@ -2438,7 +2493,7 @@ static void sprdwl_setup_wiphy(struct wiphy *wiphy)
 	wiphy->flags |= WIPHY_FLAG_HAVE_AP_SME;
 	wiphy->ap_sme_capa = 1;
 	wiphy->max_remain_on_channel_duration = 5000;
-#endif /*CONFIG_SPRDWL_WIFI_DIRECT */
+
 	wiphy->iface_combinations = sprdwl_iface_combos;
 	wiphy->n_iface_combinations = ARRAY_SIZE(sprdwl_iface_combos);
 }
