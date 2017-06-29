@@ -67,7 +67,7 @@ int ist30xx_batt_chk_max_cnt = IST30XX_MAX_CHK_CNT;
 #include <linux/input/doubletap2wake.h>
 #endif
 
-#define TOUCH_BOOSTER	1
+#define TOUCH_BOOSTER	0
 
 #if TOUCH_BOOSTER
 #include <linux/cpufreq.h>
