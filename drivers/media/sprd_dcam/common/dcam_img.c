@@ -188,9 +188,12 @@ struct dcam_info {
 	struct dcam_size           dst_size;
 	uint32_t                   pxl_fmt;
 	uint32_t                   need_isp_tool;
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t                   need_isp;
 	uint32_t                   need_shrink;
 	struct dcam_rect           path_input_rect;
+#endif
 
 	struct dcam_path_spec      dcam_path[DCAM_PATH_NUM];
 
@@ -201,7 +204,10 @@ struct dcam_info {
 	uint32_t                   is_smooth_zoom;
 	struct timeval             timestamp;
 	struct timeval             frame_last_timestamp;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t                   camera_id;
+#endif
+
 };
 
 struct dcam_dev {
@@ -252,7 +258,11 @@ LOCAL int sprd_img_unreg_path2_isr(struct dcam_dev* param);
 LOCAL void sprd_img_print_reg(void);
 LOCAL int sprd_img_start_zoom(struct dcam_frame *frame, void* param);
 LOCAL int sprd_img_path_cfg_output_addr(path_cfg_func path_cfg, struct dcam_path_spec* path_spec);
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 LOCAL int sprd_img_local_clear_path_buffer(struct dcam_dev *dev, int path_id);
+#endif
+
 
 LOCAL struct dcam_format dcam_img_fmt[] = {
 	{
@@ -665,11 +675,17 @@ LOCAL int sprd_img_check_path0_cap(uint32_t fourcc,
 	DCAM_TRACE("SPRD_IMG: check format for path0 \n");
 
 	path->is_from_isp = f->need_isp;
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	path->rot_mode = f->reserved[0];
+#endif
 
 	path->frm_type = f->channel_id;
 	path->is_work = 0;
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	printk("zcf sprd_img_check_path0_cap  rot_mode:%d\n",path->rot_mode);
+#endif
 
 	switch (fourcc) {
 	case IMG_PIX_FMT_GREY:
@@ -705,8 +721,11 @@ LOCAL int sprd_img_check_path0_cap(uint32_t fourcc,
 	path->fourcc = fourcc;
 
 	DCAM_TRACE("SPRD_IMG: check format for path0: out_fmt=%d, is_loose=%d \n", path->out_fmt, info->is_loose);
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	path->out_size.w = f->width;
 	path->out_size.h = f->height;
+#endif
 
 	path->is_work = 1;
 
@@ -1483,8 +1502,10 @@ LOCAL int sprd_img_path0_cfg(path_cfg_func path_cfg,
 	ret = path_cfg(DCAM_PATH_SRC_SEL, &param);
 	/*IMG_RTN_IF_ERR(ret);*/
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	ret = path_cfg(DCAM_PATH_ROT_MODE, &path_spec->rot_mode);
 	IMG_RTN_IF_ERR(ret);	
+#endif
 
 	ret = path_cfg(DCAM_PATH_INPUT_SIZE, &path_spec->in_size);
 	IMG_RTN_IF_ERR(ret);
@@ -1510,7 +1531,9 @@ LOCAL int sprd_img_path0_cfg(path_cfg_func path_cfg,
 	ret = sprd_img_path_cfg_output_addr(path_cfg, path_spec);
 	IMG_RTN_IF_ERR(ret);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	ret = path_cfg(DCAM_PATH_OUTPUT_RESERVED_ADDR, &path_spec->frm_reserved_addr);
+#endif
 
 	param = 1;
 	ret = path_cfg(DCAM_PATH_ENABLE, &param);
@@ -1619,6 +1642,7 @@ exit:
 	return ret;
 }
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 LOCAL int sprd_img_local_clear_path_buffer(struct dcam_dev *dev, int path_id)
 {
 	int                                     ret = 0;
@@ -1646,6 +1670,7 @@ LOCAL int sprd_img_local_clear_path_buffer(struct dcam_dev *dev, int path_id)
 
 	return 0;
 }
+#endif
 
 LOCAL int sprd_img_local_deinit(struct dcam_dev *dev)
 {
@@ -1657,7 +1682,9 @@ LOCAL int sprd_img_local_deinit(struct dcam_dev *dev)
 	}
 	path->is_work = 0;
 	path->frm_cnt_act = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	memset((void*)&path->frm_reserved_addr, 0, sizeof(struct dcam_addr));
+#endif
 	sprd_img_buf_queue_init(&path->buf_queue);
 
 	path = &dev->dcam_cxt.dcam_path[DCAM_PATH2];
@@ -1665,7 +1692,9 @@ LOCAL int sprd_img_local_deinit(struct dcam_dev *dev)
 		return -EINVAL;
 	path->is_work = 0;
 	path->frm_cnt_act = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	memset((void*)&path->frm_reserved_addr, 0, sizeof(struct dcam_addr));
+#endif
 	sprd_img_buf_queue_init(&path->buf_queue);
 
 	path = &dev->dcam_cxt.dcam_path[DCAM_PATH0];
@@ -1673,7 +1702,9 @@ LOCAL int sprd_img_local_deinit(struct dcam_dev *dev)
 		return -EINVAL;
 	path->is_work = 0;
 	path->frm_cnt_act = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	memset((void*)&path->frm_reserved_addr, 0, sizeof(struct dcam_addr));
+#endif
 	sprd_img_buf_queue_init(&path->buf_queue);
 
 	ret = sprd_img_queue_init(&dev->queue);
@@ -2096,15 +2127,18 @@ LOCAL int sprd_img_update_video(struct file *file, uint32_t channel_id)
 	path = &dev->dcam_cxt.dcam_path[channel_id];
 	path_index = sprd_img_get_path_index(channel_id);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (DCAM_PATH0 == channel_id) {
 		path_cfg = dcam_path0_cfg;
-	} else if (DCAM_PATH1 == channel_id) {
+	} else 
+#endif
+	if (DCAM_PATH1 == channel_id) {
 		path_cfg = dcam_path1_cfg;
 	}else if (DCAM_PATH2 == channel_id) {
 		path_cfg = dcam_path2_cfg;
 	}
 
-	if (dev->dcam_cxt.is_smooth_zoom && DCAM_PATH0 != channel_id) {
+	if (dev->dcam_cxt.is_smooth_zoom) {
 		dev->zoom_level = 1;
 		dev->channel_id = channel_id;
 		if (0 == path->in_rect_backup.w || 0 == path->in_rect_backup.h) {
@@ -2748,6 +2782,7 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		dev->dcam_cxt.dst_size.h = parm.dst_size.h;
 		dev->dcam_cxt.pxl_fmt = parm.pixel_fmt;
 		dev->dcam_cxt.need_isp_tool = parm.need_isp_tool;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		dev->dcam_cxt.need_isp = parm.need_isp;
 		dev->dcam_cxt.need_shrink = parm.shrink;
 		dev->dcam_cxt.camera_id = parm.camera_id;
@@ -2755,6 +2790,7 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		dev->dcam_cxt.path_input_rect.y = parm.crop_rect.y;
 		dev->dcam_cxt.path_input_rect.w = parm.crop_rect.w;
 		dev->dcam_cxt.path_input_rect.h = parm.crop_rect.h;
+#endif
 		mutex_unlock(&dev->dcam_mutex);
 		break;
 
@@ -2834,7 +2870,10 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 			mutex_unlock(&dev->dcam_mutex);
 			goto exit;
 		}
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		DCAM_TRACE("SPRD_IMG: SPRD_IMG_IO_SET_FRAME_ADDR = %d \n",parm.channel_id);
+#endif
 
 		switch (parm.channel_id) {
 		case DCAM_PATH0:
@@ -3229,6 +3268,7 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		path_id.output_size.h = dev->dcam_cxt.dst_size.h;
 		path_id.fourcc = dev->dcam_cxt.pxl_fmt;
 		path_id.need_isp_tool = dev->dcam_cxt.need_isp_tool;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		path_id.need_isp = dev->dcam_cxt.need_isp;
 		path_id.camera_id = dev->dcam_cxt.camera_id;
 		path_id.need_shrink = dev->dcam_cxt.need_shrink;
@@ -3236,13 +3276,16 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		path_id.input_trim.y = dev->dcam_cxt.path_input_rect.y;
 		path_id.input_trim.w = dev->dcam_cxt.path_input_rect.w;
 		path_id.input_trim.h = dev->dcam_cxt.path_input_rect.h;
+#endif
 		DCAM_TRACE("SPRD_IMG: get param, path work %d %d %d \n", path_0->is_work, path_1->is_work, path_2->is_work);
 		path_id.is_path_work[DCAM_PATH0] = path_0->is_work;
 		path_id.is_path_work[DCAM_PATH1] = path_1->is_work;
 		path_id.is_path_work[DCAM_PATH2] = path_2->is_work;
 		ret = dcam_get_path_id(&path_id, &channel_id);
 		ret = copy_to_user((uint32_t *)arg, &channel_id, sizeof(uint32_t));
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		sprd_img_local_clear_path_buffer(dev, channel_id);
+#endif
 		DCAM_TRACE("SPRD_IMG: get channel_id %d \n", channel_id);
 		break;
 	}
@@ -3318,7 +3361,7 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 
 		memcpy((void*)&img_format.reserved[0], (void*)&dev->dcam_cxt.dcam_path[channel_id].end_sel, sizeof(struct dcam_endian_sel));
 		if ((0 == ret) && (0 != atomic_read(&dev->stream_on))) {
-			if (DCAM_PATH0 == channel_id || DCAM_PATH1 == channel_id || DCAM_PATH2 == channel_id) {
+			if (DCAM_PATH1 == channel_id || DCAM_PATH2 == channel_id) {
 				ret = sprd_img_update_video(file, channel_id);
 			}
 		}
@@ -3496,7 +3539,9 @@ ssize_t sprd_img_read(struct file *file, char __user *u_data, size_t cnt, loff_t
 			read_op.parm.capability.path_info[i].support_raw       = path_capability.path_info[i].support_raw;
 			read_op.parm.capability.path_info[i].support_jpeg      = path_capability.path_info[i].support_jpeg;
 			read_op.parm.capability.path_info[i].support_scaling   = path_capability.path_info[i].support_scaling;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 			read_op.parm.capability.path_info[i].support_trim       = path_capability.path_info[i].support_trim;
+#endif
 			read_op.parm.capability.path_info[i].is_scaleing_path  = path_capability.path_info[i].is_scaleing_path;
 		}
 		break;

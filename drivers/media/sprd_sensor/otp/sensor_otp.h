@@ -15,6 +15,9 @@
 #define _SENSOR_OTP_H_
 
 int sensor_reloadinfo_thread(void *data);
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 void sensor_get_fw_version_otp(void *read_fw_version);
+#endif
 
 #endif

@@ -66,7 +66,9 @@
 static unsigned long SPRD_VSP_PHYS = 0;
 static unsigned long SPRD_VSP_BASE = 0;
 static unsigned long VSP_GLB_REG_BASE = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 static unsigned long sprd_vsp_range_size = 0;
+#endif
 #define VSP_INT_STS_OFF            0x0             //from VSP
 #define VSP_INT_MASK_OFF        0x04
 #define VSP_INT_CLR_OFF           0x08
@@ -427,7 +429,9 @@ static int vsp_parse_dt(struct device *dev)
         BUG();
 
     VSP_GLB_REG_BASE = SPRD_VSP_BASE + 0x1000;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     sprd_vsp_range_size = resource_size(&res);
+#endif
 
     printk(KERN_INFO "sprd_vsp_phys = %lx\n", SPRD_VSP_PHYS);
     printk(KERN_INFO "sprd_vsp_base = %lx\n", SPRD_VSP_BASE);
@@ -489,8 +493,10 @@ static int vsp_nocache_mmap(struct file *filp, struct vm_area_struct *vma)
     vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
     vma->vm_pgoff     = (SPRD_VSP_PHYS>>PAGE_SHIFT);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     if ((vma->vm_end - vma->vm_start) > sprd_vsp_range_size )
 	    return -EAGAIN;
+#endif
 
     if (remap_pfn_range(vma,vma->vm_start, vma->vm_pgoff,
                         vma->vm_end - vma->vm_start, vma->vm_page_prot))

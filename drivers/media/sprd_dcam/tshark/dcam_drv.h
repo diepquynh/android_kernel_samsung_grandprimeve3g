@@ -146,10 +146,12 @@ enum dcam_irq_id {
 	DCAM_RAW_SLICE_DONE,
 	DCAM_PATH1_SOF,
 	DCAM_PATH2_SOF,
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	DCAM_PATH0_END,
 	DCAM_PATH1_END,
 	DCAM_PATH2_END,
 	DCAM_PATH0_SOF,
+#endif
 	DCAM_IRQ_NUMBER
 };
 
@@ -376,9 +378,11 @@ struct dcam_get_path_id {
 	uint32_t               fourcc;
 	uint32_t               is_path_work[DCAM_PATH_MAX];
 	uint32_t               need_isp_tool;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t               need_isp;
 	uint32_t               need_shrink;
 	uint32_t               camera_id;
+#endif
 	struct dcam_size       input_size;
 	struct dcam_rect       input_trim;
 	struct dcam_size       output_size;
@@ -390,7 +394,9 @@ struct dcam_path_info {
 	uint32_t               support_raw;
 	uint32_t               support_jpeg;
 	uint32_t               support_scaling;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t               support_trim;
+#endif	
 	uint32_t               is_scaleing_path;
 };
 

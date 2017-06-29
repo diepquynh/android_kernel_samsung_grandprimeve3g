@@ -57,7 +57,10 @@
 static unsigned long sprd_jpg_virt;
 
 static unsigned long sprd_jpg_phys;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 static unsigned long sprd_jpg_size;
+#endif
+
 #define GLB_CTRL_OFFSET		0x00
 #define MB_CFG_OFFSET		0x04
 
@@ -382,7 +385,12 @@ static irqreturn_t jpg_isr(int irq, void *data)
 {
     int int_status;
 
-    int_status   =__raw_readl((void *)(sprd_jpg_virt+GLB_INT_RAW_OFFSET));
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
+#undef GLB_INT_STS_OFFSET
+#define GLB_INT_STS_OFFSET GLB_INT_RAW_OFFSET
+#endif
+
+    int_status   =__raw_readl((void *)(sprd_jpg_virt+GLB_INT_STS_OFFSET));
     //printk(KERN_INFO "jpg_isr JPG_INT_STS %x\n",int_status);
     if((int_status) & 0xb) // JPEG ENC
     {
@@ -405,9 +413,11 @@ static irqreturn_t jpg_isr(int irq, void *data)
             jpg_hw_dev.condition_work_BSM= 1;
             wake_up_interruptible(&jpg_hw_dev.wait_queue_work_BSM);
             printk(KERN_ERR "jpg_isr BSM");
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
             sci_glb_set((void *)(sprd_jpg_virt+0x4400), BIT(30));
             sci_glb_clr((void *)(sprd_jpg_virt+0x4400), BIT(31));
+#endif
+
         }
         if((int_status >> 1) & 0x1)  // JPEG ENC VLC DONE INIT
         {
@@ -448,7 +458,10 @@ static void jpg_parse_dt(struct device *dev)
     sprd_jpg_phys = res.start;
     sprd_jpg_virt = (unsigned long)ioremap_nocache(res.start,
         res.end - res.start);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     sprd_jpg_size = res.end - res.start;
+#endif
+
     if (!sprd_jpg_virt)
         panic("ioremap failed!\n");
 
@@ -472,8 +485,10 @@ static int jpg_nocache_mmap(struct file *filp, struct vm_area_struct *vma)
     vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
     vma->vm_pgoff     = (sprd_jpg_phys>>PAGE_SHIFT);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     if((vma->vm_end - vma->vm_start) > sprd_jpg_size)
 	return -EAGAIN;
+#endif
 
     if (remap_pfn_range(vma,vma->vm_start, vma->vm_pgoff,
                         vma->vm_end - vma->vm_start, vma->vm_page_prot))

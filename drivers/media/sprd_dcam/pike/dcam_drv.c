@@ -2501,7 +2501,10 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 	capacity->path_info[DCAM_PATH0].support_raw = 1;
 	capacity->path_info[DCAM_PATH0].support_jpeg = 1;
 	capacity->path_info[DCAM_PATH0].support_scaling = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH0].support_trim = 0;
+#endif
+
 	capacity->path_info[DCAM_PATH0].is_scaleing_path = 0;
 
 	capacity->path_info[DCAM_PATH1].line_buf = DCAM_PATH1_LINE_BUF_LENGTH;
@@ -2509,7 +2512,9 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 	capacity->path_info[DCAM_PATH1].support_raw = 0;
 	capacity->path_info[DCAM_PATH1].support_jpeg = 0;
 	capacity->path_info[DCAM_PATH1].support_scaling = 1;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH1].support_trim = 1;
+#endif
 	capacity->path_info[DCAM_PATH1].is_scaleing_path = 0;
 
 	capacity->path_info[DCAM_PATH2].line_buf = DCAM_PATH2_LINE_BUF_LENGTH;
@@ -2517,7 +2522,9 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 	capacity->path_info[DCAM_PATH2].support_raw = 0;
 	capacity->path_info[DCAM_PATH2].support_jpeg = 0;
 	capacity->path_info[DCAM_PATH2].support_scaling = 1;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH2].support_trim = 1;
+#endif
 	capacity->path_info[DCAM_PATH2].is_scaleing_path = 1;
 
 	return ret;

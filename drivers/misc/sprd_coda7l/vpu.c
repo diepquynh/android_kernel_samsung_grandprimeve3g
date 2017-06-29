@@ -187,7 +187,10 @@ static int s_vpu_irq = VPU_IRQ_NUM;
 
 static unsigned long s_vpu_reg_phy_addr = 0;
 static unsigned int s_vpu_power_status_mask = 0;
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 static unsigned long sprd_vpu_range_size = 0;
+#endif
 
 static void __iomem *s_vpu_reg_virt_addr = NULL;
 static void __iomem *s_vpu_power_reg_vir_addr = NULL;
@@ -902,17 +905,17 @@ static int vpu_fasync(int fd, struct file *filp, int mode)
 static int vpu_map_to_register(struct file *fp, struct vm_area_struct *vm)
 {
     unsigned long pfn;
-    unsigned long vpu_map_size = 0;
 
     vm->vm_flags |= VM_IO | VM_RESERVED;
     vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
     pfn = s_vpu_reg_phy_addr >> PAGE_SHIFT;
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     if((vm->vm_end-vm->vm_start) > sprd_vpu_range_size)
 		return  -EAGAIN ;
-	else 
-		vpu_map_size = (vm->vm_end-vm->vm_start);
+#endif
 
-    return remap_pfn_range(vm, vm->vm_start, pfn, vpu_map_size, vm->vm_page_prot) ? -EAGAIN : 0;
+    return remap_pfn_range(vm, vm->vm_start, pfn, vm->vm_end-vm->vm_start, vm->vm_page_prot) ? -EAGAIN : 0;
 }
 
 static int vpu_map_to_physical_memory(struct file *fp, struct vm_area_struct *vm)
@@ -991,7 +994,11 @@ static int vpu_parse_dt(struct device *dev)
     s_vpu_reg_virt_addr = ioremap_nocache(res.start, resource_size(&res));
     if(!s_vpu_reg_virt_addr)
         BUG();
+
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
     sprd_vpu_range_size = resource_size(&res);
+#endif
+
     s_vpu_drv_context.irq = irq_of_parse_and_map(np, 0);
     s_vpu_drv_context.dev_np = np;
 

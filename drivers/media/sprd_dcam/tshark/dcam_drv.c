@@ -98,7 +98,11 @@
 		} \
 	} while(0)
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 #define DCAM_IRQ_LINE_MASK                             0x011FFFFFUL
+#else
+#define DCAM_IRQ_LINE_MASK                             0x001FFFFFUL
+#endif
 
 typedef void (*dcam_isr)(void);
 
@@ -350,10 +354,12 @@ LOCAL const dcam_isr isr_list[DCAM_IRQ_NUMBER] = {
 	_dcam_raw_slice_done,
 	_dcam_path1_sof,
 	_dcam_path2_sof,
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	NULL,
 	NULL,
 	NULL,
 	_dcam_path0_sof,
+#endif
 };
 
 void dcam_glb_reg_awr(uint32_t addr, uint32_t val, uint32_t reg_id)
@@ -873,6 +879,7 @@ int32_t dcam_update_path(enum dcam_path_index path_index, struct dcam_size *in_s
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
 	DCAM_CHECK_ZERO(s_dcam_sc_array);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	printk("DCAM:update path \n");
 	printk("path_index %d s_p_dcam_mod->dcam_path0.valide %d \n", path_index, s_p_dcam_mod->dcam_path0.valide);
 	if ((DCAM_PATH_IDX_0 & path_index) && s_p_dcam_mod->dcam_path0.valide) {
@@ -885,6 +892,7 @@ int32_t dcam_update_path(enum dcam_path_index path_index, struct dcam_size *in_s
 		printk("DCAM: To update path0 \n");
 		//_dcam_auto_copy(DCAM_PATH_IDX_0);
 	}
+#endif
 
 	if ((DCAM_PATH_IDX_1 & path_index) && s_p_dcam_mod->dcam_path1.valide) {
 		rtn = dcam_path1_cfg(DCAM_PATH_INPUT_SIZE, in_size);
@@ -962,9 +970,12 @@ int32_t dcam_start_path(enum dcam_path_index path_index)
 		_dcam_path0_set();
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, true);
 		DCAM_RTN_IF_ERR;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		//_dcam_force_copy(DCAM_PATH_IDX_0);
 		_dcam_auto_copy(DCAM_PATH_IDX_0);
-#if 0
+#endif
+
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
 		if (cap_en) {
 			/* if cap is already open, the sequence is:
 			   cap force copy -> path 0 enable -> cap auto copy */
@@ -1003,26 +1014,57 @@ int32_t dcam_start_path(enum dcam_path_index path_index)
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_2, true);
 		DCAM_RTN_IF_ERR;
 		_dcam_force_copy_ext(DCAM_PATH_IDX_2, true, true);
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
+		dcam_glb_reg_owr(DCAM_CFG, BIT_2, DCAM_CFG_REG);
+#endif
 	}
 
-	if ((DCAM_PATH_IDX_0 & path_index) && s_p_dcam_mod->dcam_path0.valide) {
-		//rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, false);
-		//DCAM_RTN_IF_ERR;
-		//_dcam_auto_copy(DCAM_PATH_IDX_0);
-		s_p_dcam_mod->dcam_path0.need_wait = 0;
-		s_p_dcam_mod->dcam_path0.status = DCAM_ST_START;
-		dcam_glb_reg_owr(DCAM_CFG, BIT_0, DCAM_CFG_REG);			 /* Enable Path 0 */
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
+	printk("DCAM PATH S: %d \n", path_index);
+
+	if (0 == cap_en) {
+#ifdef DCAM_DEBUG
+		REG_MWR(CAP_CCIR_FRM_CTRL, BIT_5 | BIT_4, 1 << 4);
+		REG_MWR(CAP_MIPI_FRM_CTRL, BIT_5 | BIT_4, 1 << 4);
+#endif
+		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_0, 1 << 0, DCAM_CONTROL_REG); /* Cap force copy */
+		//REG_MWR(DCAM_CONTROL, BIT_1, 1 << 1); /* Cap auto  copy */
+		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_2, 1 << 2, DCAM_CONTROL_REG); /* Cap Enable */
 	}
+#endif
+
+	if ((DCAM_PATH_IDX_0 & path_index) && s_p_dcam_mod->dcam_path0.valide) {
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
+		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, false);
+		DCAM_RTN_IF_ERR;
+		_dcam_auto_copy(DCAM_PATH_IDX_0);
+#endif
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
+		s_p_dcam_mod->dcam_path0.need_wait = 0;
+#endif
+		s_p_dcam_mod->dcam_path0.status = DCAM_ST_START;
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
+		dcam_glb_reg_owr(DCAM_CFG, BIT_0, DCAM_CFG_REG);			 /* Enable Path 0 */
+#endif
+
+	}
+
+#ifndef CONFIG_MACH_GRANDPRIMEVE3G
+	_dcam_reg_trace();
+#endif
 
 	if ((DCAM_PATH_IDX_1 & path_index) && s_p_dcam_mod->dcam_path1.valide) {
 		s_p_dcam_mod->dcam_path1.need_wait = 0;
 		s_p_dcam_mod->dcam_path1.status = DCAM_ST_START;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		dcam_glb_reg_owr(DCAM_CFG, BIT_1, DCAM_CFG_REG);
+#endif
 	}
 
 	if ((DCAM_PATH_IDX_2 & path_index) && s_p_dcam_mod->dcam_path2.valide) {
 		s_p_dcam_mod->dcam_path2.need_wait = 0;
 		s_p_dcam_mod->dcam_path2.status = DCAM_ST_START;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		dcam_glb_reg_owr(DCAM_CFG, BIT_2, DCAM_CFG_REG);
 	}
 
@@ -1036,6 +1078,7 @@ int32_t dcam_start_path(enum dcam_path_index path_index)
 		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_0, 1 << 0, DCAM_CONTROL_REG); /* Cap force copy */
 		//REG_MWR(DCAM_CONTROL, BIT_1, 1 << 1); /* Cap auto  copy */
 		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_2, 1 << 2, DCAM_CONTROL_REG); /* Cap Enable */
+#endif
 	}
 
 	if (DCAM_PATH_IDX_ALL != path_index) {
@@ -1048,9 +1091,12 @@ int32_t dcam_start_path(enum dcam_path_index path_index)
 		}
 	}
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
+
 	printk("DCAM PATH S: %d \n", path_index);
 
 	_dcam_reg_trace();
+#endif
 
 	DCAM_TRACE("DCAM: start_path E\n");
 	return -rtn;
@@ -1173,7 +1219,7 @@ LOCAL void    _dcam_wait_for_channel_stop(enum dcam_path_index path_index)
 			ret = REG_RD(DCAM_AHBM_STS) & BIT_17;
 		} else if (s_p_dcam_mod->dcam_path2.valide && (DCAM_PATH_IDX_2 & path_index)) {
 			ret = REG_RD(DCAM_AHBM_STS) & BIT_18;
-#ifdef VERSION3D
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		} else if (s_p_dcam_mod->dcam_path0.valide && (DCAM_PATH_IDX_0 & path_index)) {
 			ret = REG_RD(DCAM_AHBM_STS) & BIT_19;
 #endif
@@ -1214,9 +1260,14 @@ LOCAL void    _dcam_quickstop_set_all(enum dcam_path_index path_index, uint32_t 
 	dcam_glb_reg_owr(DCAM_AHBM_STS, BIT_3 | BIT_4 | BIT_5, DCAM_AHBM_STS_REG);
 	udelay(10);
 	dcam_glb_reg_awr(DCAM_CFG, ~(BIT_0 | BIT_1 | BIT_2), DCAM_CFG_REG);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	dcam_glb_reg_owr(DCAM_CONTROL, BIT_8 | BIT_10 | BIT_12, DCAM_CONTROL_REG);
 	dcam_glb_reg_awr(DCAM_CONTROL, ~(BIT_8 | BIT_10 | BIT_12), DCAM_CONTROL_REG);
 	_dcam_wait_for_channel_stop(DCAM_PATH_IDX_0);
+#else
+	dcam_glb_reg_owr(DCAM_CONTROL, BIT_10 | BIT_12, DCAM_CONTROL_REG);
+	dcam_glb_reg_awr(DCAM_CONTROL, ~(BIT_10 | BIT_12), DCAM_CONTROL_REG);
+#endif
 	_dcam_wait_for_channel_stop(DCAM_PATH_IDX_1);
 	_dcam_wait_for_channel_stop(DCAM_PATH_IDX_2);
 
@@ -1302,13 +1353,14 @@ int32_t dcam_resume(void)
 	enum dcam_drv_rtn       rtn = DCAM_RTN_SUCCESS;
 
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (s_p_dcam_mod->dcam_path0.valide) {
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, true);
 		DCAM_RTN_IF_ERR;
 		_dcam_force_copy(DCAM_PATH_IDX_0);
 		_dcam_frm_clear(DCAM_PATH_IDX_0);
 	}
+#endif
 
 	if (s_p_dcam_mod->dcam_path1.valide) {
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_1, true);
@@ -1324,13 +1376,14 @@ int32_t dcam_resume(void)
 		_dcam_frm_clear(DCAM_PATH_IDX_2);
 	}
 
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (s_p_dcam_mod->dcam_path0.valide) {
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, false);
 		DCAM_RTN_IF_ERR;
 		dcam_glb_reg_owr(DCAM_CFG, BIT_0, DCAM_CFG_REG);
 		_dcam_auto_copy_ext(DCAM_PATH_IDX_0, true, true);
 	}
+#endif
 
 	if (s_p_dcam_mod->dcam_path1.valide) {
 		rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_1, false);
@@ -1739,7 +1792,7 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		}
 		break;
 	}
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	case DCAM_PATH_INPUT_RECT:
 	{
 		struct dcam_rect *rect = (struct dcam_rect*)param;
@@ -1803,6 +1856,7 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		}
 		break;
 	}
+#endif
 
 	case DCAM_PATH_OUTPUT_FORMAT:
 	{
@@ -1811,9 +1865,13 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		DCAM_CHECK_PARAM_ZERO_POINTER(param);
 
 		if((DCAM_OUTPUT_WORD != format) &&
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		(DCAM_OUTPUT_HALF_WORD != format) &&
 		(DCAM_OUTPUT_YVYU_1FRAME != format) &&
 		(DCAM_OUTPUT_YUV420 != format)){
+#else
+		(DCAM_OUTPUT_HALF_WORD != format)){
+#endif
 			rtn = DCAM_RTN_PATH_OUT_FMT_ERR;
 			path->output_format = DCAM_FTM_MAX;
 		}else{
@@ -1934,7 +1992,7 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		path->valide = *(uint32_t*)param;
 		break;
 	}
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	case DCAM_PATH_ROT_MODE:
 	{
 		uint32_t rot_mode = *(uint32_t*)param;
@@ -1948,6 +2006,7 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		}
 		break;
 	}
+#endif
 
 	default:
 		rtn = DCAM_RTN_IO_ID_ERR;
@@ -2653,12 +2712,17 @@ int32_t    dcam_get_path_id(struct dcam_get_path_id *path_id, uint32_t *channel_
 	if (NULL == path_id || NULL == channel_id) {
 		return -1;
 	}
-
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	printk("DCAM: fourcc 0x%x, input w %d, h %d output w %d, h %d input_trim %d %d %d %d shrink %d need_isp %d id:%d\n", path_id->fourcc,
 		path_id->input_size.w, path_id->input_size.h,
 		path_id->output_size.w, path_id->output_size.h,
 		path_id->input_trim.x, path_id->input_trim.y, path_id->input_trim.w, path_id->input_trim.h,
 		path_id->need_shrink, path_id->need_isp, path_id->camera_id);
+#else
+	DCAM_TRACE("DCAM: fourcc 0x%x, w %d, h %d, %d %d \n",
+		path_id->fourcc, path_id->input_size.w, path_id->input_size.h,
+		path_id->is_path_work[DCAM_PATH1], path_id->is_path_work[DCAM_PATH2]);
+#endif
 
 	if (path_id->need_isp_tool) {
 		*channel_id = DCAM_PATH0;
@@ -2668,6 +2732,7 @@ int32_t    dcam_get_path_id(struct dcam_get_path_id *path_id, uint32_t *channel_
 		*channel_id = DCAM_PATH0;
 	} else if (path_id->output_size.w <= DCAM_PATH1_LINE_BUF_LENGTH  && !path_id->is_path_work[DCAM_PATH1]) {
 		*channel_id = DCAM_PATH1;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 #ifdef VERSION3D
 	} else if (!path_id->need_shrink && path_id->need_isp && !path_id->is_path_work[DCAM_PATH0]
 				&& path_id->output_size.w == path_id->input_trim.w && path_id->output_size.h == path_id->input_trim.h) {
@@ -2675,6 +2740,7 @@ int32_t    dcam_get_path_id(struct dcam_get_path_id *path_id, uint32_t *channel_
 		if (1 == path_id->camera_id) {
 			*channel_id = DCAM_PATH2;
 		}
+#endif
 #endif
 	} else if (path_id->output_size.w <= DCAM_PATH2_LINE_BUF_LENGTH  && !path_id->is_path_work[DCAM_PATH2]) {
 		*channel_id = DCAM_PATH2;
@@ -2696,15 +2762,19 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 
 	capacity->count = 3;
 	capacity->path_info[DCAM_PATH0].line_buf = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 #ifdef VERSION3D
 	capacity->path_info[DCAM_PATH0].support_yuv = 1;
 #else
 	capacity->path_info[DCAM_PATH0].support_yuv = 0;
 #endif
+#endif
 	capacity->path_info[DCAM_PATH0].support_raw = 1;
 	capacity->path_info[DCAM_PATH0].support_jpeg = 1;
 	capacity->path_info[DCAM_PATH0].support_scaling = 0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH0].support_trim = 0;
+#endif
 	capacity->path_info[DCAM_PATH0].is_scaleing_path = 0;
 
 	capacity->path_info[DCAM_PATH1].line_buf = DCAM_PATH1_LINE_BUF_LENGTH;
@@ -2712,7 +2782,9 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 	capacity->path_info[DCAM_PATH1].support_raw = 0;
 	capacity->path_info[DCAM_PATH1].support_jpeg = 0;
 	capacity->path_info[DCAM_PATH1].support_scaling = 1;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH1].support_trim = 1;
+#endif
 	capacity->path_info[DCAM_PATH1].is_scaleing_path = 0;
 
 	capacity->path_info[DCAM_PATH2].line_buf = DCAM_PATH2_LINE_BUF_LENGTH;
@@ -2720,7 +2792,9 @@ int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity)
 	capacity->path_info[DCAM_PATH2].support_raw = 0;
 	capacity->path_info[DCAM_PATH2].support_jpeg = 0;
 	capacity->path_info[DCAM_PATH2].support_scaling = 1;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	capacity->path_info[DCAM_PATH2].support_trim = 1;
+#endif
 	capacity->path_info[DCAM_PATH2].is_scaleing_path = 1;
 
 	return ret;
@@ -2780,6 +2854,7 @@ LOCAL void _dcam_path0_set(void)
 		REG_WR(DCAM_PATH0_SRC_SIZE, reg_val);
 	}
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (path->valid_param.input_rect) {
 		reg_val = path->input_rect.x | (path->input_rect.y << 16);
 		REG_WR(DCAM_PATH0_TRIM_START, reg_val);
@@ -2796,19 +2871,29 @@ LOCAL void _dcam_path0_set(void)
 		REG_MWR(DCAM_CFG, BIT_10 , path->src_sel << 10);
 		DCAM_TRACE("DCAM: path 0: src_sel=0x%x \n", path->src_sel);
 	}
+#else
+	if (path->valid_param.output_format) {
+		enum dcam_output_mode format = path->output_format;
+		REG_MWR(DCAM_PATH0_CFG, BIT_2, format << 2);
+		DCAM_TRACE("DCAM: path 0: output_format=0x%x \n", format);
+	}
+#endif
 
 	if (path->valid_param.frame_deci) {
 		REG_MWR(DCAM_PATH0_CFG, BIT_1 | BIT_0, path->frame_deci << 0);
 	}
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (path->valid_param.output_format) {
 		enum dcam_output_mode format = path->output_format;
 		REG_MWR(DCAM_PATH0_CFG, BIT_2 | BIT_3, format << 2);
 		DCAM_TRACE("DCAM: path 0: output_format=0x%x \n", format);
 	}
+#endif
 
 	if (path->valid_param.data_endian) {
 		dcam_glb_reg_mwr(DCAM_ENDIAN_SEL, BIT_5 | BIT_4, path->data_endian.y_endian << 4, DCAM_ENDIAN_REG);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		if (DCAM_ENDIAN_BIG == path->data_endian.y_endian) {
 			if (DCAM_ENDIAN_LITTLE == path->data_endian.uv_endian ||
 				DCAM_ENDIAN_HALFBIG == path->data_endian.uv_endian) {
@@ -2835,7 +2920,7 @@ LOCAL void _dcam_path0_set(void)
 			REG_MWR(DCAM_PATH2_CFG, BIT_10 | BIT_9, path->rot_mode << 9);
 			printk("zcf dcam_path2_set  rot_mod :%d reg:%x\n",path->rot_mode,REG_RD(DCAM_PATH2_CFG));		
 		}
-
+#endif
 		dcam_glb_reg_mwr(DCAM_ENDIAN_SEL, BIT_18, BIT_18, DCAM_ENDIAN_REG); // axi write
 		dcam_glb_reg_mwr(DCAM_ENDIAN_SEL, BIT_19, BIT_19, DCAM_ENDIAN_REG); // axi read
 		DCAM_TRACE("DCAM DRV: path 0: data_endian y=0x%x, uv=0x%x \n",
@@ -3304,7 +3389,9 @@ LOCAL int32_t _dcam_path_set_next_frm(enum dcam_path_index path_index, uint32_t 
 		reserved_frame = &s_p_dcam_mod->path0_reserved_frame;
 		path = &s_p_dcam_mod->dcam_path0;
 		yuv_reg[0] = DCAM_FRM_ADDR0;
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 		yuv_reg[1] = DCAM_FRM_ADDR12;
+#endif
 		path_max_frm_cnt = DCAM_PATH_0_FRM_CNT_MAX;
 		p_heap = &s_p_dcam_mod->dcam_path0.frame_queue;
 		p_buf_queue = &s_p_dcam_mod->dcam_path0.buf_queue;
@@ -3337,8 +3424,12 @@ LOCAL int32_t _dcam_path_set_next_frm(enum dcam_path_index path_index, uint32_t 
 
 	DCAM_TRACE("DCAM: next %d y 0x%x uv 0x%x \n", path->output_frame_count, frame.yaddr, frame.uaddr);
 	REG_WR(yuv_reg[0], frame.yaddr);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (((DCAM_YUV400 > path->output_format) && (DCAM_PATH_IDX_0 != path_index)) ||
 			((DCAM_OUTPUT_YUV420 == path->output_format) && (DCAM_PATH_IDX_0 == path_index))) {
+#else
+	if ((DCAM_YUV400 > path->output_format) && (DCAM_PATH_IDX_0 != path_index)) {
+#endif
 		REG_WR(yuv_reg[1], frame.uaddr);
 		if (DCAM_YUV420_3FRAME == path->output_format) {
 			REG_WR(yuv_reg[2], frame.vaddr);
@@ -3397,10 +3488,13 @@ LOCAL int32_t _dcam_path_scaler(enum dcam_path_index path_index)
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
 	DCAM_CHECK_ZERO(s_dcam_sc_array);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (DCAM_PATH_IDX_0 == path_index) {
 		path = &s_p_dcam_mod->dcam_path0;
 		cfg_reg = DCAM_PATH0_CFG;
-	} else if (DCAM_PATH_IDX_1 == path_index) {
+	} else 
+#endif
+	if (DCAM_PATH_IDX_1 == path_index) {
 		path = &s_p_dcam_mod->dcam_path1;
 		cfg_reg = DCAM_PATH1_CFG;
 	} else if (DCAM_PATH_IDX_2 == path_index){
@@ -3447,9 +3541,12 @@ LOCAL int32_t _dcam_path_check_deci(enum dcam_path_index path_index, uint32_t *i
 
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (DCAM_PATH_IDX_0 == path_index) {
 		path = &s_p_dcam_mod->dcam_path1;
-	} else if (DCAM_PATH_IDX_1 == path_index) {
+	} else
+#endif
+	if (DCAM_PATH_IDX_1 == path_index) {
 		path = &s_p_dcam_mod->dcam_path1;
 	} else if (DCAM_PATH_IDX_2 == path_index) {
 		path = &s_p_dcam_mod->dcam_path2;
@@ -3509,10 +3606,13 @@ LOCAL int32_t _dcam_calc_sc_size(enum dcam_path_index path_index)
 
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (DCAM_PATH_IDX_0 == path_index) {
 		path = &s_p_dcam_mod->dcam_path0;
 		cfg_reg = DCAM_PATH0_CFG;
-	} else if (DCAM_PATH_IDX_1 == path_index) {
+	} else
+#endif
+	if (DCAM_PATH_IDX_1 == path_index) {
 		path = &s_p_dcam_mod->dcam_path1;
 		cfg_reg = DCAM_PATH1_CFG;
 	} else if (DCAM_PATH_IDX_2 == path_index){
@@ -3591,7 +3691,11 @@ LOCAL int32_t _dcam_set_sc_coeff(enum dcam_path_index path_index)
 
 	DCAM_CHECK_ZERO(s_p_dcam_mod);
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (DCAM_PATH_IDX_0 != path_index && DCAM_PATH_IDX_1 != path_index && DCAM_PATH_IDX_2 != path_index)
+#else
+	if (DCAM_PATH_IDX_1 != path_index && DCAM_PATH_IDX_2 != path_index)
+#endif
 		return -DCAM_RTN_PARA_ERR;
 
 	if (DCAM_PATH_IDX_1 == path_index) {
@@ -3736,9 +3840,11 @@ LOCAL void _dcam_force_copy(enum dcam_path_index path_index)
 		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_10, 1 << 10, DCAM_CONTROL_REG);
 	} else if (DCAM_PATH_IDX_2 == path_index) {
 		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_12, 1 << 12, DCAM_CONTROL_REG);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 #ifdef VERSION3D
 	} else if (DCAM_PATH_IDX_0 == path_index) {
 		dcam_glb_reg_mwr(DCAM_CONTROL, BIT_8, 1 << 8, DCAM_CONTROL_REG);
+#endif
 #endif
 	} else {
 		DCAM_TRACE("DCAM: _dcam_force_copy invalid path index: %d \n", path_index);
@@ -3862,6 +3968,7 @@ LOCAL void    _dcam_path0_done(void)
 		path->need_stop = 0;
 	}
 	_dcam_path_done_notice(DCAM_PATH_IDX_0);
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	printk("DCAM 0 \n");
 	if (path->sof_cnt < 1) {
 		printk("DCAM: path0 done cnt %d\n", path->sof_cnt);
@@ -3869,7 +3976,17 @@ LOCAL void    _dcam_path0_done(void)
 		return;
 	}
 	path->sof_cnt = 0;
+#else
+	DCAM_TRACE("DCAM 0 \n");
+	rtn = _dcam_path_set_next_frm(DCAM_PATH_IDX_0, false);
+	if (rtn) {
+		printk("DCAM: 0 w \n");
+  		return;
+  	}
+	_dcam_auto_copy(DCAM_PATH_IDX_0);
+#endif
 
+#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	if (path->need_wait) {
 		path->need_wait = 0;
 	} else {
@@ -3885,11 +4002,21 @@ LOCAL void    _dcam_path0_done(void)
 		} else {
 			DCAM_TRACE("DCAM: path0_reserved_frame \n");
 		}
+#else
+	rtn = _dcam_frame_dequeue(&path->frame_queue, &frame);
+	if (0 == rtn && frame.yaddr != s_p_dcam_mod->path0_reserved_frame.yaddr && 0 != dcam_frame_is_locked(&frame)) {
+		frame.width = path->output_size.w;
+		frame.height = path->output_size.h;
+		if (user_func) {
+			(*user_func)(&frame, data);
+		}
+	} else {
+		DCAM_TRACE("DCAM: path0_reserved_frame \n");
+#endif
 	}
 
 	return;
 }
-
 
 LOCAL void    _dcam_path0_overflow(void)
 {
@@ -4200,6 +4327,7 @@ LOCAL void    _dcam_raw_slice_done(void)
 	return;
 }
 
+#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
 LOCAL void    _dcam_path0_sof(void)
 {
 	enum dcam_drv_rtn       rtn = DCAM_RTN_SUCCESS;
@@ -4251,6 +4379,7 @@ LOCAL void    _dcam_path0_sof(void)
 
 	return;
 }
+#endif
 
 LOCAL void    _dcam_path1_sof(void)
 {
