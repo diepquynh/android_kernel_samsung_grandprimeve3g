@@ -20,7 +20,7 @@ KERNEL_PATH=$(pwd)
 KERNEL_ZIP=${KERNEL_PATH}/kernel_zip
 KERNEL_ZIP_NAME=${NAME}_${VERSION}.zip
 KERNEL_IMAGE=${KERNEL_ZIP}/tools/Image
-ZIP_DT_IMG=${KERNEL_ZIP}/tools/dt.img
+DT_IMG=${KERNEL_ZIP}/tools/dt.img
 EXTERNAL_MODULE_PATH=${KERNEL_PATH}/external_module
 OUTPUT_PATH=${KERNEL_PATH}/output
 
@@ -54,7 +54,7 @@ function build() {
 	make O=output -j${JOBS} dtbs;
 	./scripts/mkdtimg.sh -i ${KERNEL_PATH}/arch/arm/boot/dts/ -o dt.img;
 	find ${KERNEL_PATH} -name "Image" -exec mv -f {} ${KERNEL_ZIP}/tools \;
-	find ${KERNEL_PATH} -name "dt.img" -exec mv -f {} ${KERNEL_PATH}/dt_img/dt_img_gpve.img \;
+	find ${KERNEL_PATH} -name "dt.img" -exec mv -f {} ${KERNEL_ZIP}/tools \;
 
 	BUILD_END=$(date +"%s");
 	DIFF=$(($BUILD_END - $BUILD_START));
@@ -84,30 +84,17 @@ function clean() {
 
 	rm_if_exist ${KERNEL_ZIP_NAME};
 	rm_if_exist ${OUTPUT_PATH};
-	rm_if_exist ${ZIP_DT_IMG};
+	rm_if_exist ${DT_IMG};
 
 	echo -e "$yellow";
 	echo -e "Done!$nocol";
 }
 
-function gpve() {
+function menu() {
 	echo;
 	echo -e "***************************************************************";
-	echo "      RZ Kernel for Samsung Galaxy Grand Prime SM-G531H";
+	echo "      RZ Kernel for ${DEVICE}";
 	echo -e "***************************************************************";
-	echo "Choices:";
-	echo "1. Cleanup source";
-	echo "2. Build kernel";
-	echo "3. Build kernel then make flashable ZIP";
-	echo "4. Make flashable ZIP package";
-	echo "Leave empty to exit this script (it'll show invalid choice)";
-}
-
-function cpve() {
-	echo;
-	echo -e "***********************************************************";
-	echo "      RZ Kernel for Samsung Galaxy Core Prime SM-G361H";
-	echo -e "***********************************************************";
 	echo "Choices:";
 	echo "1. Cleanup source";
 	echo "2. Build kernel";
@@ -123,11 +110,11 @@ function select_device() {
 	read -n 1 -p "Choice: " -s device;	
 	case ${device} in
 		1) export DEFCONFIG=rz_cpve_defconfig
-		   export DT_IMG=${KERNEL_PATH}/dt_img/dt_img_cpve.img;
-		   cpve;;
+		   export DEVICE="Samsung Galaxy Core Prime SM-G361H"
+		   menu;;
 		2) export DEFCONFIG=rz_gpve_defconfig
-		   export DT_IMG=${KERNEL_PATH}/dt_img/dt_img_gpve.img;
-		   gpve;;
+		   export DEVICE="Samsung Galaxy Grand Prime SM-G531H"
+		   menu;;
 	esac
 }
 
@@ -158,7 +145,6 @@ function main() {
 		1) clean;;
 		2) build;;
 		3) build
-		   cp ${DT_IMG} ${ZIP_DT_IMG}
 		   make_zip;;
 		4) make_zip;;
 		*) echo
