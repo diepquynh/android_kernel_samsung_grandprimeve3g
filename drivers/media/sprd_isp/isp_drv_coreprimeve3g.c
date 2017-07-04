@@ -265,16 +265,9 @@ static void isp_read_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 
 	for (i = 0; i < counts; i++) {
 		reg_addr = ISP_BASE_ADDR + reg_bits_ptr[i].reg_addr;
-		if((reg_addr >= ISP_BASE_ADDR) && (reg_addr <= (ISP_BASE_ADDR + 0xFFFFFUL)))
-		{
 		reg_val = REG_RD(reg_addr);
 		reg_bits_ptr[i].reg_value = reg_val;
 		reg_bits_ptr[i].reg_addr = reg_addr;
-	}
-		else
-		{
-			 printk("isp_read_reg: This is not ISP reg address %d\n",reg_addr); 	   
-		}
 	}
 }
 
@@ -286,14 +279,7 @@ static void isp_write_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 	for (i = 0; i < counts; i++) {
 		reg_addr = reg_bits_ptr[i].reg_addr + ISP_BASE_ADDR;
 		reg_val = reg_bits_ptr[i].reg_value;
-		if((reg_addr >= ISP_BASE_ADDR) && (reg_addr <= (ISP_BASE_ADDR + 0xFFFFFUL)))
-		{
 		REG_WR(reg_addr, reg_val);
-	}
-		else
-		{
-			printk("isp_write_reg: This is not ISP reg address %d\n",reg_addr);        
-		}
 	}
 }
 

@@ -43,8 +43,7 @@ sprd_isp-objs := isp1.0/isp_drv_null.o
 else ifeq ($(strip $(tshark2_isp_like)),1)
 ccflags-y += -Idrivers/media/sprd_isp/isp2.0/tshark2/inc
 
-sprd_isp-objs := isp_drv.o \
-		isp2.0/tshark2/src/isp_cfg_param.o \
+sprd_isp-objs := isp2.0/tshark2/src/isp_cfg_param.o \
 		isp2.0/tshark2/src/isp_k_capability.o \
 		isp2.0/tshark2/src/isp_k_isr.o \
 		isp2.0/tshark2/src/isp_k_pgg.o \
@@ -99,6 +98,12 @@ sprd_isp-objs := isp_drv.o \
 		isp2.0/tshark2/src/isp_k_arbiter.o \
 		isp2.0/tshark2/src/isp_k_raw_sizer.o \
 		isp2.0/tshark2/src/isp_k_common.o
+
+ifeq ($(CONFIG_MACH_COREPRIMEVE3G),y)
+sprd_isp-objs += isp_drv_coreprimeve3g.o
+else
+sprd_isp-objs += isp_drv.o
+endif
 
 ifeq ($(CONFIG_64BIT),y)
 sprd_isp-objs += compat_isp_drv.o
