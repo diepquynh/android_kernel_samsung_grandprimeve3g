@@ -21,7 +21,7 @@ done;
 
 # Calculate memory to use for zram (1/2 of ram)
 totalmem=$(busybox free | grep -e "^Mem:" | busybox sed -e 's/^Mem: *//' -e 's/  *.*//')
-mem=$(((totalmem / 4 / ${num_cpu}) * 1024))
+mem=$(((totalmem / 2 / ${num_cpu}) * 1024))
 
 # Now let's start
 for i in $(busybox seq ${num_cpu}); do
@@ -32,9 +32,6 @@ for i in $(busybox seq ${num_cpu}); do
 	mkswap /dev/block/zram${num};
 	swapon -p 05 /dev/block/zram${num};
 done;
-
-# vnswap
-sswap -s;
 
 # Set maximum swappiness
 echo 130 > /proc/sys/vm/swappiness;
