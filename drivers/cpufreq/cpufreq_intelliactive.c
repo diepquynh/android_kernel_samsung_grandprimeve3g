@@ -146,7 +146,7 @@ static
 struct cpufreq_governor cpufreq_gov_intelliactive = {
 	.name = "intelliactive",
 	.governor = cpufreq_governor_intelliactive,
-	.max_transition_latency = 10000000,
+	.max_transition_latency = 5000000,
 	.owner = THIS_MODULE,
 };
 
