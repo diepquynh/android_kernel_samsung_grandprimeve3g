@@ -48,12 +48,12 @@
 #define GR_GEN1			(REG_GLB_GEN1)
 #endif
 
-#define FREQ_TABLE_SIZE 	20
+#define FREQ_TABLE_SIZE 	10
 #define DVFS_BOOT_TIME	(30 * HZ)
 #define SHARK_TDPLL_FREQUENCY	(768000)
 #define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
-#define MAX_VOLT (1015 * 1000)
+#define MAX_VOLT (1000 * 1000)
 #define MIN_VOLT (820 * 1000)
 
 static DEFINE_MUTEX(freq_lock);
@@ -81,50 +81,40 @@ static struct mutex cpufreq_vddarm_lock;
 
 enum clocking_levels {
 #ifdef SPRD_OC
-	OC4, OC3, OC2, OC1,
+	OC2, OC1,
 #endif
 	NOC, UC1, UC2, UC3, UC4,
-	UC5, UC6, UC7, UC8, UC9,
-	MIN_CL=UC9,
+	UC5, UC6,
+	MIN_CL=UC6,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
 #ifdef SPRD_OC
-		{OC4, 1536000},
-		{OC3, 1497600},
-		{OC2, 1401600},
+		{OC2, 1536000},
 		{OC1, 1363200},
 #endif
 		{NOC, 1300000},
-		{UC1, 1267200},
-		{UC2, 1190400},
-		{UC3, 1113600},
-		{UC4, 1036800},
-		{UC5, 960000},
-		{UC6, 883200},
-		{UC7, 800000},
-		{UC8, SHARK_TDPLL_FREQUENCY},
-		{UC9, 729600},
+		{UC1, 1190400},
+		{UC2, 1036800},
+		{UC3, 960000},
+		{UC4, 800000},
+		{UC5, SHARK_TDPLL_FREQUENCY},
+		{UC6, 729600},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC4]  = 1015000,
-		[OC3]  = 1000000,
-		[OC2]  = 985000,
-		[OC1]  = 970000,
+		[OC2]  = 1015000,
+		[OC1]  = 990000,
 #endif
-		[NOC]  = 955000,
+		[NOC]  = 965000,
 		[UC1]  = 940000,
-		[UC2]  = 925000,
-		[UC3]  = 910000,
-		[UC4]  = 895000,
-		[UC5]  = 880000,
-		[UC6]  = 865000,
-		[UC7]  = 850000,
-		[UC8]  = 835000,
-		[UC9]  = 820000,
+		[UC2]  = 915000,
+		[UC3]  = 890000,
+		[UC4]  = 865000,
+		[UC5]  = 840000,
+		[UC6]  = 820000,
 		[EC]   = 820000,
         },
 };
@@ -444,7 +434,7 @@ static void sprd_set_cpufreq_limit(void)
 {
 	cpufreq_min_limit = sprd_cpufreq_conf->freq_tbl[MIN_CL].frequency;
 #ifdef SPRD_OC
-	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[OC4].frequency;
+	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[OC2].frequency;
 #else
 	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[NOC].frequency;
 #endif
