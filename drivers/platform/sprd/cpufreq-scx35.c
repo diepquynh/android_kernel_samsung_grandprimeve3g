@@ -481,7 +481,7 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 	pr_info("%s cpu=%d, cur=%u, ret=%d\n",
 		__func__, policy->cpu, policy->cur, ret);
 
-	//cpumask_setall(policy->cpus);
+	cpumask_setall(policy->cpus);
 
 	return ret;
 }
