@@ -15,6 +15,7 @@
 #include <linux/vmalloc.h>
 #include <linux/sprd_mm.h>
 #include <video/sprd_isp.h>
+#include <soc/sprd/arch_misc.h>
 #include "isp_reg.h"
 #include "isp_drv.h"
 
@@ -27,6 +28,7 @@ static int32_t isp_k_pingpang_frgb_gamc(struct coordinate_xy *nodes,
 	int32_t ret = 0;
 	uint32_t i, j;
 	uint32_t val = 0;
+	int32_t gamma_node = 0;
 	unsigned long r_buf_addr;
 	unsigned long g_buf_addr;
 	unsigned long b_buf_addr;
@@ -52,10 +54,24 @@ static int32_t isp_k_pingpang_frgb_gamc(struct coordinate_xy *nodes,
 		isp_private->full_gamma_buf_id = ISP_FRGB_GAMC_BUF0;
 	}
 
-	for(i = 0,j = 0;i < ISP_PINGPANG_FRGB_GAMC_NUM;i++,j+=4) {
-		REG_WR(r_buf_addr + j, p_nodes[i].node_y & 0xff);
-		REG_WR(g_buf_addr + j, p_nodes[i].node_y & 0xff);
-		REG_WR(b_buf_addr + j, p_nodes[i].node_y & 0xff);
+	if (soc_is_scx9832a_v0() || soc_is_scx30g3_v0()) {
+		for(i = 0,j = 0; i < (ISP_PINGPANG_FRGB_GAMC_NUM - 1); i++, j+= 4) {
+			gamma_node = (((p_nodes[i].node_y & 0xFF) << 8) | (p_nodes[i + 1].node_y & 0xFF)) & 0xFFFF;
+			REG_WR(r_buf_addr + j, gamma_node);
+			REG_WR(g_buf_addr + j, gamma_node);
+			REG_WR(b_buf_addr + j, gamma_node);
+		}
+	} else {
+		for(i = 0, j = 0; i < ISP_PINGPANG_FRGB_GAMC_NODE; i++, j+= 4) {
+			if (i < ISP_PINGPANG_FRGB_GAMC_NODE - 1) {
+				gamma_node = (p_nodes[i * 2].node_y + p_nodes[i * 2 + 1].node_y) >> 1;
+			} else {
+				gamma_node = p_nodes[i * 2 -1].node_y;
+			}
+			REG_WR(r_buf_addr + j, gamma_node & 0xff);
+			REG_WR(g_buf_addr + j, gamma_node & 0xff);
+			REG_WR(b_buf_addr + j, gamma_node & 0xff);
+		}
 	}
 
 	val = ((isp_private->full_gamma_buf_id & 0x1 ) << 1) | ((isp_private->full_gamma_buf_id & 0x1) << 2) | ((isp_private->full_gamma_buf_id & 0x1 ) << 3);
@@ -68,36 +84,22 @@ static int32_t isp_k_gamma_block(struct isp_io_param *param,
 		struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	uint32_t bypass;
-	struct isp_dev_gamma_info_v1 *param_p= (struct isp_dev_gamma_info_v1 *)param->property_param;
-	struct coordinate_xy *nodes = NULL;
+	struct isp_dev_gamma_info_v1 *gamma_info_ptr = NULL;
+	gamma_info_ptr = (struct isp_dev_gamma_info_v1 *)isp_private->full_gamma_buf_addr;
 
-	nodes = (struct coordinate_xy *)isp_private->full_gamma_buf_addr;
-	if (!nodes) {
-		ret = -1;
-		printk("isp_k_gamma_block: alloc memory error.\n");
-		return -1;
-	}
-
-	ret = copy_from_user((void *)&bypass, (void *)&param_p->bypass, sizeof(uint32_t));
+	ret = copy_from_user((void *)gamma_info_ptr, param->property_param, sizeof(struct isp_dev_gamma_info_v1));
 	if (0 != ret) {
-		printk("isp_k_gamma_block: copy bypass error, ret=0x%x\n", (uint32_t)ret);
+		printk("isp_k_gamma_block: copy error, ret=0x%x\n", (uint32_t)ret);
 		return -1;
 	}
 
-	ret = copy_from_user((void *)nodes, (void *)param_p->nodes, ISP_FRGB_GAMMA_BUF_SIZE);
-	if (0 != ret) {
-		printk("isp_k_gamma_block: copy nodes error, ret=0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-	ret = isp_k_pingpang_frgb_gamc(nodes, isp_private);
+	ret = isp_k_pingpang_frgb_gamc(gamma_info_ptr->nodes, isp_private);
 	if (0 != ret) {
 		printk("isp_k_gamma_block: pingpang error, ret=0x%x\n", (uint32_t)ret);
 		return -1;
 	}
 
-	REG_MWR(ISP_GAMMA_PARAM, BIT_0, bypass);
+	REG_MWR(ISP_GAMMA_PARAM, BIT_0, gamma_info_ptr->bypass);
 
 	return ret;
 

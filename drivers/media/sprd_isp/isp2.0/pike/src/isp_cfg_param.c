@@ -38,7 +38,7 @@ static struct isp_cfg_fun isp_cfg_fun_tab[] = {
 	{ISP_BLOCK_BDN,               isp_k_cfg_bdn},
 	{ISP_BLOCK_GRGB,                   isp_k_cfg_grgb},
 	{ISP_BLOCK_RGB_GAIN2,              isp_k_cfg_rgb_gain2},
-	{ISP_BLOCK_NLM,                    isp_k_cfg_nlm},
+	/*{ISP_BLOCK_NLM,                    isp_k_cfg_nlm},*/
 	{ISP_BLOCK_CFA,                 isp_k_cfg_cfa},
 	{ISP_BLOCK_CMC,                    isp_k_cfg_cmc10},
 	{ISP_BLOCK_HDR,                    isp_k_cfg_hdr},//pike add module,this module is same to sharkl's hdr module
@@ -51,13 +51,13 @@ static struct isp_cfg_fun isp_cfg_fun_tab[] = {
 	{ISP_BLOCK_PRE_CDN_RGB,            isp_k_cfg_pre_cdn_rgb},
 	{ISP_BLOCK_POSTERIZE,              isp_k_cfg_posterize},
 	{ISP_BLOCK_AFM_V1,                 isp_k_cfg_rgb_afm},
-	{ISP_BLOCK_RGB2Y,                  isp_k_cfg_rgb2y},//pike add module 
+	{ISP_BLOCK_RGB2Y,                  isp_k_cfg_rgb2y},//pike add module
 	{ISP_BLOCK_YIQ_AEM,                isp_k_cfg_yiq_aem},
 	/*{ISP_BLOCK_ANTI_FLICKER,           isp_k_cfg_anti_flicker},*/
 	{ISP_BLOCK_YIQ_AFM,                isp_k_cfg_yiq_afm},
 	{ISP_BLOCK_YUV_PRECDN,             isp_k_cfg_yuv_precdn},
 	{ISP_BLOCK_PRE_FILTER,             isp_k_cfg_prefilter},
-	{ISP_BLOCK_UV_PREFILTER,	       isp_k_cfg_uv_prefilter},//pike add module 
+	{ISP_BLOCK_UV_PREFILTER,	       isp_k_cfg_uv_prefilter},//pike add module
 	{ISP_BLOCK_BRIGHTNESS,             isp_k_cfg_brightness},
 	{ISP_BLOCK_CONTRAST,               isp_k_cfg_contrast},
 	{ISP_BLOCK_HIST,                   isp_k_cfg_hist},
@@ -72,7 +72,7 @@ static struct isp_cfg_fun isp_cfg_fun_tab[] = {
 	{ISP_BLOCK_EMBOSS,                 isp_k_cfg_emboss},
 	/*{ISP_BLOCK_YGAMMA,                 isp_k_cfg_ygamma},*/
 	{ISP_BLOCK_YDELAY,                 isp_k_cfg_ydelay},
-	{ISP_BLOCK_YUV_NLM,                isp_k_cfg_yuv_nlm},//pike add module 
+	{ISP_BLOCK_YUV_NLM,                isp_k_cfg_yuv_nlm},//pike add module
 	//{ISP_BLOCK_IIRCNR,                 isp_k_cfg_iircnr},//pike has no this module
 	{ISP_BLOCK_FETCH,                  isp_k_cfg_fetch},
 	{ISP_BLOCK_STORE,                  isp_k_cfg_store},
@@ -114,8 +114,12 @@ int32_t isp_cfg_param(void  *param, struct isp_k_private *isp_private)
 		ret = isp_k_cfg_ygamma(&isp_param, isp_private);
 	} else if (ISP_BLOCK_AWB == isp_param.sub_block) {
 		ret = isp_k_cfg_awb(&isp_param, isp_private);
-	} else if(ISP_BLOCK_BINNING4AWB == isp_param.sub_block){
+	} else if (ISP_BLOCK_BINNING4AWB == isp_param.sub_block) {
 		ret = isp_k_cfg_binning(&isp_param, isp_private);
+	} else if (ISP_BLOCK_BUFQUEUE == isp_param.sub_block) {
+		ret = isp_k_cfg_buf_queue(&isp_param, isp_private);
+	} else if (ISP_BLOCK_NLM == isp_param.sub_block) {
+		ret = isp_k_cfg_nlm(&isp_param, isp_private);
 	} else {
 		cnt = sizeof(isp_cfg_fun_tab) / sizeof(isp_cfg_fun_tab[0]);
 		for (i = 0; i < cnt; i++) {

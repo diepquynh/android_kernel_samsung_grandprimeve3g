@@ -19,7 +19,6 @@
 static int32_t isp_k_rgb2y_block(struct isp_io_param *param)
 {
 	int32_t ret = 0;
-	uint32_t val = 0;
 	struct isp_dev_rgb2y_info rgb2y_info;
 
 	memset(&rgb2y_info, 0x00, sizeof(rgb2y_info));

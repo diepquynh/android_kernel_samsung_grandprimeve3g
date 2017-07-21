@@ -319,7 +319,7 @@ static int32_t isp_k_2d_lsc_param_load(struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
 	uint32_t time_out_cnt = 0;
-	uint32_t addr = 0, reg_value = 0;
+	uint32_t reg_value = 0;
 
 	if (ISP_LSC_BUF0 == isp_private->lsc_load_buf_id) {
 		isp_private->lsc_load_buf_id = ISP_LSC_BUF1;

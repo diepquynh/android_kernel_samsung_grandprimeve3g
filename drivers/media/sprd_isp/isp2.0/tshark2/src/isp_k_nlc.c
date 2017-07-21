@@ -38,7 +38,7 @@ static int32_t isp_k_nlc_block(struct isp_io_param *param)
 		REG_WR(ISP_NLC_PARA_G0 + i * 4, val);
 		val = ((nlc_info.node.b_node[i*3] & 0x3FF) << 20) | ((nlc_info.node.b_node[i*3+1] & 0x3FF) << 10) | (nlc_info.node.b_node[i*3+2] & 0x3FF);
 		REG_WR(ISP_NLC_PARA_B0 + i * 4, val);
-		val = ((nlc_info.node.l_node[i*3+1] & 0x3FF) << 20) | ((nlc_info.node.l_node[i*3+2] & 0x3FF) << 10) | (nlc_info.node.l_node[i*3+3] & 0x3FF);
+		val = ((nlc_info.node.l_node[i*3] & 0x3FF) << 20) | ((nlc_info.node.l_node[i*3+1] & 0x3FF) << 10) | (nlc_info.node.l_node[i*3+2] & 0x3FF);
 		REG_WR(ISP_NLC_PARA_L0 + i * 4, val);
 	}
 

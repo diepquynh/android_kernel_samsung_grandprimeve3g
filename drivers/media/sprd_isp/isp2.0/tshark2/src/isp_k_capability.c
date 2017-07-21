@@ -14,9 +14,10 @@
 #include <linux/uaccess.h>
 #include <linux/sprd_mm.h>
 #include <video/sprd_isp.h>
+#include <soc/sprd/arch_misc.h>
 #include "isp_reg.h"
 
-#if defined(CONFIG_ARCH_SCX35LT8)
+#if defined(CONFIG_ARCH_SCX35LT8) || defined(CONFIG_ARCH_WHALE)
 #define ISP_MAX_WIDTH             4416
 #define ISP_MAX_HEIGHT            3168
 #define ISP_MAX_SLICE_WIDTH       4416
@@ -36,7 +37,11 @@ static int32_t isp_k_capability_chip_id(struct isp_capability *param)
 	int32_t ret = 0;
 	uint32_t chip_id = 0;
 
-	chip_id = ISP_CHIP_ID_SC9930;
+	if (soc_is_scx9832a_v0() || soc_is_scx30g3_v0()) {
+		chip_id = ISP_CHIP_ID_TSHARK3;
+	} else {
+		chip_id = ISP_CHIP_ID_TSHARK2;
+	}
 
 	ret = copy_to_user(param->property_param, (void*)&chip_id, sizeof(chip_id));
 	if (0 != ret) {
@@ -130,6 +135,25 @@ static int32_t isp_k_capability_af_max_win_num(struct isp_capability *param)
 	return ret;
 }
 
+static int32_t isp_k_capability_time(struct isp_capability *param)
+{
+	int32_t ret = 0;
+	struct isp_time time;
+	struct timespec ts;
+
+	ktime_get_ts(&ts);
+	time.sec = ts.tv_sec;
+	time.usec = ts.tv_nsec / NSEC_PER_USEC;
+
+	ret = copy_to_user(param->property_param, (void*)&time, sizeof(time));
+	if (0 != ret) {
+		ret = -1;
+		printk("isp_k_capability_time: copy error, ret=0x%x\n", (uint32_t)ret);
+	}
+
+	return ret;
+}
+
 int32_t isp_capability(void *param)
 {
 	int32_t ret = 0;
@@ -169,6 +193,9 @@ int32_t isp_capability(void *param)
 		break;
 	case ISP_CAPABILITY_AF_MAX_WIN_NUM:
 		ret = isp_k_capability_af_max_win_num(&cap_param);
+		break;
+	case ISP_CAPABILITY_TIME:
+		ret = isp_k_capability_time(&cap_param);
 		break;
 	default:
 		printk("isp_capability: fail cmd id:%d, not supported.\n", cap_param.index);

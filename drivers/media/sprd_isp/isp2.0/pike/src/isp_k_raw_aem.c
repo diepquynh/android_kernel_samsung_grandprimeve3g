@@ -17,6 +17,8 @@
 #include "isp_reg.h"
 #include "isp_drv.h"
 
+#define ISP_RAWAEM_TIMEOUT msecs_to_jiffies(1000)
+
 static int32_t isp_k_raw_aem_block(struct isp_io_param *param)
 {
 	int32_t ret = 0;
@@ -34,7 +36,10 @@ static int32_t isp_k_raw_aem_block(struct isp_io_param *param)
 	REG_MWR(ISP_AEM_PARAM, BIT_0, aem_info.bypass);
 
 	val = (aem_info.shift & 0x1F) << 18;
-	REG_MWR(ISP_AEM_BLK_SIZE, 0x7C0000, val);
+	if(0 != val) {
+		printk("isp_k_raw_aem_block: shift error, 0x%x\n", val);
+	}
+	REG_MWR(ISP_AEM_BLK_SIZE, 0x7C0000, 0);
 
 	REG_MWR(ISP_AEM_PARAM, BIT_1, aem_info.mode << 1);
 
@@ -57,6 +62,22 @@ static int32_t isp_k_raw_aem_bypass(struct isp_io_param *param)
 	return ret;
 }
 
+static int32_t isp_k_raw_aem_mode(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t mode = 0;
+
+	ret = copy_from_user((void *)&mode, param->property_param, sizeof(mode));
+	if (0 != ret) {
+		printk("isp_k_raw_aem_mode: copy error, ret=0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	REG_MWR(ISP_AEM_PARAM, BIT_1, mode << 1);
+
+	return ret;
+}
+
 static int32_t isp_k_raw_aem_statistics(struct isp_io_param *param,
 		struct isp_k_private *isp_private)
 {
@@ -65,7 +86,7 @@ static int32_t isp_k_raw_aem_statistics(struct isp_io_param *param,
 	unsigned long addr = 0;
 	struct isp_raw_aem_statistics *aem_statistics = NULL;
 
-	aem_statistics = (struct isp_raw_aem_statistics *)isp_private->raw_aem_buf_addr;
+	/*aem_statistics = (struct isp_raw_aem_statistics *)isp_private->raw_aem_buf_addr;*/
 	if (!aem_statistics) {
 		ret = -1;
 		printk("isp_k_raw_aem_statistics: alloc memory error.\n");
@@ -122,7 +143,10 @@ static int32_t isp_k_raw_aem_shift(struct isp_io_param *param)
 	}
 
 	val = (shift & 0x1F) << 18;
-	REG_MWR(ISP_AEM_BLK_SIZE, 0x7C0000, val);
+	if(0 != val) {
+		printk("isp_k_raw_aem_shift: shift error, 0x%x\n", val);
+	}
+	REG_MWR(ISP_AEM_BLK_SIZE, 0x7C0000, 0);
 
 	return ret;
 }
@@ -181,6 +205,103 @@ static int32_t isp_k_raw_aem_slice_size(struct isp_io_param *param)
 	return ret;
 }
 
+static int32_t isp_k_raw_aem_get_statistics(struct isp_buf_node *node, struct isp_k_private *isp_private)
+{
+	int32_t ret = 0, i = 0;
+	uint32_t val0 = 0, val1 = 0;
+	unsigned long addr = 0;
+	struct isp_raw_aem_statistics *aem_statistics = NULL;
+
+	aem_statistics = (struct isp_raw_aem_statistics *)(node->k_addr);
+	if (!aem_statistics) {
+		ret = -1;
+		printk("isp_k_raw_aem_get_statistics: alloc memory error.\n");
+		return -1;
+	}
+
+	addr = ISP_RAW_AEM_OUTPUT;
+	for (i = 0x00; i < ISP_RAW_AEM_ITEM; i++) {
+		val0 = REG_RD(addr);
+		val1 = REG_RD(addr + 4);
+		aem_statistics->r[i] = (val1 >> 11) & 0x1fffff;
+		aem_statistics->g[i] = val0 & 0x3fffff;
+		aem_statistics->b[i] = ((val1 & 0x7ff) << 10) | ((val0 >> 22) & 0x3ff);
+		addr += 8;
+	}
+
+	isp_buf_queue_write(&isp_private->ae_user_queue, node);
+
+	return ret;
+}
+
+int isp_k_rawaem_thread_loop(void *arg)
+{
+	struct isp_k_private *isp_private = (struct isp_k_private *)arg;
+
+	if (isp_private == NULL) {
+		printk("isp_k_rawaem_thread_loop, isp_private is NULL \n");
+		return -1;
+	}
+	while (1) {
+		if (0 == down_interruptible(&isp_private->rawae_thread_sem)) {
+			if (isp_private->is_rawae_thread_stop) {
+				printk("isp_k_rawaem_thread_loop stop \n");
+				break;
+			}
+			isp_k_raw_aem_get_statistics(&isp_private->rawae_cur_node, isp_private);
+			up(&isp_private->rawae_schedule_sem);
+			isp_private->is_rawae_schedule = 0;
+		} else {
+			printk("isp_k_rawaem_thread_loop wait sem failed!\n");
+			break;
+		}
+	}
+	isp_private->is_rawae_thread_stop = 0;
+
+	return 0;
+}
+
+int32_t isp_k_rawaem_switch_bq_buf(struct isp_k_private *isp_private)
+{
+	int32_t ret = 0;
+	struct isp_buf_node node;
+
+	if (isp_private->is_rawae_schedule
+			|| isp_buf_queue_read(&isp_private->ae_irq_queue, &node)) {
+		ret = -1;
+	} else {
+		isp_private->rawae_cur_node = node;
+		up(&isp_private->rawae_thread_sem);
+		isp_private->is_rawae_schedule = 1;
+	}
+
+	return ret;
+}
+
+int32_t isp_k_rawaem_enqueue_buf(struct isp_k_private *isp_private, struct isp_buf_node *node)
+{
+	int32_t ret = 0;
+
+	ret = isp_buf_queue_write((struct isp_buf_queue *)&isp_private->ae_irq_queue, node);
+
+	return ret;
+}
+
+int32_t isp_k_rawaem_dequeue_buf(struct isp_k_private *isp_private, struct isp_buf_node *node)
+{
+	int32_t ret = 0;
+
+	ret = down_timeout(&isp_private->rawae_schedule_sem, ISP_RAWAEM_TIMEOUT);
+	if (ret) {
+		printk("isp_k_rawaem_dequeue_buf wait sem failed\n");
+		return -1;
+	}
+
+	isp_buf_queue_read(&isp_private->ae_user_queue, node);
+
+	return ret;
+}
+
 int32_t isp_k_cfg_raw_aem(struct isp_io_param *param,
 		struct isp_k_private *isp_private)
 {
@@ -202,6 +323,9 @@ int32_t isp_k_cfg_raw_aem(struct isp_io_param *param,
 		break;
 	case ISP_PRO_RAW_AEM_BYPASS:
 		ret = isp_k_raw_aem_bypass(param);
+		break;
+	case ISP_PRO_RAW_AEM_MODE:
+		ret = isp_k_raw_aem_mode(param);
 		break;
 	case ISP_PRO_RAW_AEM_STATISTICS:
 		ret = isp_k_raw_aem_statistics(param, isp_private);

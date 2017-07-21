@@ -15,7 +15,7 @@
 #ifndef CONFIG_64BIT
 #include <soc/sprd/hardware.h>
 #endif
-#include "parse_hwinfo_tshark2.h"
+#include "parse_hwinfo.h"
 
 #define ISP_BASE_ADDR                      ISP_BASE//SPRD_ISP_BASE
 
@@ -86,7 +86,7 @@
 //#define ISP_DISPATCH_CH1_BAYER                    (ISP_BASE_ADDR+0x0324UL)
 //#define ISP_DISPATCH_HW_CTRL_CH0               (ISP_BASE_ADDR+0x0328UL)
 //#define ISP_DISPATCH_HW_CTRL_CH1               (ISP_BASE_ADDR+0x032CUL)
- 
+
 /*isp sub block: arbiter*/
 #define ISP_ARBITER_WR_STATUS              (ISP_BASE_ADDR+0x0400UL)
 #define ISP_ARBITER_RD_STATUS              (ISP_BASE_ADDR+0x0404UL)
@@ -588,8 +588,7 @@
 #define ISP_POSTCDN_RSEGV45                (ISP_BASE_ADDR+0x5E40UL)
 #define ISP_POSTCDN_RSEGV6                 (ISP_BASE_ADDR+0x5E44UL)
 #define ISP_POSTCDN_R_DISTW0               (ISP_BASE_ADDR+0x5E48UL)
-//pike has no this register ISP_POSTCDN_START_ROW_MOD4
-//#define ISP_POSTCDN_START_ROW_MOD4         (ISP_BASE_ADDR+0x5E84UL)
+#define ISP_POSTCDN_START_ROW_MOD4         (ISP_BASE_ADDR+0x5E84UL)
 
 /*isp sub block: ygamma*/
 #define ISP_YGAMMA_STATUS                  (ISP_BASE_ADDR+0x6000UL)
@@ -791,11 +790,11 @@
 
 #define ISP_IRQ_HW_MASK                    (0xFFFFFFFF)
 #define ISP_IRQ_NUM                        (32)
-#define ISP_LSC_BUF_SIZE                   (32 * 1024)
 #define ISP_REG_BUF_SIZE                   (4 * 1024)
 #define ISP_RAW_AE_BUF_SIZE                (1024 * 4 * 3)
-#define ISP_FRGB_GAMMA_BUF_SIZE                (129 * 4 * 2)
-#define ISP_YUV_YGAMMA_BUF_SIZE            (129 * 4 * 2)
+#define ISP_FRGB_GAMMA_BUF_SIZE                (257 * 4 + 4)
+#define ISP_YUV_YGAMMA_BUF_SIZE            (129 * 4 )
 #define ISP_RAW_AWB_BUF_SIZE                (256 * 4 * 9)
 #define ISP_BING4AWB_SIZE                  (640 * 480 * 2)
-#define ISP_YIQ_ANTIFLICKER_SIZE           (1944 * 4 * 16)
+#define ISP_YIQ_ANTIFLICKER_SIZE           (1944 * 4 * 61)
+#define ISP_YIQ_AEM_BUF_SIZE               (1024 * 4)

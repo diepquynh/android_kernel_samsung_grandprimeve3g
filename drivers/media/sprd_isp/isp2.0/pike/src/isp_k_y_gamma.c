@@ -25,7 +25,7 @@ static int32_t isp_k_pingpang_yuv_ygamma(struct coordinate_xy *nodes,
 		struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	uint32_t i = 0, j = 0;
+	uint32_t i = 0, j = 0, buf_id = 0;
 	unsigned long ybuf_addr = 0;
 	struct coordinate_xy *p_nodes = NULL;
 
@@ -34,37 +34,26 @@ static int32_t isp_k_pingpang_yuv_ygamma(struct coordinate_xy *nodes,
 		printk("isp_k_pingpang_yuv_ygamma: node is null error .\n");
 		return ret;
 	}
+
 	p_nodes = nodes;
 
-#if 0
+	ybuf_addr = ISP_YGAMMA_BUF0_CH0;
+
 	if (ISP_YUV_YGAMMA_BUF0 == isp_private->yuv_ygamma_buf_id) {
-		ybuf_addr = ISP_YGAMMA_BUF0_CH0;
+		buf_id = ISP_YUV_YGAMMA_BUF0;
 		isp_private->yuv_ygamma_buf_id = ISP_YUV_YGAMMA_BUF1;
 	} else {
-		ybuf_addr = ISP_YGAMMA_BUF0_CH0;
+		buf_id = ISP_YUV_YGAMMA_BUF1;
 		isp_private->yuv_ygamma_buf_id = ISP_YUV_YGAMMA_BUF0;
 	}
-#endif
 
-	isp_private->yuv_ygamma_buf_id = ISP_YUV_YGAMMA_BUF0;
-	if (isp_private->yuv_ygamma_buf_id) {
-		REG_OWR(ISP_YGAMMA_PARAM, BIT_1);
-	} else {
-		REG_MWR(ISP_YGAMMA_PARAM, BIT_1, 0);
-	}
-
-	ybuf_addr = ISP_YGAMMA_BUF0_CH0;
-	isp_private->yuv_ygamma_buf_id = ISP_YUV_YGAMMA_BUF1;
+	REG_MWR(ISP_YGAMMA_PARAM, BIT_1, buf_id << 1);
 
 	for (i = 0, j = 0; i < ISP_PINGPANG_YUV_YGAMMA_NUM; i++, j += 4) {
 		REG_WR(ybuf_addr + j, p_nodes[i].node_y & 0xff);
 	}
 
-	if (isp_private->yuv_ygamma_buf_id) {
-		REG_OWR(ISP_YGAMMA_PARAM, BIT_1);
-	} else {
-		REG_MWR(ISP_YGAMMA_PARAM, BIT_1, 0);
-	}
+	REG_MWR(ISP_YGAMMA_PARAM, BIT_1, isp_private->yuv_ygamma_buf_id << 1);
 
 	return ret;
 }
@@ -73,34 +62,20 @@ static int32_t isp_k_ygamma_block(struct isp_io_param *param,
 	struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	uint32_t bypass;
-	struct isp_dev_ygamma_info *ygamma_info = (struct isp_dev_ygamma_info *)param->property_param;
-	struct coordinate_xy *nodes = NULL;
+	struct isp_dev_ygamma_info ygamma_info;
 
-	nodes = (struct coordinate_xy *)isp_private->yuv_ygamma_buf_addr;
-	if (!nodes) {
-		ret = -1;
-		printk("isp_k_ygamma_block: alloc memory error.\n");
-		return -1;
-	}
-
-	ret = copy_from_user((void *)&bypass, (void *)&ygamma_info->bypass, sizeof(uint32_t));
+	ret = copy_from_user((void *)&ygamma_info, param->property_param, sizeof(ygamma_info));
 	if (0 != ret) {
-		printk("isp_k_ygamma_block: copy bypass error, ret=0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-	ret = copy_from_user((void *)nodes, (void *)ygamma_info->nodes, ISP_YUV_YGAMMA_BUF_SIZE);
-	if (0 != ret) {
-		printk("isp_k_ygamma_block: copy nodes error, ret=0x%x\n", (uint32_t)ret);
+		printk("isp_k_ygamma_block: copy error, ret=0x%x\n", (uint32_t)ret);
 		return -1;
 	}
 
-	ret = isp_k_pingpang_yuv_ygamma(nodes, isp_private);
+	ret = isp_k_pingpang_yuv_ygamma(ygamma_info.nodes, isp_private);
 	if (0 != ret) {
 		printk("isp_k_ygamma_block: pingpang error, ret=0x%x\n", (uint32_t)ret);
 		return -1;
 	}
-	REG_MWR(ISP_YGAMMA_PARAM, BIT_0, bypass);
+	REG_MWR(ISP_YGAMMA_PARAM, BIT_0, ygamma_info.bypass);
 
 	return ret;
 }

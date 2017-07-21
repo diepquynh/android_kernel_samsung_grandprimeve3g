@@ -31,31 +31,31 @@ static int32_t isp_k_cce_block_uv(struct isp_io_param *param)
 		return -1;
 	}
 
-	val = (cce_uvd_info.lum_th_h_len & 0xF) 
+	val = (cce_uvd_info.lum_th_h_len & 0xF)
 		| ((cce_uvd_info.lum_th_h & 0xFF) << 8)
 		| ((cce_uvd_info.lum_th_l_len & 0xF) << 16)
 		| ((cce_uvd_info.lum_th_l & 0xFF) << 24);
 	REG_WR(ISP_CCE_UVD_PARAM0, val);
 
-	val = (cce_uvd_info.chroma_min_h & 0xFF) 
+	val = (cce_uvd_info.chroma_min_h & 0xFF)
 		| ((cce_uvd_info.chroma_min_l & 0xFF) << 8)
 		| ((cce_uvd_info.chroma_max_h & 0xFF) << 16)
 		| ((cce_uvd_info.chroma_max_l & 0xFF) << 24);
 	REG_WR(ISP_CCE_UVD_PARAM1, val);
 
-	val = (cce_uvd_info.u_th1_h & 0xFF) 
+	val = (cce_uvd_info.u_th1_h & 0xFF)
 		| ((cce_uvd_info.u_th1_l & 0xFF) << 8)
 		| ((cce_uvd_info.u_th0_h & 0xFF) << 16)
 		| ((cce_uvd_info.u_th0_l & 0xFF) << 24);
 	REG_WR(ISP_CCE_UVD_PARAM2, val);
 
-	val = (cce_uvd_info.v_th1_h & 0xFF) 
+	val = (cce_uvd_info.v_th1_h & 0xFF)
 		| ((cce_uvd_info.v_th1_l & 0xFF) << 8)
 		| ((cce_uvd_info.v_th0_h & 0xFF) << 16)
 		| ((cce_uvd_info.v_th0_l & 0xFF) << 24);
 	REG_WR(ISP_CCE_UVD_PARAM3, val);
 
-	val = (cce_uvd_info.ratio[7] & 0xF) 
+	val = (cce_uvd_info.ratio[7] & 0xF)
 		| ((cce_uvd_info.ratio[6] & 0xF) << 4)
 		| ((cce_uvd_info.ratio[5] & 0xF) << 8)
 		| ((cce_uvd_info.ratio[4] & 0xF) << 12)
@@ -96,7 +96,6 @@ static int32_t isp_k_cce_block_matrix(struct isp_io_param *param)
 		printk("isp_k_cce_block_matrix: copy error, 0x%x, 0x%x, 0x%x, 0x%x\n", cce_info.matrix[0], cce_info.matrix[1], cce_info.matrix[2], cce_info.matrix[3]);
 		return ret;
 	}
-	
 
 	REG_MWR(ISP_CCE_PARAM, BIT_1, cce_info.mode << 1);
 

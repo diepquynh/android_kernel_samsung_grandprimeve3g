@@ -11,11 +11,31 @@ ifeq ($(CONFIG_MACH_SP9830IEB_5M_H100),y)
 tshark2_isp_like=1
 endif
 
-ifeq ($(CONFIG_MACH_SP9830AEC_4M_H100),y)
+ifeq ($(CONFIG_MACH_SP9830IEC_4M_H100),y)
+tshark2_isp_like=1
+endif
+
+ifeq ($(CONFIG_MACH_SP9830IEE_4M_H100),y)
 tshark2_isp_like=1
 endif
 
 ifeq ($(CONFIG_MACH_SP7720EA),y)
+pike_isp_like=1
+endif
+
+ifeq ($(CONFIG_MACH_SP7720EB),y)
+pike_isp_like=1
+endif
+
+ifeq ($(CONFIG_MACH_PIKEB_J1MINI_3G),y)
+pike_isp_like=1
+endif
+
+ifeq ($(CONFIG_MACH_PIKEB_J1_3G),y)
+pike_isp_like=1
+endif
+
+ifeq ($(CONFIG_MACH_SP7720EB_PRIME),y)
 pike_isp_like=1
 endif
 
@@ -27,7 +47,8 @@ ifeq ($(CONFIG_ARCH_SCX35LT8),y)
 tshark2_isp_like=1
 endif
 
-ifeq ($(CONFIG_MACH_SHARKLS_Z3LTE),y)
+#SharkLS
+ifeq ($(CONFIG_MACH_SP9830I),y)
 tshark2_isp_like=1
 endif
 
@@ -43,7 +64,8 @@ sprd_isp-objs := isp1.0/isp_drv_null.o
 else ifeq ($(strip $(tshark2_isp_like)),1)
 ccflags-y += -Idrivers/media/sprd_isp/isp2.0/tshark2/inc
 
-sprd_isp-objs := isp2.0/tshark2/src/isp_cfg_param.o \
+sprd_isp-objs := isp_drv.o \
+		isp2.0/tshark2/src/isp_cfg_param.o \
 		isp2.0/tshark2/src/isp_k_capability.o \
 		isp2.0/tshark2/src/isp_k_isr.o \
 		isp2.0/tshark2/src/isp_k_pgg.o \
@@ -54,6 +76,7 @@ sprd_isp-objs := isp2.0/tshark2/src/isp_cfg_param.o \
 		isp2.0/tshark2/src/isp_k_2d_lsc.o \
 		isp2.0/tshark2/src/isp_k_1d_lsc.o \
 		isp2.0/tshark2/src/isp_k_binning4awb.o \
+		isp2.0/tshark2/src/isp_k_buf_queue.o \
 		isp2.0/tshark2/src/isp_k_awb.o \
 		isp2.0/tshark2/src/isp_k_raw_aem.o \
 		isp2.0/tshark2/src/isp_k_bpc.o \
@@ -99,12 +122,6 @@ sprd_isp-objs := isp2.0/tshark2/src/isp_cfg_param.o \
 		isp2.0/tshark2/src/isp_k_raw_sizer.o \
 		isp2.0/tshark2/src/isp_k_common.o
 
-ifeq ($(CONFIG_MACH_COREPRIMEVE3G),y)
-sprd_isp-objs += isp_drv_coreprimeve3g.o
-else
-sprd_isp-objs += isp_drv.o
-endif
-
 ifeq ($(CONFIG_64BIT),y)
 sprd_isp-objs += compat_isp_drv.o
 endif
@@ -124,6 +141,7 @@ sprd_isp-objs := isp_drv.o \
 		isp2.0/pike/src/isp_k_2d_lsc.o \
 		isp2.0/pike/src/isp_k_1d_lsc.o \
 		isp2.0/pike/src/isp_k_binning4awb.o \
+		isp2.0/pike/src/isp_k_buf_queue.o \
 		isp2.0/pike/src/isp_k_awb.o \
 		isp2.0/pike/src/isp_k_raw_aem.o \
 		isp2.0/pike/src/isp_k_bpc.o \

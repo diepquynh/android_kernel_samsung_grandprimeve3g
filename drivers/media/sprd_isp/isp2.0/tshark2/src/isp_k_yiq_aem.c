@@ -15,6 +15,7 @@
 #include <linux/sprd_mm.h>
 #include <video/sprd_isp.h>
 #include "isp_reg.h"
+#include "isp_drv.h"
 
 static int32_t isp_k_yiq_aem_block(struct isp_io_param *param)
 {
@@ -90,7 +91,123 @@ static int32_t isp_k_yiq_slice_size(struct isp_io_param *param)
 	return ret;
 }
 
-int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param)
+static int32_t isp_k_yiq_aem_bypass(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t bypass = 0;
+
+	ret = copy_from_user((void *)&bypass, param->property_param, sizeof(bypass));
+	if (0 != ret) {
+		printk("isp_k_raw_aem_bypass: copy error, ret=0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	REG_MWR(ISP_YIQ_AEM_PARAM, BIT_0, bypass);
+	return ret;
+}
+
+static int32_t isp_k_yiq_aem_ygamma_bypass(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t bypass = 0;
+
+	ret = copy_from_user((void *)&bypass, param->property_param, sizeof(bypass));
+	if (0 != ret) {
+		printk("isp_k_raw_aem_bypass: copy error, ret=0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	REG_MWR(ISP_YIQ_AEM_PARAM, BIT_7, bypass << 7);
+	return ret;
+}
+
+static int32_t isp_k_yiq_aem_statistics(struct isp_io_param *param,
+		struct isp_k_private *isp_private)
+{
+	int32_t ret = 0, i = 0;
+	uint32_t val = 0;
+	unsigned long addr = 0;
+	struct isp_aem_statistics *yiq_aem_statistics = NULL;
+
+	yiq_aem_statistics = (struct isp_aem_statistics *)isp_private->yiq_aem_buf_addr;
+	if (!yiq_aem_statistics) {
+		ret = -1;
+		printk("isp_k_yiq_aem_statistics: alloc memory error.\n");
+		return -1;
+	}
+
+	addr = ISP_YIQ_AEM_OUTPUT;
+	for (i = 0x00; i < ISP_YIQ_AEM_ITEM; i++) {
+		val = REG_RD(addr);
+		yiq_aem_statistics->val[i]= val & 0x3fffff;
+		addr += 4;
+	}
+
+	ret = copy_to_user(param->property_param, (void*)yiq_aem_statistics, sizeof(struct isp_aem_statistics));
+	if (0 != ret) {
+		ret = -1;
+		printk("isp_k_yiq_aem_statistics: copy error, ret=0x%x\n", (uint32_t)ret);
+	}
+
+	return ret;
+}
+
+static int32_t isp_k_yiq_aem_skip_num(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t val = 0;
+	uint32_t skip_num;
+
+	ret = copy_from_user((void *)&skip_num, param->property_param, sizeof(skip_num));
+	if (0 != ret) {
+		printk("isp_k_yiq_aem_skip_num: copy error, ret=0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	val = (skip_num & 0xF) << 2;
+	REG_MWR(ISP_YIQ_AEM_PARAM, 0x3C, val);
+
+	return ret;
+}
+
+static int32_t isp_k_yiq_aem_offset(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t val = 0;
+	struct img_offset offset;
+
+	ret = copy_from_user((void *)&offset, param->property_param, sizeof(struct img_offset));
+	if (0 != ret) {
+		printk("isp_k_yiq_aem_offset: read copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	val = ((offset.y & 0xFFFF) << 16) | (offset.x & 0xFFFF);
+	REG_WR(ISP_YIQ_AEM_OFFSET, val);
+
+	return ret;
+}
+
+static int32_t isp_k_yiq_aem_blk_size(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	struct isp_img_size size;
+	uint32_t val = 0;
+
+	ret = copy_from_user((void *)&size, param->property_param, sizeof(struct isp_img_size));
+	if (0 != ret) {
+		printk("isp_k_yiq_aem_blk_size: read copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	val = ((size.height & 0x1FF) << 9) | (size.width & 0x1FF);
+	REG_MWR(ISP_YIQ_AEM_BLK_SIZE, 0x3FFFF, val);
+
+	return ret;
+}
+
+int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param,
+		struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
 
@@ -108,6 +225,24 @@ int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param)
 	case ISP_PRO_YIQ_AEM_BLOCK:
 		ret = isp_k_yiq_aem_block(param);
 		break;
+	case ISP_PRO_YIQ_AEM_YGAMMA_BYPASS:
+		ret = isp_k_yiq_aem_ygamma_bypass(param);
+		break;
+	case ISP_PRO_YIQ_AEM_BYPASS:
+		ret = isp_k_yiq_aem_bypass(param);
+		break;
+	case ISP_PRO_YIQ_AEM_STATISTICS:
+		ret = isp_k_yiq_aem_statistics(param, isp_private);
+		break;
+	case ISP_PRO_YIQ_AEM_SKIP_NUM:
+		ret = isp_k_yiq_aem_skip_num(param);
+		break;
+	case ISP_PRO_YIQ_AEM_OFFSET:
+		ret = isp_k_yiq_aem_offset(param);
+		break;
+	case ISP_PRO_YIQ_AEM_BLK_SIZE:
+		ret = isp_k_yiq_aem_blk_size(param);
+		break;
 	case ISP_PRO_YIQ_AEM_SLICE_SIZE:
 		ret = isp_k_yiq_slice_size(param);
 		break;
@@ -118,4 +253,3 @@ int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param)
 
 	return ret;
 }
-

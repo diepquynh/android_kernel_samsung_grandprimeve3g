@@ -46,6 +46,7 @@ struct compat_isp_reg_bits {
 #define COMPAT_ISP_IO_READ           _IOR(ISP_IO_MAGIC, 2, struct compat_isp_reg_param)
 #define COMPAT_ISP_IO_WRITE          _IOW(ISP_IO_MAGIC, 3, struct compat_isp_reg_param)
 #define CAMPAT_ISP_IO_CFG_PARAM      _IOWR(ISP_IO_MAGIC, 7, struct compat_isp_io_param)
+#define CAMPAT_ISP_REG_READ     	 _IOR(ISP_IO_MAGIC, 8, struct compat_isp_reg_bits)
 
 
 static int compat_get_capability_param(
@@ -243,6 +244,46 @@ long compat_isp_ioctl(struct file *file, unsigned int cmd, unsigned long param)
 
 		ret = file->f_op->unlocked_ioctl(file, ISP_IO_READ, (unsigned long)data);
 		err = compat_put_read_param(data32, data);
+		ret = ret ? ret : err;
+		break;
+	}
+
+	case CAMPAT_ISP_REG_READ:
+	{
+		struct compat_isp_reg_bits __user *data32;
+		struct isp_reg_bits __user *data;
+		unsigned long reg_cnt = 20467;
+		compat_ulong_t addr;
+		compat_ulong_t val;
+		int i;
+		int err = 0;
+
+		data32 = compat_ptr(param);
+		data = compat_alloc_user_space(reg_cnt * sizeof(struct isp_reg_bits));
+		if (NULL == data) {
+			printk("compat_isp_ioctl: CAMPAT_ISP_REG_READ:failed to compat_alloc_user_space.\n");
+			return -EFAULT;
+		}
+
+		ret = file->f_op->unlocked_ioctl(file, ISP_REG_READ, (unsigned long)data);
+		for (i = 0; i < reg_cnt; i++) {
+			err = get_user(val, &data->reg_value);
+			err |= put_user(val, &data32->reg_value);
+			if (err) {
+				printk("compat_put_read_param: CAMPAT_ISP_REG_READ:failed to get reg_value%d\n", err);
+				break;
+			}
+
+			err = get_user(val, &data->reg_addr);
+			err |= put_user(val, &data32->reg_addr);
+			if (err) {
+				printk("compat_put_read_param: CAMPAT_ISP_REG_READ:failed to get reg_addr%d\n", err);
+				break;
+			}
+
+			data32++;
+			data++;
+		}
 		ret = ret ? ret : err;
 		break;
 	}

@@ -324,107 +324,11 @@ static int32_t isp_k_common_lbuf_offset(struct isp_io_param *param)
 		return -1;
 	}
 
-	
+
 	REG_MWR(ISP_COMMON_LBUF_OFFSET, 0xFFFF, lbuf_off);
 
 //	REG_WR(ISP_COMMON_LBUF_OFFSET0, ((lbuf_off.cfae_lbuf_offset & 0xFFFF) << 16 ) | (lbuf_off.comm_lbuf_offset & 0xFFFF));
 //	REG_WR(ISP_COMMON_LBUF_OFFSET1, ((lbuf_off.ydly_lbuf_offset& 0xFFFF) << 16 ) | (lbuf_off.awbm_lbuf_offset & 0xFFFF));
-
-	return ret;
-}
-
-static int32_t isp_k_all_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t auto_shadow = 0;
-
-	ret = copy_from_user((void *)&auto_shadow, param->property_param, sizeof(auto_shadow));
-	if (0 != ret) {
-		printk("isp_k_all_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 16, auto_shadow  << 16);
-
-	return ret;
-}
-
-static int32_t isp_k_awbm_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t shadow_done = 0;
-
-	ret = copy_from_user((void *)&shadow_done, param->property_param, sizeof(shadow_done));
-	if (0 != ret) {
-		printk("isp_k_awbm_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 17, shadow_done  << 17);
-
-	return ret;
-}
-
-static int32_t isp_k_ae_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t shadow_done = 0;
-
-	ret = copy_from_user((void *)&shadow_done, param->property_param, sizeof(shadow_done));
-	if (0 != ret) {
-		printk("isp_k_ae_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 18, shadow_done  << 18);
-
-	return ret;
-}
-
-static int32_t isp_k_af_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t shadow_done = 0;
-
-	ret = copy_from_user((void *)&shadow_done, param->property_param, sizeof(shadow_done));
-	if (0 != ret) {
-		printk("isp_k_af_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 19, shadow_done  << 19);
-
-	return ret;
-}
-
-static int32_t isp_k_afl_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t shadow_done = 0;
-
-	ret = copy_from_user((void *)&shadow_done, param->property_param, sizeof(shadow_done));
-	if (0 != ret) {
-		printk("isp_k_afl_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 20, shadow_done  << 20);
-
-	return ret;
-}
-
-static int32_t isp_k_comm_shadow_ctrl(struct isp_io_param *param)
-{
-	int32_t ret = 0;
-	uint32_t shadow_done = 0;
-
-	ret = copy_from_user((void *)&shadow_done, param->property_param, sizeof(shadow_done));
-	if (0 != ret) {
-		printk("isp_k_comm_shadow_ctrl: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
-		return -1;
-	}
-
-//	REG_MWR(ISP_SHADOW_CTRL_CH0, 1 << 21, shadow_done  << 21);
 
 	return ret;
 }
@@ -513,24 +417,6 @@ int32_t isp_k_cfg_common(struct isp_io_param *param)
 		break;
 	case ISP_PRO_COMMON_LBUF_OFFSET:
 		ret = isp_k_common_lbuf_offset(param);
-		break;
-	case ISP_PRO_COMMON_SHADOW_ALL_CTRL:
-		ret = isp_k_all_shadow_ctrl(param);
-		break;
-	case ISP_PRO_COMMON_AWBM_SHADOW:
-		ret = isp_k_awbm_shadow_ctrl(param);
-		break;
-	case ISP_PRO_COMMON_AE_SHADOW:
-		ret = isp_k_ae_shadow_ctrl(param);
-		break;
-	case ISP_PRO_COMMON_AF_SHADOW:
-		ret = isp_k_af_shadow_ctrl(param);
-		break;
-	case ISP_PRO_COMMON_AFL_SHADOW:
-		ret = isp_k_afl_shadow_ctrl(param);
-		break;
-	case ISP_PRO_COMMON_COMM_SHADOW:
-		ret = isp_k_comm_shadow_ctrl(param);
 		break;
 	case ISP_PRO_COMMON_3A_SINGLE_FRAME_CTRL:
 		ret = isp_k_3a_shadow_ctrl(param);
