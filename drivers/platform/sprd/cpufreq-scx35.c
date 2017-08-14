@@ -83,15 +83,15 @@ enum clocking_levels {
 #ifdef SPRD_OC
 	OC2, OC1,
 #endif
-	NOC, UC1, UC2,
-	UC3, UC4, UC5,
-	MIN_CL=UC5,
+	NOC, UC1, UC2, UC3, UC4,
+	UC5, UC6,
+	MIN_CL=UC6,
 	EC,
 };
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
 #ifdef SPRD_OC
-		{OC2, 1453900},
+		{OC2, 1536000},
 		{OC1, 1363200},
 #endif
 		{NOC, 1300000},
@@ -100,20 +100,22 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 		{UC3, 960000},
 		{UC4, 800000},
 		{UC5, SHARK_TDPLL_FREQUENCY},
+		{UC6, 729600},
 		{EC,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC2]  = 1000000,
-		[OC1]  = 975000,
+		[OC2]  = 1015000,
+		[OC1]  = 990000,
 #endif
-		[NOC]  = 950000,
-		[UC1]  = 925000,
-		[UC2]  = 900000,
-		[UC3]  = 875000,
-		[UC4]  = 850000,
-		[UC5]  = 825000,
-		[EC]   = 825000,
+		[NOC]  = 965000,
+		[UC1]  = 940000,
+		[UC2]  = 915000,
+		[UC3]  = 890000,
+		[UC4]  = 865000,
+		[UC5]  = 840000,
+		[UC6]  = 820000,
+		[EC]   = 820000,
         },
 };
 
