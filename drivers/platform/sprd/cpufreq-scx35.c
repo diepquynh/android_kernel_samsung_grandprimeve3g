@@ -53,9 +53,6 @@
 #define SHARK_TDPLL_FREQUENCY	(768000)
 #define TRANSITION_LATENCY	(50 * 1000) /* ns */
 
-#define MAX_VOLT (1000 * 1000)
-#define MIN_VOLT (820 * 1000)
-
 static DEFINE_MUTEX(freq_lock);
 struct cpufreq_freqs global_freqs;
 unsigned int percpu_target[CONFIG_NR_CPUS] = {0};
@@ -73,49 +70,40 @@ struct cpufreq_conf {
 
 struct cpufreq_table_data {
 	struct cpufreq_frequency_table 		freq_tbl[FREQ_TABLE_SIZE];
-	unsigned long				vddarm_mv[FREQ_TABLE_SIZE];
+	unsigned int				vddarm_mv[FREQ_TABLE_SIZE];
 };
 
 struct cpufreq_conf *sprd_cpufreq_conf = NULL;
 static struct mutex cpufreq_vddarm_lock;
 
-enum clocking_levels {
-#ifdef SPRD_OC
-	OC2, OC1,
-#endif
-	NOC, UC1, UC2, UC3, UC4,
-	UC5, UC6,
-	MIN_CL=UC6,
-	EC,
-};
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
         .freq_tbl = {
 #ifdef SPRD_OC
-		{OC2, 1536000},
-		{OC1, 1363200},
+		{0, 1536000},
+		{1, 1363200},
 #endif
-		{NOC, 1300000},
-		{UC1, 1190400},
-		{UC2, 1036800},
-		{UC3, 960000},
-		{UC4, 800000},
-		{UC5, SHARK_TDPLL_FREQUENCY},
-		{UC6, 729600},
-		{EC,  CPUFREQ_TABLE_END},
+		{2, 1300000},
+		{3, 1190400},
+		{4, 1036800},
+		{5, 960000},
+		{6, 800000},
+		{7, SHARK_TDPLL_FREQUENCY},
+		{8, 729600},
+		{9,  CPUFREQ_TABLE_END},
         },
         .vddarm_mv = {
 #ifdef SPRD_OC
-		[OC2]  = 1015000,
-		[OC1]  = 990000,
+		1015000,
+		990000,
 #endif
-		[NOC]  = 965000,
-		[UC1]  = 940000,
-		[UC2]  = 915000,
-		[UC3]  = 890000,
-		[UC4]  = 865000,
-		[UC5]  = 840000,
-		[UC6]  = 820000,
-		[EC]   = 820000,
+		965000,
+		940000,
+		915000,
+		890000,
+		865000,
+		840000,
+		820000,
+		820000,
         },
 };
 
@@ -432,12 +420,12 @@ static unsigned int sprd_cpufreq_getspeed(unsigned int cpu)
 
 static void sprd_set_cpufreq_limit(void)
 {
-	cpufreq_min_limit = sprd_cpufreq_conf->freq_tbl[MIN_CL].frequency;
-#ifdef SPRD_OC
-	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[OC2].frequency;
-#else
-	cpufreq_max_limit = sprd_cpufreq_conf->freq_tbl[NOC].frequency;
-#endif
+	int i;
+	struct cpufreq_frequency_table *tmp = sprd_cpufreq_conf->freq_tbl;
+	for (i = 0; (tmp[i].frequency != CPUFREQ_TABLE_END); i++) {
+		cpufreq_min_limit = min(tmp[i].frequency, cpufreq_min_limit);
+		cpufreq_max_limit = max(tmp[i].frequency, cpufreq_max_limit);
+	}
 	pr_info("--xing-- %s max=%u min=%u\n", __func__, cpufreq_max_limit, cpufreq_min_limit);
 }
 
@@ -496,51 +484,6 @@ static struct freq_attr *sprd_cpufreq_attr[] = {
 	NULL,
 };
 
-ssize_t sprd_vdd_get(char *buf) {
-	int i, len = 0;
-
-#define freq_table sprd_cpufreq_conf->freq_tbl[i].frequency
-#define voltage_table sprd_cpufreq_conf->vddarm_mv[i]
-
-	for (i = 0; i <= MIN_CL; i++) {
-		len += sprintf(buf + len, "%umhz: %lu mV\n", freq_table / 1000, voltage_table / 1000);
-	}
-	return len;
-}
-
-void sprd_vdd_set(const char *buf) {
-	int ret = -EINVAL;
-	int i = 0;
-	int j = 0;
-	int u[MIN_CL + 1];
-	while (j < MIN_CL + 1) {
-		int consumed;
-		int val;
-		ret = sscanf(buf, "%d%n", &val, &consumed);
-		if (ret > 0) {
-			buf += consumed;
-			u[j++] = val;
-		}
-		else {
-			break;
-		}
-	}
-
-	for (i = 0; i < j; i++) {
-		if (u[i] > MAX_VOLT / 1000) {
-			u[i] = MAX_VOLT / 1000;
-		}
-         if( u[i] % 25 == 0 ) {
-		 sprd_cpufreq_conf->vddarm_mv[i] = u[i] * 1000; }
-	}
-   return;
-}
-
-static struct vdd_levels_control sprd_vdd_control = {
-      .get = sprd_vdd_get,
-      .set = sprd_vdd_set,
-};
-
 static struct cpufreq_driver sprd_cpufreq_driver = {
 	.verify		= sprd_cpufreq_verify_speed,
 	.target		= sprd_cpufreq_target,
@@ -549,7 +492,6 @@ static struct cpufreq_driver sprd_cpufreq_driver = {
 	.exit		= sprd_cpufreq_exit,
 	.name		= "sprd",
 	.attr		= sprd_cpufreq_attr,
-	.volt_control 	= &sprd_vdd_control,
 	.flags		= CPUFREQ_SHARED
 };
 
