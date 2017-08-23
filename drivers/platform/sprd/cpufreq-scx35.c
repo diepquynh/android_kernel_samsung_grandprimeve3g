@@ -26,6 +26,7 @@
 #include <linux/debugfs.h>
 #include <linux/cpu.h>
 #include <linux/regulator/consumer.h>
+//#include <asm/system.h>
 #include <trace/events/power.h>
 
 #include <soc/sprd/hardware.h>
@@ -34,6 +35,18 @@
 #include <soc/sprd/sci.h>
 #include <soc/sprd/sci_glb_regs.h>
 #include <soc/sprd/arch_misc.h>
+
+#if defined(CONFIG_ARCH_SC8825)
+#define MHz                     (1000000)
+#define GR_MPLL_REFIN_2M        (2 * MHz)
+#define GR_MPLL_REFIN_4M        (4 * MHz)
+#define GR_MPLL_REFIN_13M       (13 * MHz)
+#define GR_MPLL_REFIN_SHIFT     16
+#define GR_MPLL_REFIN_MASK      (0x3)
+#define GR_MPLL_N_MASK          (0x7ff)
+#define GR_MPLL_MN		(REG_GLB_M_PLL_CTL0)
+#define GR_GEN1			(REG_GLB_GEN1)
+#endif
 
 #define FREQ_TABLE_SIZE 	10
 #define DVFS_BOOT_TIME	(30 * HZ)
@@ -156,31 +169,57 @@ static unsigned int sprd_raw_get_cpufreq(void)
 #endif
 }
 
-static void cpufreq_set_clock(void)
+static void cpufreq_set_clock(unsigned int freq)
 {
 	int ret;
 
 	ret = clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->tdpllclk);
 	if (ret)
 		pr_err("Failed to set cpu parent to tdpll\n");
-
-	if (!(sci_glb_read(REG_PMU_APB_MPLL_REL_CFG, -1) & BIT_MPLL_AP_SEL)) {
-		sci_glb_set(REG_PMU_APB_MPLL_REL_CFG, BIT_MPLL_AP_SEL);
-		udelay(500);
+	if (freq == SHARK_TDPLL_FREQUENCY/2) {
+		//ca7 clk div
+		#ifndef CONFIG_ARCH_SCX35L
+		sci_glb_set(REG_AP_AHB_CA7_CKG_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#else
+		#ifndef CONFIG_ARCH_SCX35LT8	//TODO
+		sci_glb_set(REG_AP_AHB_CA7_CKG_DIV_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#endif
+		#endif
+	} else if (freq == SHARK_TDPLL_FREQUENCY) {
+		#ifndef CONFIG_ARCH_SCX35L
+		sci_glb_clr(REG_AP_AHB_CA7_CKG_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#else
+		#ifndef CONFIG_ARCH_SCX35LT8	//TODO
+		sci_glb_clr(REG_AP_AHB_CA7_CKG_DIV_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#endif
+		#endif
+	} else {
+	/*
+		if (clk_get_parent(sprd_cpufreq_conf->clk) != sprd_cpufreq_conf->tdpllclk) {
+			ret = clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->tdpllclk);
+			if (ret)
+				pr_err("Failed to set cpu parent to tdpll\n");
+		}
+		*/
+		if (!(sci_glb_read(REG_PMU_APB_MPLL_REL_CFG, -1) & BIT_MPLL_AP_SEL)) {
+			sci_glb_set(REG_PMU_APB_MPLL_REL_CFG, BIT_MPLL_AP_SEL);
+			udelay(500);
+		}
+		ret = clk_set_rate(sprd_cpufreq_conf->mpllclk, (freq * 1000));
+		if (ret)
+			pr_err("Failed to set mpll rate\n");
+		ret = clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->mpllclk);
+		if (ret)
+			pr_err("Failed to set cpu parent to mpll\n");
+		#ifndef CONFIG_ARCH_SCX35L
+		sci_glb_clr(REG_AP_AHB_CA7_CKG_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#else
+		#ifndef CONFIG_ARCH_SCX35LT8	//TODO
+		sci_glb_clr(REG_AP_AHB_CA7_CKG_DIV_CFG, BITS_CA7_MCU_CKG_DIV(1));
+		#endif
+		#endif
 	}
-
-	ret = clk_set_rate(sprd_cpufreq_conf->mpllclk, (freq * 1000));
-	if (ret)
-		pr_err("Failed to set mpll rate\n");
-
-	ret = clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->mpllclk);
-	if (ret)
-		pr_err("Failed to set cpu parent to mpll\n");
-
-	sci_glb_clr(REG_AP_AHB_CA7_CKG_DIV_CFG, BITS_CA7_MCU_CKG_DIV(1));
-
 }
-
 static void sprd_raw_set_cpufreq(int cpu, struct cpufreq_freqs *freq, int index)
 {
 #if defined(CONFIG_ARCH_SCX35)
@@ -221,9 +260,9 @@ static void sprd_raw_set_cpufreq(int cpu, struct cpufreq_freqs *freq, int index)
 
 	if (freq->new >= sprd_raw_get_cpufreq()) {
 		CPUFREQ_SET_VOLTAGE();
-		cpufreq_set_clock();
+		cpufreq_set_clock(freq->new);
 	} else {
-		cpufreq_set_clock();
+		cpufreq_set_clock(freq->new);
 		CPUFREQ_SET_VOLTAGE();
 	}
 
@@ -402,6 +441,11 @@ static void sprd_set_cpufreq_limit(void)
 	pr_info("--xing-- %s max=%u min=%u\n", __func__, cpufreq_max_limit, cpufreq_min_limit);
 }
 
+#if defined(CONFIG_ARCH_SCX35LT8)
+#define AON_APB_CHIP_ID		REG_AON_APB_CHIP_ID0
+#else
+#define AON_APB_CHIP_ID		REG_AON_APB_CHIP_ID
+#endif
 static int sprd_freq_table_init(void)
 {
 	/* Instantly initialize frequency table, no need detecting - koquantam */
@@ -827,8 +871,16 @@ static int __init sprd_cpufreq_modinit(void)
 	if (IS_ERR(sprd_cpufreq_conf->regulator))
 		return PTR_ERR(sprd_cpufreq_conf->regulator);
 
+	/* set max voltage first */
+	/*
+	regulator_set_voltage(sprd_cpufreq_conf->regulator,
+		sprd_cpufreq_conf->vddarm_mv[0],
+		sprd_cpufreq_conf->vddarm_mv[0]);
+	*/
 	clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->tdpllclk);
-
+	/*
+	* clk_set_rate(sprd_cpufreq_conf->mpllclk, (sprd_top_frequency * 1000));
+	*/
 	clk_set_parent(sprd_cpufreq_conf->clk, sprd_cpufreq_conf->mpllclk);
 	global_freqs.old = sprd_raw_get_cpufreq();
 
