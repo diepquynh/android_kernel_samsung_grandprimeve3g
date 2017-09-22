@@ -41,13 +41,6 @@ config ARM_UNWIND
 	  the performance is not affected. Currently, this feature
 	  only works with EABI compilers. If unsure say Y.
 
-config SPRD_SYSDUMP
-        tristate "Enable SPRD sysdump handler"
-        depends on ARCH_SC
-        help
-          This option enables Spreadtrum sysdump which prepare debug info
-	  for u-boot to write into mmc storage after kernel panics.
-
 config OLD_MCOUNT
 	bool
 	depends on FUNCTION_TRACER && FRAME_POINTER
@@ -790,71 +783,37 @@ config CORESIGHT_SOURCE_ETM3X
 	  the ETM version data tracing may also be available.
 endif
 
-comment "BSP Feature"
-menuconfig SEC_BSP
-	bool "Samsung TN BSP Feature"
+comment "Samsung Rooting Restriction Feature"
+config SEC_RESTRICT_ROOTING
+	bool "Samsung Rooting Restriction Feature"
 	default n
 	help
-	  Samsung TN BSP Feature.
+	  Restrict unauthorized executions with root permission.
 
-config SEC_DEBUG
-	bool "Enable SEC DEBUG"
-	default n
+config SEC_RESTRICT_SETUID
+	bool "Restrict changing root privilege except allowed process"
+	depends on SEC_RESTRICT_ROOTING
+	default y
+	help
+	  Say Y here if you want to restrict functions related setuid. Only allowed
+	  process can chanage ROOT privilege. Saying N will not restrict changing
+	  permission.
 
-if SEC_DEBUG
-config SEC_DEBUG_SCHED_LOG
-	bool "Samsung Scheduler Logging Feature"
+config SEC_RESTRICT_FORK
+	bool "Restrict forking process except allowed process"
+	depends on SEC_RESTRICT_ROOTING
+	default y
+	help
+	  Say Y here if you want to restrict function related fork. Process matched
+	  special condition will be not forked. Saying N will not restrict forking
+	  process.
+
+config SEC_RESTRICT_ROOTING_LOG
+	bool "Print restricted result to kernel log"
+	depends on SEC_RESTRICT_ROOTING
 	default n
 	help
-	  Samsung Scheduler Logging Feature for Debug use.
-
-config SEC_DEBUG_SCHED_LOG_NONCACHED
-    bool "Samsung Scheduler log for non cache"
-	default n
-	depends on SEC_DEBUG_SCHED_LOG
-
-config SEC_DEBUG_SOFTIRQ_LOG
-	bool "Samsung Softirq Logging Feature"
-	default n
-	depends on SEC_DEBUG_SCHED_LOG
-	help
-	  Samsung Softirq Logging Feature for Debug use.
-	  This option enables us to log softirq enter/exit.
-	  It is not only hard-irq which results in scheduler lockup,
-	  To be more clear we need to see also softirq logs.
-
-config SEC_DEBUG_TIMER_LOG
-	bool "Samsung Timer Logging Feature"
-	default n
-	help
-	  Samsung Timer Logging Feature for Debug use.
-
-config SEC_LOG
-	bool "Samsung log buffer"
-	default n
-
-config SEC_LOG_BUF_NOCACHE
-	bool "samsung log buf for cache type"
-	depends on SEC_LOG
-	default n
-	
-config SEC_LOG_LAST_KMSG
-	bool "Samsung Use Sec Log Last Kmsg"
-	depends on SEC_LOG
-	default n
-	help
-	  This feature creats a node to read contents of sec_log_buf
-	  area just before booting into kernel from bootloader.
-	  This is very helpful to read sec_log_buf area without reset
-	  or entering upload mode.
-
-config SEC_DEBUG_USER
-	bool "Enable user options"
-	default n
-
-config SEC_DEBUG_REG_ACCESS
-	bool "Samsung reg access debugging"
-	default n
-endif
+	   Say Y here if you want to see result of restricting SETUID or FORK. It will
+	   be displayed by kernel error log. Saying N will not be displayed anything.
 
 endmenu

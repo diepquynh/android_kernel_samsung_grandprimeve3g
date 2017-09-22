@@ -27,7 +27,7 @@ enum {
 	SIPC_ID_WCN,		/* Wireless Connectivity */
 	SIPC_ID_GGE, 		/* Gsm Gprs Edge processor */
 	SIPC_ID_LTE, 		/* LTE processor */
-        SIPC_ID_PMIC,
+	SIPC_ID_PMIC,
 	SIPC_ID_NR,		/* total processor number */
 };
 
@@ -63,6 +63,8 @@ enum {
 	SMSG_CH_DATA4,		/* 2G/3G wirleless data */
 	SMSG_CH_DATA5,		/* 2G/3G wirleless data */
 	SMSG_CH_DIAG,		/* pipe for debug log/dump */
+	SMSG_CH_PM_CTRL, 	/* power management control */
+	SMSG_CH_DUAL_SIM_PLUG,	/* dual sim plug channel */
 	SMSG_CH_NR,		/* total channel number */
 };
 
@@ -110,6 +112,9 @@ int smsg_ch_open(uint8_t dst, uint8_t channel, int timeout);
  * @return: 0 on success, <0 on failue
  */
 int smsg_ch_close(uint8_t dst, uint8_t channel, int timeout);
+
+
+int smsg_senddie(uint8_t dst);
 
 /**
  * smsg_send -- send smsg

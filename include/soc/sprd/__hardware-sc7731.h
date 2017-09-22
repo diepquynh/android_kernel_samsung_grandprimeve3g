@@ -211,11 +211,15 @@ extern unsigned long sprd_adi_phys;
 #define CPW_START_ADDR		(CONFIG_PHYS_OFFSET + 256 * SZ_1M)
 #endif
 #if defined(CONFIG_MODEM_W_MEMCUT)
-#define CPW_TOTAL_SIZE		(SZ_1M * 28)
+#define CPW_TOTAL_SIZE		(SZ_1M * 29)
 #elif defined CONFIG_ARCH_SCX30G
-#define CPW_TOTAL_SIZE		(SZ_1M * 27)
+#if (defined CONFIG_ARCH_SCX30G3 && !defined CONFIG_MACH_SP8730SEEA_T3)
+#define CPW_TOTAL_SIZE		(SZ_1M * 29)
 #else
-#define CPW_TOTAL_SIZE		(SZ_1M * 33)
+#define CPW_TOTAL_SIZE		(SZ_1M * 29)
+#endif
+#else
+#define CPW_TOTAL_SIZE		(SZ_1M * 29)
 #endif
 #define CPW_RING_ADDR		(CPW_START_ADDR + CPW_TOTAL_SIZE - SZ_4K)
 #define CPW_RING_SIZE			(SZ_4K)
@@ -231,17 +235,6 @@ extern unsigned long sprd_adi_phys;
 #define WCN_RING_ADDR		(WCN_START_ADDR + WCN_TOTAL_SIZE - SZ_4K)
 #define WCN_RING_SIZE			(SZ_4K)
 #define WCN_SMEM_SIZE		(SZ_512K + SZ_256K)
-#endif
-
-
-#ifdef CONFIG_SEC_DEBUG
-/* we have to consider io remap area to whether io memory ares is overlap or not
- * we have to set up device io map to not overlap
- */
-#define SPRD_SECDEBUG_BASE         SCI_IOMAP(0x460000)
-#define SPRD_SECDEBUG_PHYS         0x50003000
-#define SPRD_SECDEBUG_SIZE         (SZ_4K)
-#define SEC_DEBUG_MAGIC_BASE_VA    (SPRD_SECDEBUG_BASE)
 #endif
 
 #endif

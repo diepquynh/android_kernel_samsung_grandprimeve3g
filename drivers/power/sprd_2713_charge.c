@@ -167,6 +167,39 @@ struct sprdbat_auxadc_cal adc_cal = {
 	SPRDBAT_AUXADC_CAL_NO,
 };
 
+struct sprdbat_auxadc_cal temp_adc_cal = {
+	1000, 3413,
+	100, 341,
+	SPRDBAT_AUXADC_CAL_NO,
+};
+
+static void sprdchg_get_temp_efuse_cal(void)
+{
+	extern int sci_temp_efuse_calibration_get(unsigned int *p_cal_data);
+	unsigned int efuse_cal_data[2] = { 0 };
+	if (sci_temp_efuse_calibration_get(efuse_cal_data)) {
+		temp_adc_cal.p0_vol = efuse_cal_data[0] & 0xffff;
+		temp_adc_cal.p0_adc = (efuse_cal_data[0] >> 16) & 0xffff;
+		temp_adc_cal.p1_vol = efuse_cal_data[1] & 0xffff;
+		temp_adc_cal.p1_adc = (efuse_cal_data[1] >> 16) & 0xffff;
+		temp_adc_cal.cal_type = SPRDBAT_AUXADC_CAL_CHIP;
+	}
+	printk("sprdchg_temp_adc_to_vol %d,%d,%d,%d,cal_type:%d\n",
+	       temp_adc_cal.p0_vol, temp_adc_cal.p0_adc, temp_adc_cal.p1_vol,
+	       temp_adc_cal.p1_adc, temp_adc_cal.cal_type);
+}
+
+uint16_t sprdchg_small_scale_to_vol(uint16_t adcvalue)
+{
+	int32_t temp;
+	temp = temp_adc_cal.p0_vol - temp_adc_cal.p1_vol;
+	temp = temp * (adcvalue - temp_adc_cal.p0_adc);
+	temp = temp / (temp_adc_cal.p0_adc - temp_adc_cal.p1_adc);
+	temp = temp + temp_adc_cal.p0_vol;
+
+	return temp;
+}
+
 static int __init adc_cal_start(char *str)
 {
 	unsigned int adc_data[2] = { 0 };
@@ -231,6 +264,7 @@ void sprdchg_init(struct sprd_battery_platform_data *pdata)
 		}
 		#endif
 	}
+	sprdchg_get_temp_efuse_cal();
 #if !(defined(CONFIG_ARCH_SCX35L64)||defined(CONFIG_ARCH_SCX35LT8)) //mingwei TODO
 	sci_adi_write((ANA_CTL_EIC_BASE + 0x50), 1, (0xFFF));	//eic debunce
 	printk("ANA_CTL_EIC_BASE0x%x\n", sci_adi_read(ANA_CTL_EIC_BASE + 0x50));
@@ -242,18 +276,25 @@ static uint16_t sprdchg_adc_to_vol(uint16_t channel, int scale,
 				   uint16_t adcvalue)
 {
 	uint32_t result;
-	uint32_t vbat_vol = sprdchg_bat_adc_to_vol(adcvalue);
+	uint32_t vol;
 	uint32_t m, n;
 	uint32_t bat_numerators, bat_denominators;
 	uint32_t numerators, denominators;
 
+#if defined(CONFIG_ADIE_SC2723S) ||defined(CONFIG_ADIE_SC2723)
+	vol = sprdchg_small_scale_to_vol(adcvalue);
+	bat_numerators = 1;
+	bat_denominators = 1;
+#else
+	vol = sprdchg_bat_adc_to_vol(adcvalue);
 	sci_adc_get_vol_ratio(ADC_CHANNEL_VBAT, 0, &bat_numerators,
 			      &bat_denominators);
+#endif
 	sci_adc_get_vol_ratio(channel, scale, &numerators, &denominators);
 
 	///v1 = vbat_vol*0.268 = vol_bat_m * r2 /(r1+r2)
 	n = bat_denominators * numerators;
-	m = vbat_vol * bat_numerators * (denominators);
+	m = vol * bat_numerators * (denominators);
 	result = (m + n / 2) / n;
 	return result;
 }
@@ -642,7 +683,7 @@ static uint32_t _sprdchg_read_chg_current(void)
 
 uint32_t sprdchg_read_chg_current(void)
 {
-#define CUR_RESULT_NUM 9
+#define CUR_RESULT_NUM 4
 
 	int i, temp;
 	volatile int j;

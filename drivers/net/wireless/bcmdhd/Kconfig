@@ -69,14 +69,14 @@ config BROADCOM_WIFI
 		This is a configuration for broadcom WLAN driver.
 
 config BCMDHD_FW_PATH
-	depends on WLAN
+	depends on BROADCOM_WIFI
 	string "Firmware path"
 	default "/system/etc/firmware/fw_bcmdhd.bin"
 	---help---
 	  Path to the firmware file.
 
 config BCMDHD_NVRAM_PATH
-	depends on WLAN
+	depends on BROADCOM_WIFI
 	string "NVRAM path"
 	default "/system/etc/wifi/bcmdhd.cal"
 	---help---

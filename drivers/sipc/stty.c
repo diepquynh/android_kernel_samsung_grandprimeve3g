@@ -117,8 +117,6 @@ static int stty_open(struct tty_struct *tty, struct file * filp)
 
 #ifdef CONFIG_SPRD_2351
     rf2351_gpio_ctrl_power_enable(1);
-#endif
-#ifdef CONFIG_ARCH_SCX20
     rf2351_vddwpa_ctrl_power_enable(1);
 #endif
 
@@ -149,8 +147,6 @@ static void stty_close(struct tty_struct *tty, struct file * filp)
 
 #ifdef CONFIG_SPRD_2351
     rf2351_gpio_ctrl_power_enable(0);
-#endif
-#ifdef CONFIG_ARCH_SCX20
     rf2351_vddwpa_ctrl_power_enable(0);
 #endif
 

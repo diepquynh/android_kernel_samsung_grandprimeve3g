@@ -28,8 +28,10 @@
 #define ISP_3D_LUT_ITEM                    729
 #define ISP_RAW_AFM_ITEM                   25
 #define ISP_YIQ_AFM_ITEM                   100
+#define ISP_YIQ_AEM_ITEM                   1024
 #define ISP_HSV_ITEM                       361
 
+#define ISP_RAW_AFM_ITEM_R6P9              105
 
 #define ISP_CMC_MATRIX_TAB_MAX             9
 #define ISP_GAMMA_NODE_MAX                 66
@@ -54,8 +56,10 @@
 enum isp_chip_id {
 	ISP_CHIP_ID_INVALID = 0x00,
 	ISP_CHIP_ID_SC8820 = 0xA55A8820,
-	ISP_CHIP_ID_SC9630 = 0xA55A9630,
-	ISP_CHIP_ID_SC9930 = 0xA55A9930
+	ISP_CHIP_ID_SHARKL = 0xA55A9630,
+	ISP_CHIP_ID_PIKE = 0xA55A7720,
+	ISP_CHIP_ID_TSHARK2 = 0xA55A9838,
+	ISP_CHIP_ID_TSHARK3
 };
 
 enum isp_interrupt_mode {
@@ -321,6 +325,10 @@ enum {
 	ISP_INT_AFM_RGB_WIN22 = (1<<22),
 	ISP_INT_AFM_RGB_WIN23 = (1<<23),
 	ISP_INT_AFM_RGB_WIN24 = (1<<24),
+	ISP_INT_AFL_NEW_DDR_START = (1<<25),
+	ISP_INT_AFL_NEW_DDR_DONE = (1<<26),
+	ISP_INT_AFL_NEW_SRAM_START = (1<<27),
+	ISP_INT_AFL_NEW_SRAM_DONE = (1<<28),
 };
 
 enum {
@@ -456,6 +464,10 @@ enum {
 	ISP_INT_EVT_AFM_RGB_WIN22 = (1<<22),
 	ISP_INT_EVT_AFM_RGB_WIN23 = (1<<23),
 	ISP_INT_EVT_AFM_RGB_WIN24 = (1<<24),
+	ISP_INT_EVT_AFL_NEW_DDR_START = (1<<25),
+	ISP_INT_EVT_AFL_NEW_DDR_DONE = (1<<26),
+	ISP_INT_EVT_AFL_NEW_SRAM_START = (1<<27),
+	ISP_INT_EVT_AFL_NEW_SRAM_DONE = (1<<28),
 };
 
 enum isp_block {
@@ -770,9 +782,11 @@ enum isp_binging4awb_property {
 	ISP_PRO_BINNING4AWB_BLOCK,
 	ISP_PRO_BINNING4AWB_BYPASS,
 	ISP_PRO_BINNING4AWB_SCALING_RATIO,
+	ISP_PRO_BINNING4AWB_GET_SCALING_RATIO,
 	ISP_PRO_BINNING4AWB_MEM_ADDR,
 	ISP_PRO_BINNING4AWB_STATISTICS_BUF,
 	ISP_PRO_BINNING4AWB_TRANSADDR,
+	ISP_PRO_BINNING4AWB_ENDIAN,
 };
 
 enum isp_pre_glb_gain_property {
@@ -859,6 +873,7 @@ enum isp_nbpc_property {
 enum isp_raw_aem_property {
 	ISP_PRO_RAW_AEM_BLOCK,
 	ISP_PRO_RAW_AEM_BYPASS,
+	ISP_PRO_RAW_AEM_MODE,
 	ISP_PRO_RAW_AEM_STATISTICS,
 	ISP_PRO_RAW_AEM_SKIP_NUM,
 	ISP_PRO_RAW_AEM_SHIFT,
@@ -1447,10 +1462,12 @@ struct isp_dev_nbpc_info {
 #define ISP_CTM_PARAM_NUM   (729 * 4)
 #define ISP_PINGPANG_HSV_NUM 361
 #define ISP_HSV_PARAM_NUM (361 * 2)
-#define ISP_PINGPANG_FRGB_GAMC_NUM 129
+#define ISP_PINGPANG_FRGB_GAMC_NODE 129
+#define ISP_PINGPANG_FRGB_GAMC_NUM 257
 #define ISP_PINGPANG_YUV_YGAMMA_NUM 129
 #define ISP_VST_IVST_NUM 1024
 #define ISP_AFM_WIN_NUM_V1 25
+#define ISP_AFM_WIN_NUM_R6P9 10
 
 enum isp_dev_capability {
 	ISP_CAPABILITY_CHIP_ID,
@@ -1459,6 +1476,7 @@ enum isp_dev_capability {
 	ISP_CAPABILITY_AWB_WIN,
 	ISP_CAPABILITY_AWB_DEFAULT_GAIN,
 	ISP_CAPABILITY_AF_MAX_WIN_NUM,
+	ISP_CAPABILITY_TIME,
 };
 
 enum isp_int_property {
@@ -1614,6 +1632,15 @@ enum isp_rgb_afm_property {
 	ISP_PRO_RGB_AFM_FRAME_RANGE,
 	ISP_PRO_RGB_AFM_WIN,
 	ISP_PRO_RGB_AFM_WIN_NUM,
+
+/*isp ver:r6p9 only, such as tshark3*/
+	ISP_PRO_RGB_AFM_STATISTIC,
+	ISP_PRO_RGB_AFM_SPSMD_SQUARE_ENABLE,
+	ISP_PRO_RGB_AFM_OVERFLOW_PROTECT,
+	ISP_PRO_RGB_AFM_SUBFILTER,
+	ISP_PRO_RGB_AFM_SPSMD_TOUCH_MODE,
+	ISP_PRO_RGB_AFM_SHFIT,
+	ISP_PRO_RGB_AFM_THRESHOLD_RGB,
 };
 
 enum isp_rgb2y_property {
@@ -1622,6 +1649,12 @@ enum isp_rgb2y_property {
 
 enum isp_yiq_aem_property {
 	ISP_PRO_YIQ_AEM_BLOCK,
+	ISP_PRO_YIQ_AEM_YGAMMA_BYPASS,
+	ISP_PRO_YIQ_AEM_BYPASS,
+	ISP_PRO_YIQ_AEM_STATISTICS,
+	ISP_PRO_YIQ_AEM_SKIP_NUM,
+	ISP_PRO_YIQ_AEM_OFFSET,
+	ISP_PRO_YIQ_AEM_BLK_SIZE,
 	ISP_PRO_YIQ_AEM_SLICE_SIZE,
 };
 
@@ -1694,6 +1727,11 @@ struct isp_reg_param {
 	uint32_t counts;
 };
 
+struct isp_time {
+	uint32_t sec;
+	uint32_t usec;
+};
+
 struct isp_irq {
 	uint32_t irq_val0;
 	uint32_t irq_val1;
@@ -1701,6 +1739,7 @@ struct isp_irq {
 	uint32_t irq_val3;
 	uint32_t reserved;
 	int32_t ret_val;
+	struct isp_time time;
 };
 
 struct isp_interrupt {
@@ -1805,6 +1844,38 @@ struct spsmd_thrd {
     uint32_t max;
 };
 
+struct afm_subfilter {
+	uint32_t average;
+	uint32_t median;
+};
+
+struct afm_shift {
+	uint32_t shift_spsmd;
+	uint32_t shift_sobel5;
+	uint32_t shift_sobel9;
+};
+
+struct afm_thrd_rgb {
+	uint32_t sobel5_thr_min_red;
+	uint32_t sobel5_thr_max_red;
+	uint32_t sobel5_thr_min_green;
+	uint32_t sobel5_thr_max_green;
+	uint32_t sobel5_thr_min_blue;
+	uint32_t sobel5_thr_max_blue;
+	uint32_t sobel9_thr_min_red;
+	uint32_t sobel9_thr_max_red;
+	uint32_t sobel9_thr_min_green;
+	uint32_t sobel9_thr_max_green;
+	uint32_t sobel9_thr_min_blue;
+	uint32_t sobel9_thr_max_blue;
+	uint32_t spsmd_thr_min_red;
+	uint32_t spsmd_thr_max_red;
+	uint32_t spsmd_thr_min_green;
+	uint32_t spsmd_thr_max_green;
+	uint32_t spsmd_thr_min_blue;
+	uint32_t spsmd_thr_max_blue;
+};
+
 struct cce_shift {
 	uint32_t y_shift;
 	uint32_t u_shift;
@@ -1833,6 +1904,10 @@ struct csa_factor_v1 {
 
 struct isp_raw_afm_statistic {
 	uint32_t val[ISP_RAW_AFM_ITEM];
+};
+
+struct isp_raw_afm_statistic_r6p9 {
+	uint32_t val[ISP_RAW_AFM_ITEM_R6P9];
 };
 
 struct isp_yiq_afm_statistic {
@@ -2346,6 +2421,14 @@ struct isp_dev_rgb_afm_info_v1 {
 	uint32_t frame_width;
 	uint32_t frame_height;
 	struct isp_coord coord[ISP_AFM_WIN_NUM_V1];
+
+/*isp ver:r6p9 only, such as tshark3*/
+	uint32_t spsmd_square_en;
+	uint32_t overflow_protect_en;
+	struct afm_subfilter subfilter;
+	uint32_t spsmd_touch_mode;
+	struct afm_shift shift;
+	struct afm_thrd_rgb thrd;
 };
 
 struct isp_dev_rgb2y_info {

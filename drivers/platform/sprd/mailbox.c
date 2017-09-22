@@ -176,7 +176,7 @@ static int __init mbox_init(void)
 	for (i = 0; i < 0x100; i++);
 
 	__raw_writel(0x0, (void __iomem *)(REGS_SEND_MBOX_BASE  + MBOX_FIFO_RST));
-	__raw_writel(~FIFO_BLOCK_STS, REGS_SEND_MBOX_BASE + MBOX_IRQ_MSK);
+	__raw_writel(0xffffffff, REGS_SEND_MBOX_BASE + MBOX_IRQ_MSK);
         ret = request_irq(vmailbox_src_irq, mbox_src_irqhandle, IRQF_NO_SUSPEND, "sprd-mailbox_source", NULL);
 	if (ret) {
             pr_err("mbox request source irq:%d failed\n", vmailbox_src_irq);

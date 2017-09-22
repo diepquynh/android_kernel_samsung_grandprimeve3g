@@ -185,6 +185,7 @@ static int regulator_check_voltage(struct regulator_dev *rdev,
 	if (*min_uV > *max_uV) {
 		rdev_err(rdev, "unsupportable voltage range: %d-%duV\n",
 			 *min_uV, *max_uV);
+		dump_stack();
 		return -EINVAL;
 	}
 

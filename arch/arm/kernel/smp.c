@@ -52,9 +52,7 @@
 #include <soc/sprd/sprd_debug.h>
 #endif
 
-#if defined(CONFIG_SEC_DEBUG_SCHED_LOG) || defined(CONFIG_SEC_DEBUG)
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
@@ -590,9 +588,7 @@ static void ipi_cpu_stop(unsigned int cpu)
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
-#ifdef CONFIG_SEC_DEBUG
 		sec_debug_dump_stack();
-#endif
 		raw_spin_unlock(&stop_lock);
 	}
 
@@ -680,9 +676,6 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_SPRD_SYSDUMP
 		extern void sysdump_ipi(struct pt_regs *regs);
 #endif
-#ifdef CONFIG_SEC_DEBUG
-extern void sec_debug_backup_ctx(struct pt_regs *regs);
-#endif
 void handle_IPI(int ipinr, struct pt_regs *regs)
 {
 	unsigned int cpu = smp_processor_id();
@@ -694,9 +687,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_SPRD_DEBUG
 	sprd_debug_irq_log(ipinr, do_IPI, 1);
 #endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	sec_debug_irq_log(ipinr, do_IPI, 1);
-#endif
 
 	trace_arm_ipi_entry(ipinr);
 	switch (ipinr) {
@@ -732,9 +723,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_SPRD_SYSDUMP
 		sysdump_ipi(regs);
 #endif
-#ifdef CONFIG_SEC_DEBUG
 		sec_debug_backup_ctx(regs);
-#endif
 		ipi_cpu_stop(cpu);
 		irq_exit();
 		break;
@@ -758,9 +747,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 #ifdef CONFIG_SPRD_DEBUG
 	sprd_debug_irq_log(ipinr, do_IPI, 2);
 #endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	sec_debug_irq_log(ipinr, do_IPI, 2);
-#endif
 
 	trace_arm_ipi_exit(ipinr);
 	set_irq_regs(old_regs);
@@ -786,8 +773,11 @@ void smp_send_stop(void)
 	while (num_online_cpus() > 1 && timeout--)
 		udelay(1);
 
-	if (num_online_cpus() > 1)
+	if (num_online_cpus() > 1) {
 		pr_warning("SMP: failed to stop secondary CPUs\n");
+		/* make non-stoped CPUs occur pagefault */
+		sec_coresight_trigger_pagefault_nonstopped();
+	}
 }
 
 /*

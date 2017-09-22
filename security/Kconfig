@@ -125,6 +125,8 @@ source security/yama/Kconfig
 
 source security/integrity/Kconfig
 
+source security/rootrecorder/Kconfig
+
 choice
 	prompt "Default security module"
 	default DEFAULT_SECURITY_SELINUX if SECURITY_SELINUX

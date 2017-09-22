@@ -1523,6 +1523,8 @@ static int wedge_bulk_in_endpoint(struct fsg_dev *fsg)
 	int	rc;
 
 	DBG(fsg, "bulk-in set wedge\n");
+	if(!fsg->bulk_in->ops->set_wedge)
+		fsg->bulk_in->ops->set_halt(fsg->bulk_in,3);
 	rc = usb_ep_set_wedge(fsg->bulk_in);
 	if (rc == -EAGAIN)
 		VDBG(fsg, "delayed bulk-in endpoint wedge\n");
@@ -1536,6 +1538,8 @@ static int wedge_bulk_in_endpoint(struct fsg_dev *fsg)
 		/* Wait for a short time and then try again */
 		if (msleep_interruptible(100) != 0)
 			return -EINTR;
+		if(!fsg->bulk_in->ops->set_wedge)
+			fsg->bulk_in->ops->set_halt(fsg->bulk_in,3);
 		rc = usb_ep_set_wedge(fsg->bulk_in);
 	}
 	return rc;
@@ -2537,8 +2541,11 @@ static void handle_exception(struct fsg_common *common)
 		if (!fsg_is_set(common))
 			break;
 		if (test_and_clear_bit(IGNORE_BULK_OUT,
-				       &common->fsg->atomic_bitflags))
+				       &common->fsg->atomic_bitflags)){
+			if(!common->fsg->bulk_in->ops->set_wedge)
+				common->fsg->bulk_in->ops->set_halt(common->fsg->bulk_in,2);
 			usb_ep_clear_halt(common->fsg->bulk_in);
+		}
 
 		if (common->ep0_req_tag == exception_req_tag)
 			ep0_queue(common);	/* Complete the status stage */
@@ -2625,7 +2632,6 @@ static int fsg_main_thread(void *common_)
 
 		if (do_scsi_command(common) || finish_reply(common))
 			continue;
-
 		spin_lock_irq(&common->lock);
 		if (!exception_in_progress(common))
 			common->state = FSG_STATE_STATUS_PHASE;

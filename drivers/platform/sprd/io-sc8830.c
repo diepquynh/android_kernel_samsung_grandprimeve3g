@@ -22,11 +22,6 @@
 #include <soc/sprd/hardware.h>
 #include <soc/sprd/arch_misc.h>
 
-#if defined(CONFIG_SEC_DEBUG)
-/* For saving Fault status */
-#include <soc/sprd/sec_debug.h>
-#endif
-
 #define SPRD_DEVICE(name) {			\
 	.virtual = SPRD_##name##_BASE,		\
 	.pfn = __phys_to_pfn(SPRD_##name##_PHYS),\
@@ -63,9 +58,6 @@ static struct map_desc sprd_io_desc[] __initdata = {
 #endif
 	SPRD_DEVICE(PWM),
 	SPRD_DEVICE(LPDDR2),
-#if defined(CONFIG_SEC_DEBUG)
-	SPRD_DEVICE(SECDEBUG),
-#endif
 };
 
 void __init sci_map_io(void)

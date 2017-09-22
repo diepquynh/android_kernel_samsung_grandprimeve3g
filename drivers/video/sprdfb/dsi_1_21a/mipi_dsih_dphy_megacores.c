@@ -17,6 +17,7 @@
  */
 
 #include <linux/delay.h>
+#include <asm/string.h>
 #include "mipi_dsih_dphy.h"
 
 #define L						0
@@ -324,16 +325,24 @@ static int mipi_dsih_dphy_set_pll_reg(dphy_t *phy, struct dphy_pll *pll)
 {
 	int i;
 	u8 *val;
-
 	struct pll_regs regs;
-	u8 regs_addr[] = {
-		0x03, 0x04, 0x06, 0x07, 0x08, 0x09,
-		0x0a, 0x0b, 0x0c, 0x0d, 0x0e
-	};
+	u8 regs_off_addr[] = {
+			0x03, 0x04, 0x06, 0x07, 0x08, 0x09,
+			0x0a, 0x0b, 0x0c, 0x0d, 0x0e
+			};
+	u8 regs_on_addr[] = {
+			0x03, 0x04, 0x07, 0x08, 0x09, 0x0a,
+			0x0b, 0x0c, 0x0d, 0x0e, 0x06
+			};
+	int reg_30_val[] = {
+			0x1F, 0x82, 0x99, 0x9E, 0x76, 0x27,
+			0x62, 0x00, 0x18, 0xA0, 0xA6
+			};
 
 	if (!pll || !pll->fvco)
 		goto FAIL;
 
+#ifndef CONFIG_FB_HOP_SPECTRUM_FREQ_SCALING
 	memset((u8 *)&regs, '\0', sizeof(regs));
 	regs._03.bits.prbs_bist = 1;
 	regs._03.bits.en_lp_treot = true;
@@ -362,10 +371,13 @@ static int mipi_dsih_dphy_set_pll_reg(dphy_t *phy, struct dphy_pll *pll)
 	regs._0e.bits.kstep_l = pll->kstep & 0x7;
 
 	val = (u8 *)&regs;
+	for (i = 0; i < sizeof(regs_off_addr); ++i)
+		mipi_dsih_dphy_write(phy, regs_off_addr[i], &val[i], 1);
 
-	for (i = 0; i < sizeof(regs_addr); ++i)
-		mipi_dsih_dphy_write(phy, regs_addr[i], &val[i], 1);
-
+#else
+	for (i = 0; i < sizeof(regs_on_addr); ++i)
+		mipi_dsih_dphy_write(phy, regs_on_addr[i], &reg_30_val[i], 1);
+#endif
 	return 0;
 
 FAIL:
@@ -532,7 +544,7 @@ static int mipi_dsih_dphy_config_lane_timing(dphy_t *phy,
 		range[H] = INFINITY;
 		val[CLK] = ROUND_UP(range[L] * factor - constant, t_half_byteck);
 		range[L] = MAX(8 * t_ui, 60 * scale + 4 * t_ui);
-		val[DATA] = ROUND_UP(range[L] * factor /2 - constant, t_half_byteck);
+		val[DATA] = ROUND_UP(range[L] * 3 / 2 - constant, t_half_byteck);
 		mipi_dsih_dphy_set_timing_regs(phy, TRAIL_TIME, val);
 
 	case EXIT_TIME:

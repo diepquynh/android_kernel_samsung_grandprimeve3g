@@ -14,7 +14,11 @@
 #include <soc/sprd/adc.h>
 
 #define ADC_CHANNEL_VF        0
+#if defined(CONFIG_MACH_J1X3G) || defined(CONFIG_MACH_J1MINI3G)
+#define ADC_CHANNEL_TEMP        3
+#else
 #define ADC_CHANNEL_TEMP        1
+#endif
 
 static struct iio_channel *temp_adc;
 

@@ -78,6 +78,7 @@ struct ion_addr_data {
 	bool iova_enabled;
 	unsigned long iova_addr;
 	unsigned long phys_addr;
+	struct dma_buf *dmabuf;
 	size_t size;
 };
 
@@ -107,6 +108,10 @@ struct ion_fence_data {
 int sprd_ion_get_gsp_addr(struct ion_addr_data *data);
 
 int sprd_ion_free_gsp_addr(int fd);
+
+struct dma_buf *sprd_ion_get_iommu_gspn_dmabuf_from_fd(int fd);
+int sprd_ion_get_iommu_gspn_dmabuf(struct ion_addr_data *data);
+int sprd_ion_free_iommu_gspn_dmabuf(struct ion_addr_data *data);
 
 long sprd_ion_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg);

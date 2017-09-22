@@ -160,9 +160,7 @@ struct sprdfb_device {
 
 	uint32_t	 	bpp;  /*input bit per pixel*/
 
-#ifdef CONFIG_SEC_DEBUG
 	uint32_t		framebuffer_nr; /*number of framebuffer*/
-#endif
 
 	uint16_t		panel_ready; /*panel has been inited by uboot*/
 	uint16_t		panel_if_type; /*panel IF*/
@@ -214,7 +212,7 @@ struct display_ctrl {
 
 	int32_t 	(*refresh)	  (struct sprdfb_device *dev);
 	void 	(*logo_proc)	  (struct sprdfb_device *dev);
-
+	int32_t	(*shutdown)	  (struct sprdfb_device *dev);
 	int32_t	(*suspend)	  (struct sprdfb_device *dev);
 	int32_t 	(*resume)	  (struct sprdfb_device *dev);
 	int32_t (*update_clk) (struct sprdfb_device *dev);
@@ -222,7 +220,9 @@ struct display_ctrl {
 #ifdef CONFIG_FB_ESD_SUPPORT
 	int32_t	(*ESD_check)	  (struct sprdfb_device *dev);
 #endif
-
+#ifdef CONFIG_LCD_ESD_RECOVERY
+    int32_t	(*ESD_reset)	  (struct sprdfb_device *dev);
+#endif
 #ifdef  CONFIG_FB_LCD_OVERLAY_SUPPORT
 	int32_t 	(*enable_overlay) 	(struct sprdfb_device *dev, struct overlay_info* info, int enable);
 	int32_t	(*display_overlay)	(struct sprdfb_device *dev, struct overlay_display* setting);

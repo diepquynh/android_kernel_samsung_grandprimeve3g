@@ -50,7 +50,7 @@ static int32_t isp_block_buf_alloc(struct isp_k_private *isp_private)
 	int32_t ret = 0;
 	uint32_t buf_len = 0;
 
-	buf_len = ISP_REG_BUF_SIZE + ISP_RAW_AE_BUF_SIZE + ISP_FRGB_GAMMA_BUF_SIZE + ISP_YUV_YGAMMA_BUF_SIZE + ISP_RAW_AWB_BUF_SIZE;
+	buf_len = ISP_REG_BUF_SIZE + ISP_RAW_AE_BUF_SIZE + ISP_FRGB_GAMMA_BUF_SIZE + ISP_YUV_YGAMMA_BUF_SIZE + ISP_RAW_AWB_BUF_SIZE + ISP_YIQ_AEM_BUF_SIZE;
 
 	isp_private->block_buf_addr = (unsigned long)vzalloc(buf_len);
 	if (0 == isp_private->block_buf_addr) {
@@ -68,6 +68,8 @@ static int32_t isp_block_buf_alloc(struct isp_k_private *isp_private)
 		isp_private->yuv_ygamma_buf_len = ISP_YUV_YGAMMA_BUF_SIZE;
 		isp_private->raw_awbm_buf_addr = isp_private->yuv_ygamma_buf_addr + isp_private->yuv_ygamma_buf_len;
 		isp_private->raw_awbm_buf_len = ISP_RAW_AWB_BUF_SIZE;
+		isp_private->yiq_aem_buf_addr = isp_private->raw_awbm_buf_addr + isp_private->raw_awbm_buf_len;
+		isp_private->yiq_aem_buf_len = ISP_YIQ_AEM_BUF_SIZE;
 	}
 
 	return ret;
@@ -93,6 +95,7 @@ static int32_t isp_block_buf_free(struct isp_k_private *isp_private)
 		isp_private->raw_awbm_buf_addr = 0x00;
 		isp_private->raw_awbm_buf_len = 0x00;
 	}
+
 	return ret;
 }
 
@@ -109,6 +112,7 @@ static int32_t isp_yiq_antiflicker_buf_free(struct isp_k_private *isp_private)
 	}
 
 	return ret;
+
 }
 
 static int32_t isp_yiq_antiflicker_buf_alloc(struct isp_k_private *isp_private, uint32_t len)
@@ -138,105 +142,15 @@ static int32_t isp_yiq_antiflicker_buf_alloc(struct isp_k_private *isp_private, 
 			outer_flush_range(__pa(ptr), __pa(ptr) + len);
 #endif
 		}
+
 		return ret;
+
 }
 
-static int32_t isp_lsc_buf_free(struct isp_k_private *isp_private)
-{
-	int32_t ret = 0;
-
-	if ((0x00 != isp_private->lsc_buf_addr)
-		&& (0x00 != isp_private->lsc_buf_order)) {
-		free_pages(isp_private->lsc_buf_addr, isp_private->lsc_buf_order);
-		isp_private->lsc_buf_addr = 0x00;
-		isp_private->lsc_buf_len = 0x00;
-		isp_private->lsc_buf_order = 0x00;
-	}
-
-	return ret;
-}
-
-static int32_t isp_lsc_buf_alloc(struct isp_k_private *isp_private, uint32_t len)
-{
-	int32_t ret = 0x00;
-#ifndef CONFIG_64BIT
-	uint32_t buf = 0x00;
-	void *ptr = NULL;
-#endif
-
-	if (0x00 < len) {
-		isp_private->lsc_buf_len = len;
-		isp_private->lsc_buf_order = get_order(len);
-		isp_private->lsc_buf_addr = (unsigned long)__get_free_pages(GFP_KERNEL | __GFP_COMP, isp_private->lsc_buf_order);
-		if (NULL == (void*)isp_private->lsc_buf_addr) {
-			printk("isp_lsc_buf_alloc: memory error, addr:0x%lx, len:0x%x, order:0x%x.\n",
-				isp_private->lsc_buf_addr,
-				isp_private->lsc_buf_len,
-				isp_private->lsc_buf_order);
-			return -1;
-		}
-	#ifndef CONFIG_64BIT
-		ptr = (void*)isp_private->lsc_buf_addr;
-		buf = virt_to_phys((volatile void *)isp_private->lsc_buf_addr);
-		
-		dmac_flush_range(ptr, ptr + len);
-		outer_flush_range(__pa(ptr), __pa(ptr) + len);
-	#endif
-	}
-
-	return ret;
-}
-
-static int32_t isp_binging4awb_buf_free(struct isp_k_private *isp_private)
-{
-	int32_t ret = 0;
-
-	if ((0x00 != isp_private->bing4awb_buf_addr)
-		&& (0x00 != isp_private->bing4awb_buf_len)) {
-		free_pages(isp_private->bing4awb_buf_addr, isp_private->bing4awb_buf_len);
-		isp_private->bing4awb_buf_addr = 0x00;
-		isp_private->bing4awb_buf_len = 0x00;
-		isp_private->bing4awb_buf_order = 0x00;
-	}
-
-	return ret;
-}
-
-static int32_t isp_binging4awb_buf_alloc(struct isp_k_private *isp_private, uint32_t len)
-{
-	int32_t ret = 0x00;
-#ifndef CONFIG_64BIT
-	uint32_t buf = 0x00;
-	void *ptr = NULL;
-#endif
-
-	if (0x00 < len) {
-		isp_private->bing4awb_buf_len = len;
-		isp_private->bing4awb_buf_order = get_order(len);
-		isp_private->bing4awb_buf_addr = (unsigned long)__get_free_pages(GFP_KERNEL | __GFP_COMP,
-			isp_private->bing4awb_buf_order);
-		if (NULL == (void *)isp_private->bing4awb_buf_addr) {
-			printk("isp_binging4awb_buf_alloc: memory error, addr:0x%lx, len:0x%x, order:0x%x.\n",
-				isp_private->bing4awb_buf_addr,
-				isp_private->bing4awb_buf_len,
-				isp_private->bing4awb_buf_order);
-			return -1;
-		}
-	#ifndef CONFIG_64BIT
-		ptr = (void *)isp_private->bing4awb_buf_addr;
-		buf = virt_to_phys((volatile void *)isp_private->bing4awb_buf_addr);
-		dmac_flush_range(ptr, ptr + len);
-		outer_flush_range(__pa(ptr), __pa(ptr) + len);
-	#endif
-	}
-
-	return ret;
-}
-
+#if 0
 static int32_t isp_b4awb_switch_buf(struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	int32_t i = 0;
 
 	/*first bypass b4awb*/
 	REG_MWR(ISP_BINNING_PARAM, BIT_0, 0x1);
@@ -257,6 +171,7 @@ static int32_t isp_b4awb_switch_buf(struct isp_k_private *isp_private)
 
 	return ret;
 }
+#endif
 
 static void isp_read_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 {
@@ -267,10 +182,10 @@ static void isp_read_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 		reg_addr = ISP_BASE_ADDR + reg_bits_ptr[i].reg_addr;
 		if((reg_addr >= ISP_BASE_ADDR) && (reg_addr <= (ISP_BASE_ADDR + 0xFFFFFUL)))
 		{
-		reg_val = REG_RD(reg_addr);
-		reg_bits_ptr[i].reg_value = reg_val;
-		reg_bits_ptr[i].reg_addr = reg_addr;
-	}
+			reg_val = REG_RD(reg_addr);
+			reg_bits_ptr[i].reg_value = reg_val;
+		  	reg_bits_ptr[i].reg_addr = isp_phybase + reg_bits_ptr[i].reg_addr;
+		} 
 		else
 		{
 			 printk("isp_read_reg: This is not ISP reg address %d\n",reg_addr); 	   
@@ -288,8 +203,8 @@ static void isp_write_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 		reg_val = reg_bits_ptr[i].reg_value;
 		if((reg_addr >= ISP_BASE_ADDR) && (reg_addr <= (ISP_BASE_ADDR + 0xFFFFFUL)))
 		{
-		REG_WR(reg_addr, reg_val);
-	}
+			REG_WR(reg_addr, reg_val);
+		}
 		else
 		{
 			printk("isp_write_reg: This is not ISP reg address %d\n",reg_addr);        
@@ -307,6 +222,7 @@ static int32_t isp_queue_init(struct isp_queue *queue)
 	memset(queue, 0x00, sizeof(*queue));
 	queue->write = &queue->node[0];
 	queue->read  = &queue->node[0];
+
 	return 0;
 }
 
@@ -328,6 +244,7 @@ static int32_t isp_queue_write(struct isp_queue *queue, struct isp_node *node)
 
 	if (queue->write == queue->read)
 		queue->write = ori_node;
+
 	return 0;
 }
 
@@ -338,11 +255,13 @@ static int32_t isp_queue_read(struct isp_queue *queue, struct isp_node *node)
 			queue, node);
 		return -1;
 	}
+
 	if (queue->read != queue->write) {
 		*node = *queue->read++;
 		if (queue->read > &queue->node[ISP_QUEUE_LENGTH-1])
 			queue->read = &queue->node[0];
 	}
+
 	return 0;
 }
 
@@ -425,6 +344,7 @@ static int32_t isp_set_clk(struct isp_k_file *file, enum isp_clk_sel clk_sel)
 		printk("isp_set_clk: clk_enable error.\n");
 		return -1;
 	}
+
 	return ret;
 }
 
@@ -437,24 +357,29 @@ static int32_t isp_module_rst(struct isp_k_file *file)
 		printk("isp_module_rst: file is null error.\n");
 		return -1;
 	}
+
 	isp_private = file->isp_private;
 	if (!isp_private) {
 		printk("isp_module_rst: isp_private is null error.\n");
 		return -1;
 	}
+
 	if (0x00 != atomic_read(&isp_private->users)) {
 		ret = isp_axi_bus_waiting();
 
 		isp_clr_int();
+
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
+
 		sci_glb_clr(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
 		sci_glb_clr(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
 	}
+
 	return ret;
 }
 
@@ -482,7 +407,7 @@ static int32_t isp_module_eb(struct isp_k_file *file)
 			printk("isp_module_eb: clk_mm_i_eb error.\n");
 		}
 
-	#if defined(CONFIG_MACH_SP7720EA)
+	#if defined(CONFIG_MACH_SP7720EA) || defined(CONFIG_MACH_SP7720EB) || defined(CONFIG_MACH_PIKEB_J1MINI_3G) || defined(CONFIG_MACH_PIKEB_J1_3G) || defined(CONFIG_MACH_SP7720EB_PRIME) || defined(CONFIG_MACH_J1MINI3G)
 		ret = isp_set_clk(file, ISP_CLK_256M);
 	#elif defined(CONFIG_ARCH_SCX35LT8)
 		ret = isp_set_clk(file, ISP_CLK_480M);
@@ -539,6 +464,7 @@ static irqreturn_t isp_isr(int irq, void *dev_id)
 	struct isp_node node;
 	struct isp_k_file *fd = NULL;
 	struct isp_drv_private *drv_private = NULL;
+	struct timespec ts;
 
 	if (!dev_id) {
 		printk("isp_isr: dev_id is null error.\n");
@@ -558,10 +484,13 @@ static irqreturn_t isp_isr(int irq, void *dev_id)
 	ret = isp_get_int_num(&node);
 
 	/*B4AWB INT*/
-	if (node.irq_val1 & BIT_18) {
+	/*if (node.irq_val1 & BIT_18) {
 		isp_b4awb_switch_buf(fd->isp_private);
-	}
+	}*/
 
+	ktime_get_ts(&ts);
+	node.time.sec = ts.tv_sec;
+	node.time.usec =  ts.tv_nsec / NSEC_PER_USEC;
 	isp_queue_write((struct isp_queue *)&drv_private->queue, (struct isp_node *)&node);
 	spin_unlock_irqrestore(&drv_private->isr_lock, flag);
 
@@ -777,6 +706,7 @@ static long isp_ioctl( struct file *file, unsigned int cmd, unsigned long param)
 		irq_param.irq_val2 = node.irq_val2;
 		irq_param.irq_val3 = node.irq_val3;
 		irq_param.reserved = node.reserved;
+		irq_param.time = node.time;
 		ret = copy_to_user ((void *)param, (void *)&irq_param, sizeof(irq_param));
 		if (0 != ret) {
 			ret = -EFAULT;
@@ -883,6 +813,8 @@ static long isp_ioctl( struct file *file, unsigned int cmd, unsigned long param)
 			ret = -EFAULT;
 			printk("isp_ioctl: restet error.\n");
 		}
+		isp_private->full_gamma_buf_id = 0;
+		isp_private->yuv_ygamma_buf_id = 0;
 
 		up(&isp_private->ioctl_lock);
 
@@ -945,7 +877,6 @@ static long isp_ioctl( struct file *file, unsigned int cmd, unsigned long param)
 	{
 		int ret;
 		int num;
-		int i;
 		int ISP_REG_NUM = 20467;
 
 		struct isp_reg_bits *ptr = (struct isp_reg_bits *)vmalloc(ISP_REG_NUM * sizeof(struct isp_reg_bits));
@@ -1017,33 +948,12 @@ static int isp_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, isp_private);
+
 	s_isp_private = isp_private;
-	ret = isp_lsc_buf_alloc(isp_private, ISP_LSC_BUF_SIZE);
-	if (ret) {
-		ret = -ENOMEM;
-		isp_block_buf_free(isp_private);
-		devm_kfree(&pdev->dev, isp_private);
-		platform_set_drvdata(pdev, NULL);
-		printk("isp_probe: no memory for isp lsc buf alloc, error.\n");
-		return ret;
-	}
-	
-	ret = isp_binging4awb_buf_alloc(isp_private, ISP_BING4AWB_SIZE);
-	if (ret) {
-		ret = -ENOMEM;
-		isp_lsc_buf_free(isp_private);
-		isp_block_buf_free(isp_private);
-		devm_kfree(&pdev->dev, isp_private);
-		platform_set_drvdata(pdev, NULL);
-		printk("isp_probe: no memory for isp lsc buf alloc, error.\n");
-		return ret;
-	}
 
 	ret = isp_yiq_antiflicker_buf_alloc(isp_private, ISP_YIQ_ANTIFLICKER_SIZE);
 	if (ret) {
 		ret = -ENOMEM;
-		isp_binging4awb_buf_free(isp_private);
-		isp_lsc_buf_free(isp_private);
 		isp_block_buf_free(isp_private);
 		devm_kfree(&pdev->dev, isp_private);
 		platform_set_drvdata(pdev, NULL);
@@ -1054,9 +964,7 @@ static int isp_probe(struct platform_device *pdev)
 	ret = misc_register(&isp_dev);
 	if (ret) {
 		ret = -EACCES;
-		isp_yiq_antiflicker_buf_free(isp_private);		
-		isp_binging4awb_buf_free(isp_private);
-		isp_lsc_buf_free(isp_private);
+		isp_yiq_antiflicker_buf_free(isp_private);
 		isp_block_buf_free(isp_private);
 		devm_kfree(&pdev->dev, isp_private);
 		platform_set_drvdata(pdev, NULL);
@@ -1077,8 +985,6 @@ static int isp_remove(struct platform_device *dev)
 
 	if (isp_private) {
 		isp_yiq_antiflicker_buf_free(isp_private);
-		isp_binging4awb_buf_free(isp_private);
-		isp_lsc_buf_free(isp_private);
 		isp_block_buf_free(isp_private);
 		devm_kfree(&dev->dev, isp_private);
 		platform_set_drvdata(dev, NULL);
@@ -1087,7 +993,9 @@ static int isp_remove(struct platform_device *dev)
 	}
 
 	misc_deregister(&isp_dev);
+
 	printk("isp_remove: success.\n");
+
 	return 0;
 }
 
@@ -1129,13 +1037,13 @@ static int isp_wr_addr(struct isp_reg_bits *ptr)
 {
 		int i;
 		int sum = 0;
+		struct isp_reg_bits *ptr_reg = ptr;
 
 		if(NULL == ptr){
 			printk("isp_wr_addr: ptr\n");
 			return -1;
 		}
 
-		struct isp_reg_bits *ptr_reg = ptr;
 
 		ptr_reg -> reg_addr = 0x0000; /* Interrupt part*/
 		sum++;
@@ -1263,7 +1171,7 @@ static int isp_wr_addr(struct isp_reg_bits *ptr)
 		ptr_reg++;  /* RGBG */
 		ptr_reg -> reg_addr = 0x1200;
 		sum++;
-	
+
 		for(i = 0; i < 3; i++)
 		{
 			ptr_reg++;
@@ -1608,7 +1516,7 @@ static int isp_wr_addr(struct isp_reg_bits *ptr)
 			ptr_reg -> reg_addr = 0x4300 + i * 0x4;
 			sum++;
 		}
-	
+
 		for(i = 0; i < 158; i++)
 		{
 			ptr_reg++;
@@ -1683,7 +1591,7 @@ static int isp_wr_addr(struct isp_reg_bits *ptr)
 		ptr_reg++; /* AUTOCONT: auto contrat adjustment */
 		ptr_reg -> reg_addr = 0x5700;
 		sum++;
-	
+
 		for(i = 0; i < 2; i++)
 		{
 			ptr_reg++;
@@ -1758,7 +1666,7 @@ static int isp_wr_addr(struct isp_reg_bits *ptr)
 		ptr_reg++; /* post-cdn */
 		ptr_reg -> reg_addr = 0x5E00;
 		sum++;
-	
+
 		for(i = 0; i < 29; i++)
 		{
 			ptr_reg++;

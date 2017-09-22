@@ -22,7 +22,7 @@
 #include <linux/cpufreq_limit.h>
 #endif
 #include <linux/io.h>
-
+#include <asm/sec/sec_log.h>
 #include "power.h"
 
 DEFINE_MUTEX(pm_mutex);
@@ -714,49 +714,32 @@ power_attr(pm_freeze_timeout);
 
 #endif	/* CONFIG_FREEZER*/
 
-#ifdef CONFIG_ARCH_SC
-extern void cp_abort(void *debug_info);
-static ssize_t restart_cpc_show(struct kobject *kobj, struct kobj_attribute *attr,
-                          char *buf)
+#ifdef CONFIG_SW_SELF_DISCHARGING
+static char selfdischg_usage_str[] =
+	"[START]\n"
+	"/sys/power/cpufreq_self_discharging 1\n"
+	"/sys/devices/system/cpu/cpuhotplug/cpu_hotplug_disable 1\n"
+	"[STOP]\n"
+	"/sys/power/cpufreq_self_discharging 0\n"
+	"/sys/devices/system/cpu/cpuhotplug/cpu_hotplug_disable 0\n"
+	"[END]\n";
+
+static ssize_t selfdischg_usage_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
 {
-                return -EINVAL;
+	pr_info("%s\n", __func__);
+	return sprintf(buf, "%s", selfdischg_usage_str);
 }
 
-extern int sec_log_buf_nocache_enable;
-#define CP_DBG_ADD 0x86bfff00	//physical address
-#define CP_DBG_LEN 256
-static ssize_t restart_cpc_store(struct kobject *kobj, struct kobj_attribute *attr,
-                          const char *buf, size_t n)
-{
-	int val;
-	char *cp_assert_info[1]={0};
-#ifdef CONFIG_SEC_LOG_BUF_NOCACHE
-		void __iomem *base_cp_dbg = 0;
-#else
-		unsigned long base_cp_dbg = 0;
-#endif
-
-	memcpy(cp_assert_info, buf, 1);
-	if (sscanf(cp_assert_info, "%d", &val) == 1 && val > 0){
-		if(sec_log_buf_nocache_enable == 1){
-			base_cp_dbg = ioremap_nocache(CP_DBG_ADD, CP_DBG_LEN);
-			memset(base_cp_dbg, 0, CP_DBG_LEN);
-			memcpy(base_cp_dbg, buf+2, CP_DBG_LEN);
-		} else if(sec_log_buf_nocache_enable == 0) {
-			base_cp_dbg = CP_DBG_ADD;
-			memset(base_cp_dbg, 0, CP_DBG_LEN);
-			memcpy(phys_to_virt(base_cp_dbg), buf+2, CP_DBG_LEN);
-		} else
-			printk("Fail to copy cp debug log!!!\n");
-
-		cp_abort(buf+2);
-	}
-
-	return n;
-}
-
-power_attr(restart_cpc);
-#endif
+static struct kobj_attribute selfdischg_usage_attr = {
+	.attr	= {
+		.name = __stringify(selfdischg_usage),
+		.mode = 0440,
+	},
+	.show	= selfdischg_usage_show,
+};
+#endif /* CONFIG_SW_SELF_DISCHARGING */
 
 #ifdef CONFIG_USER_WAKELOCK
 power_attr(wake_lock);
@@ -790,13 +773,13 @@ static struct attribute * g[] = {
 	&pm_freeze_timeout_attr.attr,
 #endif
 
-#ifdef CONFIG_ARCH_SC
-	&restart_cpc_attr.attr,
-#endif
 #ifdef CONFIG_CPU_FREQ_LIMIT_USERSPACE
 	&cpufreq_table_attr.attr,
 	&cpufreq_max_limit_attr.attr,
 	&cpufreq_min_limit_attr.attr,
+#endif
+#ifdef CONFIG_SW_SELF_DISCHARGING
+	&selfdischg_usage_attr.attr,
 #endif
 	NULL,
 };

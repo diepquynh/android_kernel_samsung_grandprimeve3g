@@ -30,17 +30,8 @@
 #include "ist30xxc_tracking.h"
 
 #if IST30XX_INTERNAL_BIN
-#ifdef CONFIG_MACH_SS_SHARKLT8
-#include "./firmware/ss_sharklt8_fw.h"
-#else
-#include "./firmware/coreprimeve3g_fw.h"
+#include "j3x3g_fw.h"
 #endif
-#if (IMAGIS_TSP_IC < IMAGIS_IST3038C)
-#if IST30XX_MULTIPLE_TSP
-//#include "./firmware/ist30xxc_fw_tsp_Ver0000_porting.h"
-#endif
-#endif
-#endif  // IST30XX_INTERNAL_BIN
 
 #define TAGS_PARSE_OK		(0)
 
@@ -980,7 +971,7 @@ bool ist30xx_check_valid_vendor(struct ist30xx_data *data, u32 tsp_vendor)
 			return true;
 	}
 
-	return false;
+    return false;
 }
 
 #if IST30XX_MULTIPLE_TSP
@@ -1018,24 +1009,22 @@ int ist30xx_check_auto_update(struct ist30xx_data *data)
 {
 	int ret = 0;
 	int retry = IST30XX_MAX_RETRY_CNT;
-	u32 tsp_type = TSP_TYPE_UNKNOWN;
+	u32 chip_id = 0;
 	bool tsp_check = false;
 	u32 chksum;
 	struct ist30xx_fw *fw = &data->fw;
 
 	while (retry--) {
-		ret = ist30xx_read_cmd(data, eHCOM_GET_TSP_VENDOR, &tsp_type);
+		ret = ist30xx_read_cmd(data, eHCOM_GET_CHIP_ID, &chip_id);
 		if (likely(ret == 0)) {
-			if (likely(ist30xx_check_valid_vendor(data, tsp_type) == true))
+			if (likely(chip_id == IST30XX_CHIP_ID))
 				tsp_check = true;
+
 			break;
 		}
 
 		ist30xx_reset(data, false);
 	}
-
-	if (data->pdata->chip_code < IMAGIS_IST3038C)
-		tsp_info("TSP vendor: %x\n", tsp_type);
 
 	if (unlikely(!tsp_check))
 		goto fw_check_end;
@@ -1088,15 +1077,15 @@ int ist30xx_auto_bin_update(struct ist30xx_data *data)
 	fw->buf = (u8 *)ist30xxc_fw;
 	fw->buf_size = sizeof(ist30xxc_fw);
 
-	if (data->pdata->chip_code < IMAGIS_IST3038C) {
 #if IST30XX_MULTIPLE_TSP
+	if (data->pdata->chip_code < IMAGIS_IST3038C)
 		ist30xx_set_tsp_fw(data);
 #endif
-	}
 
 	ret = ist30xx_get_update_info(data, fw->buf, fw->buf_size);
 	if (unlikely(ret))
 		return 1;
+	
 	fw->bin.main_ver = ist30xx_parse_ver(data, FLAG_MAIN, fw->buf);
 	fw->bin.fw_ver = ist30xx_parse_ver(data, FLAG_FW, fw->buf);
 	fw->bin.test_ver = ist30xx_parse_ver(data, FLAG_TEST, fw->buf);
@@ -1512,7 +1501,7 @@ int ist30xx_init_update_sysfs(struct ist30xx_data *data)
 	else
 		total_size = IST30XX_FLASH_64K_SIZE;
 
-	buf32_flash = kmalloc(total_size / IST30XX_DATA_LEN, GFP_KERNEL);
+	buf32_flash = kmalloc(total_size, GFP_KERNEL);
 
 	data->status.update = 0;
 	data->status.calib = 0;

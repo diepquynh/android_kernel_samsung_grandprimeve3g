@@ -57,7 +57,6 @@ struct sprd_runtime_data {
 	struct sprd_pcm_dma_params *params;
 	int uid_cid_map[2];
 	int int_pos_update[2];
-	sprd_dma_desc *dma_cfg_array;
 	dma_addr_t *dma_desc_array_orig;
 	dma_addr_t dma_desc_array_phys_orig;
 	dma_addr_t *dma_desc_array;
@@ -222,7 +221,6 @@ static int sprd_pcm_open(struct snd_pcm_substream *substream)
 
 	sp_asoc_pr_info("%s Open %s\n", sprd_dai_pcm_name(srtd->cpu_dai),
 			PCM_DIR_NAME(substream->stream));
-
 	if (sprd_is_i2s(srtd->cpu_dai)) {
 		snd_soc_set_runtime_hwparams(substream, &sprd_i2s_pcm_hardware);
 		config = srtd->cpu_dai->ac97_pdata;
@@ -238,7 +236,6 @@ static int sprd_pcm_open(struct snd_pcm_substream *substream)
 		burst_len = (VBC_FIFO_FRAME_NUM * 4);
 		hw_chan = 2;
 	}
-
 	/*
 	 * For mysterious reasons (and despite what the manual says)
 	 * playback samples are lost if the DMA count is not a multiple
@@ -280,10 +277,8 @@ static int sprd_pcm_open(struct snd_pcm_substream *substream)
 					   hw_chan * (PAGE_SIZE+32),
 					   &rtd->dma_desc_array_phys_orig,
 					   GFP_KERNEL);
-
 		rtd->dma_desc_array_phys = (rtd->dma_desc_array_phys_orig+31)&(~31);
 		rtd->dma_desc_array  =	(unsigned int)rtd->dma_desc_array_orig + (rtd->dma_desc_array_phys - rtd->dma_desc_array_phys_orig);
-
 		if (atomic_inc_return(&lightsleep_refcnt) == 1)
 			sprd_lightsleep_disable("audio", 1);
 #ifdef CONFIG_SND_SOC_SPRD_AUDIO_BUFFER_USE_IRAM
@@ -307,12 +302,6 @@ static int sprd_pcm_open(struct snd_pcm_substream *substream)
 	if (!rtd->dma_desc_array_orig)
 		goto err1;
 
-	rtd->dma_cfg_array =
-	    kzalloc(hw_chan * runtime->hw.periods_max * sizeof(sprd_dma_desc),
-		    GFP_KERNEL);
-	if (!rtd->dma_cfg_array)
-		goto err2;
-
 	rtd->uid_cid_map[0] = rtd->uid_cid_map[1] = -1;
 
 	rtd->burst_len = burst_len;
@@ -322,18 +311,6 @@ static int sprd_pcm_open(struct snd_pcm_substream *substream)
 	ret = 0;
 	goto out;
 
-err2:
-	pr_err("ERR:dma_cfg_array alloc failed!\n");
-
-#ifdef CONFIG_SND_SOC_SPRD_AUDIO_BUFFER_USE_IRAM
-	if (rtd->buffer_in_iram)
-		sprd_buffer_iram_restore();
-	else
-#endif
-		dma_free_coherent(substream->pcm->card->dev,
-				      hw_chan * (PAGE_SIZE+32),
-				      rtd->dma_desc_array_orig,
-				      rtd->dma_desc_array_phys_orig);
 err1:
 	pr_err("ERR:dma_desc_array alloc failed!\n");
 	kfree(rtd);
@@ -371,7 +348,6 @@ static int sprd_pcm_close(struct snd_pcm_substream *substream)
 	}
 #endif
 
-	kfree(rtd->dma_cfg_array);
 	kfree(rtd);
 
 	return 0;
@@ -492,8 +468,10 @@ static int sprd_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct sprd_runtime_data *rtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *srtd = substream->private_data;
 	struct sprd_pcm_dma_params *dma;
+	sprd_dma_desc *dma_cfg_array = NULL;
 	size_t totsize = params_buffer_bytes(params);
 	size_t period = params_period_bytes(params);
+	size_t periods = params_periods(params);
 	sprd_dma_desc *dma_desc[2];
 	dma_addr_t dma_buff_phys[2];	/*, next_desc_phys[2]; */
 	struct i2s_config *config = NULL;
@@ -561,8 +539,15 @@ static int sprd_pcm_hw_params(struct snd_pcm_substream *substream,
 
 	runtime->dma_bytes = totsize;
 
-	dma_desc[0] = rtd->dma_cfg_array;
-	dma_desc[1] = rtd->dma_cfg_array + runtime->hw.periods_max;
+        dma_cfg_array =
+                kzalloc(used_chan_count * periods * sizeof(sprd_dma_desc),
+                    GFP_KERNEL);
+         if(!dma_cfg_array) {
+            goto hw_param_err;
+         }
+
+	dma_desc[0] = dma_cfg_array;
+	dma_desc[1] = dma_cfg_array + periods;
 
 	dma_buff_phys[0] = runtime->dma_addr;
 	rtd->dma_addr_offset = (totsize / used_chan_count);
@@ -623,7 +608,7 @@ static int sprd_pcm_hw_params(struct snd_pcm_substream *substream,
 		       dma_reg_addr[0].phys_addr);
 
 	sci_dma_config((u32) (rtd->uid_cid_map[0]),
-		       (struct sci_dma_cfg *)(rtd->dma_cfg_array),
+		       (struct sci_dma_cfg *)(dma_cfg_array),
 		       params_periods(params), &dma_reg_addr[0]);
 	if (!(params->flags & SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP)) {
 		sp_asoc_pr_info("Register IRQ for DMA chan ID %d\n",
@@ -637,18 +622,18 @@ static int sprd_pcm_hw_params(struct snd_pcm_substream *substream,
 	if (used_chan_count > 1) {
 		dma_reg_addr[1].phys_addr =
 		    (u32) (dma_reg_addr[0].phys_addr) +
-		    runtime->hw.periods_max * DMA_LINKLIST_CFG_NODE_SIZE;
+		    periods * DMA_LINKLIST_CFG_NODE_SIZE;
 		dma_reg_addr[1].virt_addr =
 		    (dma_reg_addr[0].virt_addr) +
-		    runtime->hw.periods_max * DMA_LINKLIST_CFG_NODE_SIZE;
+		    periods * DMA_LINKLIST_CFG_NODE_SIZE;
 		sp_asoc_pr_dbg("dma_reg_addr[1].virt_addr:0x%x\n",
 			       dma_reg_addr[1].virt_addr);
 		sp_asoc_pr_dbg("dma_reg_addr[1].phys_addr:0x%x\n",
 			       dma_reg_addr[1].phys_addr);
 
 		sci_dma_config((u32) (rtd->uid_cid_map[1]),
-			       (struct sci_dma_cfg *)(rtd->dma_cfg_array +
-						      runtime->hw.periods_max),
+			       (struct sci_dma_cfg *)(dma_cfg_array +
+						      periods),
 			       params_periods(params), &dma_reg_addr[1]);
 		if (!(params->flags & SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP)) {
 			sp_asoc_pr_info("Register IRQ for DMA Chan ID %d\n",
@@ -676,6 +661,9 @@ hw_param_err:
 	sp_asoc_pr_dbg("hw_param_err\n");
 ok_go_out:
 	sp_asoc_pr_dbg("return %i\n", ret);
+	if(dma_cfg_array) {
+	    kfree(dma_cfg_array);
+	}
 	return ret;
 }
 

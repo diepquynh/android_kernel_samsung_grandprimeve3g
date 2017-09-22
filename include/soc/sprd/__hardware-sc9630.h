@@ -164,5 +164,4 @@ extern unsigned long sprd_adi_phys;
 #define REGS_PUB_APB_BASE	SPRD_PUB_BASE
 #define REGS_ARM7_AHB_RF_BASE	SPRD_ARM7AHBRF_BASE
 
-
 #endif

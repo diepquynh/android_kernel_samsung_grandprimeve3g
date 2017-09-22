@@ -62,7 +62,7 @@ MODULE_ALIAS("mmc:block");
 #define INAND_CMD38_ARG_SECERASE 0x80
 #define INAND_CMD38_ARG_SECTRIM1 0x81
 #define INAND_CMD38_ARG_SECTRIM2 0x88
-#define MMC_BLK_TIMEOUT_MS  (300)   /*(10 * 60 * 1000) to 300*//* 10 minute timeout */
+#define MMC_BLK_TIMEOUT_MS  (10 * 1000)	/* 10 seconds timeout */
 
 #define mmc_req_rel_wr(req)	((req->cmd_flags & REQ_FUA) && \
 				  (rq_data_dir(req) == WRITE))
@@ -818,6 +818,7 @@ static void mmc_error_count_log(struct mmc_card *card, int index, int error, u32
 static void mmc_card_error_logging(struct mmc_card *card, struct mmc_blk_request *brq, u32 status)
 {
 	int index = 0;
+	int error = 0;
 
 	if (brq->sbc.error)
 		mmc_error_count_log(card, index, brq->sbc.error, status);
@@ -832,6 +833,12 @@ static void mmc_card_error_logging(struct mmc_card *card, struct mmc_blk_request
 	if (brq->stop.error) {
 		index = 6;
 		mmc_error_count_log(card, index, brq->stop.error, status);
+	}
+	if (!(status & R1_READY_FOR_DATA) ||
+			 (R1_CURRENT_STATE(status) == R1_STATE_PRG)) {
+		index = 8;
+		error = -ETIMEDOUT;	// card stuck in prg state
+		mmc_error_count_log(card, index, error, status);
 	}
 
 	return;
@@ -864,7 +871,7 @@ static ssize_t error_count_show(struct device *dev,
 	total_len += snprintf(buf, PAGE_SIZE,
 			"type: err statuks: first_issue_time: last_issue_time: count\n");
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < 10; i++) {
 		total_len += snprintf(buf + (sizeof(char)*68*(i+1)), PAGE_SIZE,
 				"%4s:%4d 0x%08x %16llu, %16llu, %10d\n",
 				err_log[i].type, err_log[i].err_type,
@@ -925,8 +932,8 @@ static void mmc_card_debug_log_sysfs_init(struct mmc_card *card)
 	card->err_log[0].err_type = -EILSEQ;
 	card->err_log[1].err_type = -ETIMEDOUT;
 
-	snprintf(card->err_log[2].type, sizeof(char)*4, "I/O ");
-	snprintf(card->err_log[3].type, sizeof(char)*4, "I/O ");
+	snprintf(card->err_log[2].type, sizeof(char)*4, "cmd ");
+	snprintf(card->err_log[3].type, sizeof(char)*4, "cmd ");
 	card->err_log[2].err_type = -EILSEQ;
 	card->err_log[3].err_type = -ETIMEDOUT;
 
@@ -939,6 +946,11 @@ static void mmc_card_debug_log_sysfs_init(struct mmc_card *card)
 	snprintf(card->err_log[7].type, sizeof(char)*4, "stop");
 	card->err_log[6].err_type = -EILSEQ;
 	card->err_log[7].err_type = -ETIMEDOUT;
+
+	snprintf(card->err_log[8].type, sizeof(char)*4, "busy");
+	snprintf(card->err_log[9].type, sizeof(char)*4, "busy");
+	card->err_log[8].err_type = -EILSEQ;
+	card->err_log[9].err_type = -ETIMEDOUT;
 }
 #endif
 
@@ -1402,26 +1414,16 @@ static int mmc_blk_err_check(struct mmc_card *card,
 				gen_err = 1;
 			}
 
-			/*
-			 * CMD25 -> CMD13 (WP violation) -> next CMD (illegal CMD)
-			 * need to change card status (rcv->tran)
-			 */
-			if ((status & R1_WP_VIOLATION) && 
-					(R1_CURRENT_STATE(status) == R1_STATE_RCV)) {
-				err = send_stop(card, &status);
-
-				pr_err("%s: WP violation. send CMD12 to "
-						"change card status (rcv->tran)\n",
-						req->rq_disk->disk_name);
-
-				/*
-				 * If the stop cmd also timed out, the card is probably
-				 * not present, so abort.  Other errors are bad news too.
-				 */
-				if (err) {
-					pr_err("%s: error %d sending stop command\n",
-					       req->rq_disk->disk_name, err);
-					return MMC_BLK_ABORT;
+			if (status & CMD_ERRORS) {
+				pr_err("%s: command error reported, status = %#x\n",
+						req->rq_disk->disk_name, status);
+				if (!(status & R1_WP_VIOLATION))
+					brq->data.error = -EIO;
+				if ((R1_CURRENT_STATE(status) == R1_STATE_RCV) ||
+						(R1_CURRENT_STATE(status) == R1_STATE_DATA)) {
+					err = send_stop(card, &status);
+					if (err)
+						return MMC_BLK_ABORT;
 				}
 			}
 
@@ -1432,7 +1434,9 @@ static int mmc_blk_err_check(struct mmc_card *card,
 				pr_err("%s: Card stuck in programming state!"\
 					" %s %s\n", mmc_hostname(card->host),
 					req->rq_disk->disk_name, __func__);
-
+#ifdef MMC_CARD_ERROR_LOGGING
+				mmc_card_error_logging(card, brq, status);
+#endif
 				return MMC_BLK_CMD_ERR;
 			}
 			/*
@@ -2090,8 +2094,20 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 		case MMC_BLK_CMD_ERR:
 			printk("%s MMC_BLK_CMD_ERR\n",__func__);
 			ret = mmc_blk_cmd_err(md, card, brq, req, ret);
-			if (!mmc_blk_reset(md, card->host, type))
+			if (!mmc_blk_reset(md, card->host, type)) {
+				if (!ret) {
+                                        /*
+                                         * We have successfully completed block
+                                         * request and notified to upper layers.
+                                         * As the reset is successful, assume
+                                         * h/w is in clean state and proceed
+                                         * with new request.
+                                         */
+                                        BUG_ON(card->host->areq);
+                                        goto start_new_req;
+				}
 				break;
+			}
 			goto cmd_abort;
 		case MMC_BLK_ECC_ERR:
 			printk("%s MMC_BLK_ECC_ERR\n",__func__);
@@ -2659,6 +2675,102 @@ static const struct mmc_fixup blk_fixups[] =
 	END_FIXUP
 };
 
+#ifdef CONFIG_MMC_SUPPORT_BKOPS_MODE
+static ssize_t bkops_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct gendisk *disk;
+	struct mmc_blk_data *md;
+	struct mmc_card *card;
+
+	disk = dev_to_disk(dev);
+
+	if (disk)
+		md = disk->private_data;
+	else
+		goto show_out;
+
+	if (md)
+		card = md->queue.card;
+	else
+		goto show_out;
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", card->bkops_enable);
+
+show_out:
+	return snprintf(buf, PAGE_SIZE, "\n");
+}
+
+static ssize_t bkops_mode_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct gendisk *disk;
+	struct mmc_blk_data *md;
+	struct mmc_card *card;
+	u8 value;
+	int err = 0;
+
+	disk = dev_to_disk(dev);
+
+	if (disk)
+		md = disk->private_data;
+	else
+		goto store_out;
+
+	if (md)
+		card = md->queue.card;
+	else
+		goto store_out;
+
+	if (kstrtou8(buf, 0, &value))
+		goto store_out;
+
+	err = mmc_bkops_enable(card->host, value);
+	if (err)
+		return err;
+
+	return count;
+store_out:
+	return -EINVAL;
+}
+
+static inline void mmc_blk_bkops_sysfs_init(struct mmc_card *card)
+{
+	struct mmc_blk_data *md = mmc_get_drvdata(card);
+
+	card->bkops_attr.show = bkops_mode_show;
+	card->bkops_attr.store = bkops_mode_store;
+	sysfs_attr_init(&card->bkops_attr.attr);
+	card->bkops_attr.attr.name = "bkops_en";
+#if defined(CONFIG_MMC_BKOPS_NODE_UID) || defined(CONFIG_MMC_BKOPS_NODE_GID)
+	card->bkops_attr.attr.mode = S_IRUGO | S_IWUSR | S_IWGRP;
+#else
+	card->bkops_attr.attr.mode = S_IRUGO | S_IWUSR;
+#endif
+	if (device_create_file((disk_to_dev(md->disk)), &card->bkops_attr)) {
+		pr_err("%s: Failed to create bkops_en sysfs entry\n",
+				mmc_hostname(card->host));
+#if defined(CONFIG_MMC_BKOPS_NODE_UID) || defined(CONFIG_MMC_BKOPS_NODE_GID)
+	} else {
+		int rc;
+		struct device *dev;
+
+		dev = disk_to_dev(md->disk);
+		rc = sysfs_chown_file(&dev->kobj, &card->bkops_attr.attr,
+				CONFIG_MMC_BKOPS_NODE_UID,
+				CONFIG_MMC_BKOPS_NODE_GID);
+		if (rc)
+			pr_err("%s: Failed to change mode of sysfs entry\n",
+					mmc_hostname(card->host));
+#endif
+	}
+}
+#else
+static inline void mmc_blk_bkops_sysfs_init(struct mmc_card *card)
+{
+}
+#endif
+
 static int mmc_blk_probe(struct mmc_card *card)
 {
 	struct mmc_blk_data *md, *part_md;
@@ -2701,6 +2813,12 @@ static int mmc_blk_probe(struct mmc_card *card)
 	if (card)
 		mmc_card_debug_log_sysfs_init(card);
 #endif
+	/* init sysfs for bkops mode */
+	if (card && mmc_card_mmc(card)) {
+		mmc_blk_bkops_sysfs_init(card);
+		spin_lock_init(&card->bkops_lock);
+	}
+
 	return 0;
 
  out:

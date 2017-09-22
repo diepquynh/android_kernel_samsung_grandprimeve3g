@@ -183,18 +183,18 @@ extern   "C"
         GSP_KERNEL_CTL_CMD_ERR = 0x8F,//not an err
         GSP_KERNEL_ADDR_MAP_ERR = 0x90,//iommu map err
         GSP_KERNEL_CLOCK_ERR = 0x91,//gsp relative clock check failed
-        /*GSP kernel driver defined err code, end*/
-		
-		/*GSP HAL defined err code, start*/
+	GSP_KERNEL_BUFFER_FENCE_ERR = 0x92, //gsp input/output buffer fence error_code
+	/*GSP kernel driver defined err code, end*/
 
-		GSP_HAL_PARAM_ERR = 0xA0,// common hal interface parameter err
-		GSP_HAL_PARAM_CHECK_ERR = 0xA1,// GSP config parameter check err
-		GSP_HAL_VITUAL_ADDR_NOT_SUPPORT = 0xA2,// GSP can't process virtual address
-		GSP_HAL_ALLOC_ERR = 0xA3,
-		GSP_HAL_KERNEL_DRIVER_NOT_EXIST = 0xA4,// gsp driver nod not exist
-        /*GSP HAL defined err code, end*/
+	/*GSP HAL defined err code, start*/
+	GSP_HAL_PARAM_ERR = 0xA0,// common hal interface parameter err
+	GSP_HAL_PARAM_CHECK_ERR = 0xA1,// GSP config parameter check err
+	GSP_HAL_VITUAL_ADDR_NOT_SUPPORT = 0xA2,// GSP can't process virtual address
+	GSP_HAL_ALLOC_ERR = 0xA3,
+	GSP_HAL_KERNEL_DRIVER_NOT_EXIST = 0xA4,// gsp driver nod not exist
+	/*GSP HAL defined err code, end*/
 
-        GSP_ERR_MAX_NUM,
+	GSP_ERR_MAX_NUM,
     } GSP_ERR_CODE_E;
 
 
@@ -271,12 +271,15 @@ extern   "C"
     }
     GSP_DATA_ADDR_T;
 
-	typedef struct _GSP_MEM_INFO
-	{
-		uint8_t is_pa;
-		int32_t share_fd;
-		uint32_t uv_offset;
-		uint32_t v_offset;
+    typedef struct _GSP_MEM_INFO
+    {
+	uint8_t is_pa;
+	int32_t share_fd;
+	uint32_t uv_offset;
+	uint32_t v_offset;
+#ifdef CONFIG_VIDEO_GSPN_SPRD
+	struct dma_buf *dmabuf;
+#endif
 	}
 	GSP_MEM_INFO;
 
@@ -354,10 +357,13 @@ extern   "C"
 
     typedef struct _GSP_CONFIG_INFO_TAG_
     {
-        GSP_MISC_CONFIG_INFO_T          misc_info;
-        GSP_LAYER0_CONFIG_INFO_T        layer0_info;
-        GSP_LAYER1_CONFIG_INFO_T        layer1_info;
-        GSP_LAYER_DES_CONFIG_INFO_T layer_des_info;
+	GSP_MISC_CONFIG_INFO_T          misc_info;
+	GSP_LAYER0_CONFIG_INFO_T        layer0_info;
+	GSP_LAYER1_CONFIG_INFO_T        layer1_info;
+	GSP_LAYER_DES_CONFIG_INFO_T	layer_des_info;
+#ifdef CONFIG_VIDEO_GSPN_SPRD
+	uint8_t                         async; //0: sync; 1:async
+#endif
     }
     GSP_CONFIG_INFO_T;
 

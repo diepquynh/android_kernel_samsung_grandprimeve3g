@@ -899,76 +899,8 @@ config TOUCHSCREEN_TPS6507X
 	  To compile this driver as a module, choose M here: the
 	  module will be called tps6507x_ts.
 
-config TOUCHSCREEN_FOCALTECH
-        tristate "touchscreen_focaltech driver"
-        depends on I2C 
-        help
-          Say Y here if you have a FOCALTECH based touchscreen
-          controller.
-
-          If unsure, say N.
-
-          To compile this driver as a module, choose M here: the 
-          module will be called focaltech_ts.o
-
-config TOUCHSCREEN_FIRMWARE_UPGRADE
-        bool "TOUCHSCREEN FIRMWARE UPGRADE"
-        depends on TOUCHSCREEN_FOCALTECH
-        default n
-        help
-	  Say Y here to enable support for the TP firmware update.
-
-config TOUCHSCREEN_GOODIX
-        tristate "touchscreen_goodix driver"
-        depends on I2C
-        help
-          Say Y here if you have a GOODIX based touchscreen
-          controller.
-
-          If unsure, say N.
-
-          To compile this driver as a module, choose M here: the
-          module will be called gt9xx_ts.ko
-
-config TOUCHSCREEN_MMS136
-	tristate "MMS136 touchscreen driver"
-	depends on I2C
-	help
-	  Say Y here if you want to support MMS136 based touchscreen
-	  controller.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here:the module
-	  be called mms136_ts
-
-
-config TOUCHSCREEN_IST30XX
-        tristate "IST30XX I2C Touchscreen"
-        depends on I2C
-           help
-             Say Y here if you have the Imagis IST30XX I2C touchscreen
-             connected to your system.
-
-             If unsure, say N.
-
-             To compile this driver as a module, choose M here: the
-             module will be called ist30xx.
-
-config TOUCHSCREEN_IST30XXA
-        tristate "IST30XXA I2C Touchscreen"
-        depends on I2C
-           help
-             Say Y here if you have the Imagis IST30XXA I2C touchscreen
-             connected to your system.
-
-             If unsure, say N.
-
-             To compile this driver as a module, choose M here: the
-             module will be called ist30xxa.
-
-config TOUCHSCREEN_IST30XXB
-        tristate "IST30XXB I2C Touchscreen"
+config TOUCHSCREEN_IST30XXC
+        tristate "IST30XXC I2C Touchscreen"
         depends on I2C
            help
              Say Y here if you have the Imagis IST30XXB I2C touchscreen
@@ -979,63 +911,50 @@ config TOUCHSCREEN_IST30XXB
              To compile this driver as a module, choose M here: the
              module will be called ist30xx.
 
-config TOUCHSCREEN_IST30XXC
-	tristate "Imagis IST30XXC series touchscreen"
-	depends on I2C
-	help
-		Say Y here if you have a touchscreen using the IST30XXC series.
-
-		If unsure, say N.
-
-		To compile this driver as a module, choose M here: the
-		module will be called ist30xxc.
-
-config TOUCHSCREEN_MMS134
-	tristate "MMS134s touchscreen driver"
-	depends on I2C
-	help
-	  Say Y here if you want to support MMS134s based touchscreen
-	  controller.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here:the module
-	  be called mms100s_ts
-
-config TOUCHSCREEN_MMS134S
-    tristate "MMS134s touchscreen driver"
-    depends on I2C
-    help
-      Say Y here if you want to support MMS134s based touchscreen
-      controller.
-
-      If unsure, say N.
-
-      To compile this driver as a module, choose M here:the module
-      be called mms134s
-										  
-config TOUCHSCREEN_MSG2138
-        tristate "MSG2138 touchscreen driver"
+config TOUCHSCREEN_BT432_TS
+        tristate "ZINITIX BT432 I2C Touchscreen"
         depends on I2C
            help
-             Say Y here if you have a MSG2138 based touchscreen
-             controller.
-
-             If unsure, say N.
-
-             To compile this driver as a module, choose M here: the
-             module will be called msg2138.c.             
-
-config TOUCHSCREEN_BT541_TS
-	tristate "ZINITIX BT541 I2C Touchscreen"
-	depends on I2C
-           help
-             Say Y here if you have the Imagis ZINITIX BT541 I2C touchscreen
+             Say Y here if you have the Imagis ZINITIX BT432 I2C touchscreen
              connected to your system.
 
              If unsure, say N.
 
              To compile this driver as a module, choose M here: the
              module will be called Zinitix.
-             
+
+config TOUCHSCREEN_FT6x06
+        tristate "FORCALTECH FT6x06 I2C Touchscreen"
+        depends on I2C
+           help
+             Say Y here if you have the FORCALTECH I2C touchscreen
+             connected to your system.
+
+             If unsure, say N.
+
+             To compile this driver as a module, choose M here: the
+             module will be called FORCALTECH.
+
+config TOUCHSCREEN_MELFAS_MMS438
+    tristate "MELFAS MMS438 Touchscreen"
+    depends on I2C
+    help
+      Say Y here if you have a MELFAS MMS438 touchscreen device in your system.
+
+      If unsure, say N.
+
+      To compile this driver as a module, choose M here: the module will be called mms_ts.
+
+config TOUCHSCREEN_MELFAS_MCS8040L
+        tristate "MELFAS MCS8040L I2C Touchscreen"
+        depends on I2C
+           help
+             Say Y here if you have the MELFAS I2C touchscreen
+             connected to your system.
+
+             If unsure, say N.
+
+             To compile this driver as a module, choose M here: the
+             module will be called MELFAS.
+
 endif

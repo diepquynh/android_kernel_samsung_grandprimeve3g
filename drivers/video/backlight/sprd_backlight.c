@@ -13,6 +13,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/backlight.h>
 #include <linux/fb.h>
@@ -42,6 +43,12 @@
 #define PRINT_INFO(x...)  printk(KERN_INFO "[SPRD_BACKLIGHT_INFO] " x)
 #define PRINT_WARN(x...)  printk(KERN_INFO "[SPRD_BACKLIGHT_WARN] " x)
 #define PRINT_ERR(format,x...)  printk(KERN_ERR "[SPRD_BACKLIGHT_ERR] func: %s  line: %04d  info: " format, __func__, __LINE__, ## x)
+#endif
+
+//#define CONFIG_THERMAL_BL
+#ifdef CONFIG_THERMAL_BL
+#include <linux/thermal.h>
+#include <linux/sprd_cpu_cooling.h>
 #endif
 
 #define DIMMING_PWD_BASE       (SPRD_MISC_BASE + 0x8020)
@@ -106,6 +113,7 @@ enum bl_pwm_mode {
 struct sprd_bl_devdata {
 	enum bl_pwm_mode	pwm_mode;
 	unsigned long		pwm_index;
+    struct mutex mutex;
 	struct backlight_device *bldev;
 	int             suspend;
 	struct clk      *clk;
@@ -113,6 +121,20 @@ struct sprd_bl_devdata {
 	int ctl_pin;
 	int ctl_pin_level;
 };
+
+#ifdef CONFIG_THERMAL_BL
+u32 cooling_max_brightness = 170;
+
+struct bl_thermal_cooling_info_t {
+	struct thermal_cooling_device *cdev;
+	unsigned long cooling_state;
+	int max_state;
+} bl_thermal_cooling_info = {
+	.cdev = NULL,
+	.cooling_state = 0,
+	.max_state = 4,
+};
+#endif
 
 static struct sprd_bl_devdata sprdbl = {
 	.ctl_pin = -1,
@@ -160,6 +182,8 @@ static int sprd_bl_pwm_update_status(struct backlight_device *bldev)
 {
 	u32 led_level;
 
+    mutex_lock(&sprdbl.mutex);
+
 	if ((bldev->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK)) ||
 			bldev->props.power != FB_BLANK_UNBLANK ||
 			sprdbl.suspend ||
@@ -174,6 +198,9 @@ static int sprd_bl_pwm_update_status(struct backlight_device *bldev)
 		led_level = led_level * 67 / 100;
 		if(led_level < 8)
 			led_level = 8;
+	#ifdef CONFIG_THERMAL_BL
+		if(led_level > cooling_max_brightness) led_level = cooling_max_brightness;
+	#endif
 		PRINT_INFO("[pwm] brightness = %d, led_level = %d\n", bldev->props.brightness, led_level);
 		bl_pwm_clk_en(1);
 		pwm_write(sprdbl.pwm_index, PWM2_SCALE, PWM_PRESCALE);
@@ -187,9 +214,56 @@ static int sprd_bl_pwm_update_status(struct backlight_device *bldev)
 	if(1 == pwm_whiteled_both)
 		sprd_bl_whiteled_update_status(bldev);
 #endif
+        mutex_unlock(&sprdbl.mutex);
 
 	return 0;
 }
+
+#ifdef CONFIG_THERMAL_BL
+static int get_bl_max_state(struct thermal_cooling_device *cdev,
+			 unsigned long *state)
+{
+		int ret = 0;
+
+		*state = bl_thermal_cooling_info.max_state;
+
+		return ret;
+}
+
+static int get_bl_cur_state(struct thermal_cooling_device *cdev,
+			 unsigned long *state)
+{
+		int ret = 0;
+
+		*state = bl_thermal_cooling_info.cooling_state;
+
+		return ret;
+}
+
+static int set_bl_cur_state(struct thermal_cooling_device *cdev,
+			 unsigned long state)
+{
+		struct bl_thermal_cooling_info_t *c_info = &bl_thermal_cooling_info;
+
+		if (c_info->cooling_state == state){
+			return 0;
+		}else{
+			c_info->cooling_state = state;
+		}
+		if(c_info->cooling_state)
+			cooling_max_brightness = 85;
+		else
+			cooling_max_brightness = 170;
+			sprd_bl_pwm_update_status(sprdbl.bldev);
+			PRINT_INFO("thermal_brightness = %d,cur_state = %d\n", cooling_max_brightness,state);
+}
+
+static struct thermal_cooling_device_ops sprd_backlight_cooling_ops = {
+		.get_max_state = get_bl_max_state,
+		.get_cur_state = get_bl_cur_state,
+		.set_cur_state = set_bl_cur_state,
+};
+#endif
 
 static int sprd_bl_pwm_get_brightness(struct backlight_device *bldev)
 {
@@ -384,6 +458,9 @@ static int sprd_backlight_probe(struct platform_device *pdev)
 	struct backlight_properties props;
 	struct backlight_device *bldev;
 	int use_pwm = 0;
+#ifdef CONFIG_THERMAL_BL
+	struct bl_thermal_cooling_info_t *c_info = &bl_thermal_cooling_info;
+#endif
 
 #ifdef SPRD_BACKLIGHT_PWM
 	struct clk* ext_26m = NULL;
@@ -517,6 +594,8 @@ pwm_7715ea:
 	props.brightness = PWM_MOD_MAX >> 1;
 	props.power = FB_BLANK_UNBLANK;
 
+    mutex_init(&sprdbl.mutex);
+
 	if(1 == use_pwm) {
 		bldev = backlight_device_register(
 				pdev->name, &pdev->dev,
@@ -525,6 +604,15 @@ pwm_7715ea:
 			printk(KERN_ERR "Failed to register backlight device\n");
 			return -ENOMEM;
 		}
+#ifdef CONFIG_THERMAL_BL
+		c_info->cdev = thermal_cooling_device_register("thermal-bl", 0,
+							&sprd_backlight_cooling_ops);
+		if (IS_ERR(c_info->cdev)){
+			printk(KERN_ERR "Failed to register thermal_backlight device\n");
+			return -ENOMEM;
+		}
+			PRINT_INFO("thermal_cooling_device_register successful!\n");
+#endif
 		#if(defined(CONFIG_MACH_SP7715EA)||defined(CONFIG_MACH_SP7715EATRISIM))
 			if(0x00000000 == adie_chip_ver) {
 				pwm_whiteled_both = 1;

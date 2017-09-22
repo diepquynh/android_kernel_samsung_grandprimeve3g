@@ -93,9 +93,7 @@
 #include <soc/sprd/sprd_debug.h>
 #endif
 
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
@@ -3073,9 +3071,7 @@ need_resched:
 	sprd_debug_task_log(cpu, rq->curr);
 #endif
 
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	sec_debug_task_log(cpu,rq->curr);
-#endif
 
 	post_schedule(rq);
 

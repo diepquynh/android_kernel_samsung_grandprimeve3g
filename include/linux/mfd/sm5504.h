@@ -31,6 +31,7 @@ enum {
     MUIC_SM5504_CABLE_TYPE_0x15,            //adc 0x15
     MUIC_SM5504_CABLE_TYPE_TYPE1_CHARGER,   //adc 0x17 (id : 200k)
     MUIC_SM5504_CABLE_TYPE_0x1A,            //adc 0x1A
+	MUIC_SM5504_CABLE_TYPE_0x1A_WITH_VBUS,  //adc 0x1A VBUS
     /* JIG Group */
     MUIC_SM5504_CABLE_TYPE_JIG_USB_OFF,     //adc 0x18
     MUIC_SM5504_CABLE_TYPE_JIG_USB_ON,      //adc 0x19
@@ -46,6 +47,7 @@ enum {
     MUIC_SM5504_CABLE_TYPE_INVALID, // Un-initialized
 
     MUIC_SM5504_CABLE_TYPE_OTG_WITH_VBUS,
+    MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 };
 
 typedef enum {
@@ -54,6 +56,16 @@ typedef enum {
     JIG_UART_BOOT_OFF,
     JIG_UART_BOOT_ON,
 } jig_type_t;
+
+/* MUIC Dock Observer Callback parameter */
+enum {
+        MUIC_DOCK_DETACHED      = 0,
+        MUIC_DOCK_DESKDOCK      = 1,
+        MUIC_DOCK_CARDOCK       = 2,
+        MUIC_DOCK_AUDIODOCK     = 7,
+        MUIC_DOCK_SMARTDOCK     = 8,
+        MUIC_DOCK_HMT           = 11,
+};
 
 struct sm5504_platform_data {
     int irq_gpio;
@@ -70,6 +82,7 @@ struct sm5504_platform_data {
 };
 
 bool sm5504_get_otg_status(void);
+void muic_dock_cb(int type);
 
 #endif // LINUX_MFD_SM5504_H
 

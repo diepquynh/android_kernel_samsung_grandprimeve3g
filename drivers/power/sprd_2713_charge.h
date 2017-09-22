@@ -18,6 +18,7 @@
 #define SPRDBAT_TWO_CHARGE_CHANNEL
 #endif
 
+#define CHG_CUR_ADJUST
 #define SPRDBAT_CCCV_MIN    0x00
 #define SPRDBAT_CCCV_MAX   0x3F
 #define ONE_CCCV_STEP_VOL   75	//7.5mV
@@ -27,7 +28,7 @@
 
 /*charge current type*/
 #define SPRDBAT_CHG_CUR_LEVEL_MIN       300
-#define SPRDBAT_CHG_CUR_LEVEL_MAX	2300
+#define SPRDBAT_CHG_CUR_LEVEL_MAX	1300
 
 #define SPRDBAT_ADC_CHANNEL_VCHG ADC_CHANNEL_VCHGSEN
 
@@ -51,6 +52,7 @@ void sprdchg_set_cccvpoint(unsigned int cvpoint);
 uint32_t sprdchg_get_cccvpoint(void);
 uint32_t sprdchg_tune_endvol_cccv(uint32_t chg_end_vol, uint32_t cal_cccv);
 void sprdchg_set_chg_cur(uint32_t chg_current);
+uint32_t sprdchg_get_chg_cur(void);
 int sprdchg_charger_is_adapter(void);
 void sprdchg_set_chg_ovp(uint32_t ovp_vol);
 uint32_t sprdchg_read_chg_current(void);

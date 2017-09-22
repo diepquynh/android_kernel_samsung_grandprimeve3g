@@ -84,6 +84,7 @@ void sprd_debug_check_crash_key(unsigned int code, int value)
 	static bool volup_p;
 	static bool voldown_p;
 	static int loopcount;
+	static int vol_pressed;
 
 	if (!sprd_debug_level.en.kernel_fault)
 		return;
@@ -103,6 +104,8 @@ void sprd_debug_check_crash_key(unsigned int code, int value)
 			volup_p = true;
 		if (code == KEY_VOLUMEDOWN)
 			voldown_p = true;
+		if ((!vol_pressed) && volup_p && voldown_p)
+			vol_pressed = jiffies_to_msecs(jiffies);
 		if (volup_p && voldown_p) {
 			static unsigned long stack_dump_jiffies = 0;
 
@@ -118,8 +121,17 @@ void sprd_debug_check_crash_key(unsigned int code, int value)
 			}
 			if (code == KEY_POWER) {
 				pr_info("%s: Crash key count : %d\n", __func__, ++loopcount);
-				if (loopcount == 2)
-					panic("Crash Key");
+				//if (loopcount == 2)
+					//panic("Crash Key");
+				if ((jiffies_to_msecs(jiffies) - vol_pressed) <= 5000) {
+					if (loopcount == 2)
+						panic("Crash Key");
+				} else {
+					volup_p = false;
+					voldown_p = false;
+					loopcount = 0;
+					vol_pressed = 0;
+				}
 			}
 		}
 	} else {

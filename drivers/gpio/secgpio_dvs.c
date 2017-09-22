@@ -171,7 +171,56 @@ static ssize_t checked_secgpio_file_read(
 
 	switch(i)
         {
-#if defined (CONFIG_ARCH_SCX30G)
+#if defined (CONFIG_ARCH_SCX20)
+			case 18  :
+				i=i+9;
+				break;
+			case 33  :
+				i=i+1;
+				break;
+			case 36 :
+				i=i+8;
+				break;
+			case 60 :
+				i=i+11;
+				break;
+			case 84 :
+				i=i+4;
+				break;
+			case 95 :
+				i=i+1;
+				break;
+			case 101 :
+				i=i+2;
+				break;
+			case 104 :
+				i=i+1;
+				break;
+			case 106 :
+				i=i+26;
+				break;
+			case 136 :
+				i=i+2;
+				break;
+			case 140 :
+				i=i+6;
+				break;
+			case 170 :
+				i=i+3;
+				break;
+			case 174 :
+				i=i+12;
+				break;
+			case 194 :
+				i=i+5;
+				break;
+			case 202 :
+				i=i+5;
+				break;
+			case 215 :
+				i=i+10;
+				break;
+#elif defined (CONFIG_ARCH_SCX30G)
 			case 22  :
 				i=i+5;
 				break;
@@ -239,7 +288,56 @@ static ssize_t checked_sleep_secgpio_file_read(
 	
 		  switch(i)
         {
-#if defined (CONFIG_ARCH_SCX30G)
+#if defined (CONFIG_ARCH_SCX20)
+			  case 18  :
+				  i=i+9;
+				  break;
+			  case 33  :
+				  i=i+1;
+				  break;
+			  case 36 :
+				  i=i+8;
+				  break;
+			  case 60 :
+				  i=i+11;
+				  break;
+			  case 84 :
+				  i=i+4;
+				  break;
+			  case 95 :
+				  i=i+1;
+				  break;
+			  case 101 :
+				  i=i+2;
+				  break;
+			  case 104 :
+				  i=i+1;
+				  break;
+			  case 106 :
+				  i=i+26;
+				  break;
+			  case 136 :
+				  i=i+2;
+				  break;
+			  case 140 :
+				  i=i+6;
+				  break;
+			  case 170 :
+				  i=i+3;
+				  break;
+			  case 174 :
+				  i=i+12;
+				  break;
+			  case 194 :
+				  i=i+5;
+				  break;
+			  case 202 :
+				  i=i+5;
+				  break;
+			  case 215 :
+				  i=i+10;
+				  break;
+#elif defined (CONFIG_ARCH_SCX30G)
 			  case 22  :
 				  i=i+5;
 				  break;

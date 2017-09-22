@@ -24,6 +24,18 @@
 #define SPRD_FLASH_ON		1
 #define SPRD_FLASH_OFF		0
 
+#if defined(CONFIG_MACH_SP9830IEC_4M_H100) || defined(CONFIG_MACH_SP9830AEC_4M_H100) || defined (CONFIG_MACH_SP9830IEE_4M_H100)
+#undef GPIO_CAM_FLASH_EN
+#undef GPIO_CAM_FLASH_MODE
+
+#define GPIO_CAM_FLASH_EN 92
+#define GPIO_CAM_FLASH_MODE 123
+#elif defined(CONFIG_MACH_SP9830AEA_PAD_H100)
+#define GPIO_CAM_FLASH_EN	73
+#define GPIO_CAM_FLASH_MODE 72
+#endif
+
+
 int sprd_flash_on(void)
 {
 	printk("sprd_flash_on \n");
@@ -60,5 +72,10 @@ int sprd_flash_close(void)
 	gpio_request(GPIO_CAM_FLASH_MODE,"cam_flash_mode");
 	gpio_direction_output(GPIO_CAM_FLASH_MODE, SPRD_FLASH_OFF);
 	gpio_free(GPIO_CAM_FLASH_MODE);
+	return 0;
+}
+
+int sprd_flash_cfg(struct sprd_flash_cfg_param *param, void *arg)
+{
 	return 0;
 }

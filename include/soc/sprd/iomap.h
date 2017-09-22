@@ -53,6 +53,13 @@ struct iotable_sprd {
 #define SPRD_CODECAHB_SIZE      io_addr_sprd.CODECAHB.length
 #endif
 
+#if defined(CONFIG_ARCH_SCX30G3)
+	struct iomap_sprd CRYPTO;
+#define SPRD_CRYPTO_PHYS	io_addr_sprd.CRYPTO.paddr
+#define SPRD_CRYPTO_BASE	io_addr_sprd.CRYPTO.vaddr
+#define SPRD_CRYPTO_SIZE	io_addr_sprd.CRYPTO.length
+#endif
+
 	struct iomap_sprd APBREG;
 #define SPRD_APBREG_PHYS	io_addr_sprd.APBREG.paddr
 #define SPRD_APBREG_BASE	io_addr_sprd.APBREG.vaddr
@@ -236,6 +243,11 @@ struct iotable_sprd {
 #define SPRD_AONCKG_BASE	io_addr_sprd.AONCKG.vaddr
 #define SPRD_AONCKG_SIZE	io_addr_sprd.AONCKG.length
 
+	struct iomap_sprd CORESIGHT;
+#define SPRD_CORESIGHT_PHYS	io_addr_sprd.CORESIGHT.paddr
+#define SPRD_CORESIGHT_BASE	io_addr_sprd.CORESIGHT.vaddr
+#define SPRD_CORESIGHT_SIZE	io_addr_sprd.CORESIGHT.length
+
 	struct iomap_sprd CORE;
 #define SPRD_CORE_PHYS		io_addr_sprd.CORE.paddr
 #define SPRD_CORE_BASE		io_addr_sprd.CORE.vaddr
@@ -339,4 +351,8 @@ struct iotable_sprd {
 #if defined(CONFIG_ARCH_SCX30G2) || defined(CONFIG_MACH_SP9830I) || defined(CONFIG_ARCH_SCX35LT8) 
 #define REGS_CODEC_AHB_BASE	SPRD_CODECAHB_BASE
 #endif
+#if defined(CONFIG_ARCH_SCX30G3)
+#define REGS_CRYPTO_APB_RF_BASE	SPRD_CRYPTO_BASE
+#endif
+
 #endif /* __SCI_IOMAP_H__ */

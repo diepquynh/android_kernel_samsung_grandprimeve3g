@@ -88,7 +88,7 @@
 #define ISP_DISPATCH_CH1_BAYER             (ISP_BASE_ADDR+0x0324UL)
 #define ISP_DISPATCH_HW_CTRL_CH0           (ISP_BASE_ADDR+0x0328UL)
 #define ISP_DISPATCH_HW_CTRL_CH1           (ISP_BASE_ADDR+0x032CUL)
- 
+
 /*isp sub block: arbiter*/
 #define ISP_ARBITER_WR_STATUS              (ISP_BASE_ADDR+0x0400UL)
 #define ISP_ARBITER_RD_STATUS              (ISP_BASE_ADDR+0x0404UL)
@@ -314,6 +314,8 @@
 #define ISP_NLM_DIRECTION_0                (ISP_BASE_ADDR+0x2138UL)
 #define ISP_NLM_DIRECTION_1                (ISP_BASE_ADDR+0x213CUL)
 #define ISP_NLM_LUT_W_0                    (ISP_BASE_ADDR+0x2140UL)
+#define ISP_NLM_ADD_BACK_NEW0              (ISP_BASE_ADDR+0x21A0UL)
+#define ISP_NLM_ADD_BACK_NEW1              (ISP_BASE_ADDR+0x21A4UL)
 
 /*isp sub block: CFA: clolor filter array*/
 #define ISP_CFAE_STATUS                    (ISP_BASE_ADDR+0x3000UL)
@@ -418,6 +420,22 @@
 #define ISP_RGB_AFM_TYPE2_VAL00            (ISP_BASE_ADDR+0x3D50UL)
 #define ISP_RGB_AFM_SPSMD_THRESHOLD_MIN    (ISP_BASE_ADDR+0x3DB4UL)
 
+/*isp ver:r6p9 only, such as tsahrk3*/
+#define ISP_RGB_AFM_SOBEL5_THR_RED         (ISP_BASE_ADDR+0x3C1CUL)
+#define ISP_RGB_AFM_SOBEL9_THR_RED         (ISP_BASE_ADDR+0x3C20UL)
+#define ISP_RGB_AFM_SPSMD_THR_RED          (ISP_BASE_ADDR+0x3C24UL)
+#define ISP_RGB_AFM_WINDOW_RANGE           (ISP_BASE_ADDR+0x3C28UL)
+#define ISP_RGB_AFM_ROI_SOBEL5X5           (ISP_BASE_ADDR+0x3C78UL)
+#define ISP_RGB_AFM_ROI_SOBEL9X9           (ISP_BASE_ADDR+0x3CF0UL)
+#define ISP_RGB_AFM_ROI_SPSMD              (ISP_BASE_ADDR+0x3D68UL)
+#define ISP_RGB_AFM_SOBEL5_THR_GREEN       (ISP_BASE_ADDR+0x3DE0UL)
+#define ISP_RGB_AFM_SOBEL9_THR_GREEN       (ISP_BASE_ADDR+0x3DE4UL)
+#define ISP_RGB_AFM_SPSMD_THR_GREEN        (ISP_BASE_ADDR+0x3DE8UL)
+#define ISP_RGB_AFM_SOBEL5_THR_BLUE        (ISP_BASE_ADDR+0x3DECUL)
+#define ISP_RGB_AFM_SOBEL9_THR_BLUE        (ISP_BASE_ADDR+0x3DF0UL)
+#define ISP_RGB_AFM_SPSMD_THR_BLUE         (ISP_BASE_ADDR+0x3DF4UL)
+#define ISP_RGB_AFM_HIGHT_BIT_ROI          (ISP_BASE_ADDR+0x3DF8UL)
+
 /*isp sub block:YIQ AEM*/
 #define ISP_YIQ_AEM_STATUS                 (ISP_BASE_ADDR + 0x4100UL)
 #define ISP_YIQ_AEM_PARAM                  (ISP_BASE_ADDR + 0x4114UL)
@@ -452,6 +470,16 @@
 #define ISP_YIQ_AFM_COEF10                 (ISP_BASE_ADDR + 0x43F4UL)
 #define ISP_YIQ_AFM_LAPLACE0               (ISP_BASE_ADDR + 0x43F8UL)
 #define ISP_YIQ_AFM_SLICE_SIZE             (ISP_BASE_ADDR + 0x4588UL)
+
+/*isp sub block:ANTI FLICKER NEW*/
+#define ISP_ANTI_FLICKER_NEW_STATUS0       (ISP_BASE_ADDR + 0x4600UL)
+#define ISP_ANTI_FLICKER_NEW_STATUS1       (ISP_BASE_ADDR + 0x4604UL)
+#define ISP_ANTI_FLICKER_NEW_STATUS2       (ISP_BASE_ADDR + 0x4608UL)
+#define ISP_ANTI_FLICKER_NEW_PARAM0        (ISP_BASE_ADDR + 0x4614UL)
+#define ISP_ANTI_FLICKER_NEW_PARAM1        (ISP_BASE_ADDR + 0x4618UL)
+#define ISP_ANTI_FLICKER_NEW_PARAM2        (ISP_BASE_ADDR + 0x461CUL)
+#define ISP_ANTI_FLICKER_NEW_COL_POS       (ISP_BASE_ADDR + 0x4620UL)
+#define ISP_ANTI_FLICKER_NEW_DDR_INIT_ADDR (ISP_BASE_ADDR + 0x4624UL)
 
 /*isp sub block: Pre-CDN*/
 #define ISP_PRECDN_STATUS0                 (ISP_BASE_ADDR+0x5000UL)
@@ -638,6 +666,10 @@
 #define ISP_RAW_AEM_OUTPUT                 (ISP_BASE_ADDR+0x12000)
 /*#define ISP_RAW_AEM_ITEM                   1024*/
 
+/*isp v memory3: yiq_aem*/
+#define ISP_YIQ_AEM_OUTPUT                 (ISP_BASE_ADDR+0x14000)
+/*#define ISP_YIQ_AEM_ITEM                   1024*/
+
 /*isp v memory11: 3D_LUT0*/
 #define ISP_3D_LUT0_OUTPUT                 (ISP_BASE_ADDR+0x17000)
 /*#define ISP_3D_LUT0_ITEM                    729*/
@@ -662,11 +694,11 @@
 
 #define ISP_IRQ_HW_MASK                    (0xFFFFFFFF)
 #define ISP_IRQ_NUM                        (32)
-#define ISP_LSC_BUF_SIZE                   (32 * 1024)
 #define ISP_REG_BUF_SIZE                   (4 * 1024)
 #define ISP_RAW_AE_BUF_SIZE                (1024 * 4 * 3)
-#define ISP_FRGB_GAMMA_BUF_SIZE                (129 * 4 * 2)
-#define ISP_YUV_YGAMMA_BUF_SIZE            (129 * 4 * 2)
+#define ISP_FRGB_GAMMA_BUF_SIZE            (257 * 4 + 4)
+#define ISP_YUV_YGAMMA_BUF_SIZE            (129 * 4)
 #define ISP_RAW_AWB_BUF_SIZE                (256 * 4 * 9)
 #define ISP_BING4AWB_SIZE                  (640 * 480 * 2)
 #define ISP_YIQ_ANTIFLICKER_SIZE           (3120 * 4 * 61)
+#define ISP_YIQ_AEM_BUF_SIZE               (1024 * 4)

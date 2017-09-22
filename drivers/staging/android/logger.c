@@ -29,16 +29,13 @@
 #include <linux/time.h>
 #include <linux/vmalloc.h>
 #include <linux/aio.h>
+#include <asm/setup.h>
 #include "logger.h"
 
 #include <asm/ioctls.h>
 
-#if defined(CONFIG_SEC_DEBUG)
-#include <soc/sprd/sec_debug.h>
-#endif
-#if defined(CONFIG_SEC_BSP)
-#include <soc/sprd/sec_bsp.h>
-#endif
+#include <asm/sec/sec_debug.h>
+#include <asm/sec/sec_bsp.h>
 
 /**
  * struct logger_log - represents a specific log, such as 'main' or 'radio'
@@ -435,6 +432,75 @@ static void do_write_log(struct logger_log *log, const void *buf, size_t count)
 
 }
 
+#ifdef CONFIG_SEC_DEBUG
+unsigned char *get_main_log_buf_addr(void)
+{
+	struct logger_log *log;
+
+	list_for_each_entry(log, &log_list, logs)
+	if (!strcmp(log->misc.name, LOGGER_LOG_MAIN))
+		return log->buffer;
+	return NULL;
+}
+
+unsigned char *get_radio_log_buf_addr(void)
+{
+	struct logger_log *log;
+
+	list_for_each_entry(log, &log_list, logs)
+	if (!strcmp(log->misc.name, LOGGER_LOG_RADIO))
+		return log->buffer;
+	return NULL;
+}
+
+unsigned char *get_events_log_buf_addr(void)
+{
+	struct logger_log *log;
+
+	list_for_each_entry(log, &log_list, logs)
+	if (!strcmp(log->misc.name, LOGGER_LOG_EVENTS))
+		return log->buffer;
+	return NULL;
+}
+
+unsigned char *get_system_log_buf_addr(void)
+{
+	struct logger_log *log;
+
+	list_for_each_entry(log, &log_list, logs)
+	if (!strcmp(log->misc.name, LOGGER_LOG_SYSTEM))
+		return log->buffer;
+	return NULL;
+}
+
+static void sec_logger_print_buffer(struct logger_log *log, size_t count)
+{
+	/* print as kernel log if the log string starts with "!@" */
+	if (count >= 2) {
+		if (log->buffer[log->w_off] == '!'
+		    && log->buffer[logger_offset(log, log->w_off + 1)] == '@') {
+			int i;
+			char tmp[256];
+
+			for (i = 0; i < min(count, sizeof(tmp) - 1); i++)
+				tmp[i] =
+				    log->buffer[logger_offset \
+						(log, log->w_off + i)];
+			tmp[i] = '\0';
+			printk(KERN_INFO "%s\n", tmp);
+
+			sec_boot_stat_add(tmp);
+		}
+	}
+}
+#else /* CONFIG_SEC_DEBUG */
+static inline unsigned char *get_main_log_buf_addr(void) { return NULL; }
+static inline unsigned char *get_radio_log_buf_addr(void) { return NULL; }
+static inline unsigned char *get_events_log_buf_addr(void) { return NULL; }
+static inline unsigned char *get_system_log_buf_addr(void) { return NULL; }
+static inline void sec_logger_print_buffer(struct logger_log *log, size_t count) { }
+#endif /* CONFIG_SEC_DEBUG */
+
 /*
  * do_write_log_user - writes 'len' bytes from the user-space buffer 'buf' to
  * the log 'log'
@@ -462,28 +528,7 @@ static ssize_t do_write_log_from_user(struct logger_log *log,
 			 */
 			return -EFAULT;
 
-#if defined(CONFIG_SEC_DEBUG)
-	/* print as kernel log if the log string starts with "!@" */
-	if (count >= 2) {
-		if (log->buffer[log->w_off] == '!'
-		    && log->buffer[logger_offset(log, log->w_off + 1)] == '@') {
-			char tmp[256];
-			int i;
-			for (i = 0; i < min(count, sizeof(tmp) - 1); i++)
-				tmp[i] =
-				    log->buffer[logger_offset \
-						(log, log->w_off + i)];
-			tmp[i] = '\0';
-			printk(KERN_INFO"%s\n", tmp);
-#if defined(CONFIG_SEC_BSP)
-			if (strncmp(tmp, "!@Boot", 6) == 0) {
-				sec_boot_stat_add(tmp);
-			}
-#endif
-		}
-	}
-#endif
-
+	sec_logger_print_buffer(log, count);
 	log->w_off = logger_offset(log, log->w_off + count);
 
 	return count;
@@ -781,8 +826,8 @@ static int __init create_log(char *log_name, int size)
 	struct logger_log *log;
 	unsigned char *buffer;
 
-#if defined(CONFIG_SEC_DEBUG)
-	buffer = kmalloc(size, GFP_KERNEL);
+#ifdef CONFIG_SEC_DEBUG
+	buffer = kzalloc(size, GFP_KERNEL);
 #else
 	buffer = vmalloc(size);
 #endif
@@ -833,79 +878,58 @@ out_free_log:
 	kfree(log);
 
 out_free_buffer:
+#ifdef CONFIG_SEC_DEBUG
+	kfree(buffer);
+#else
 	vfree(buffer);
+#endif
 	return ret;
 }
 
-#if defined(CONFIG_SEC_DEBUG)
-unsigned char *get_main_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_MAIN))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_radio_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_RADIO))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_events_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_EVENTS))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_system_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_SYSTEM))
-		return log->buffer;
-	return NULL;
-}
-#endif
-
 static int __init logger_init(void)
 {
-	int ret;
+	int ret, i;
+	unsigned long memsize = 0;
 
-	ret = create_log(LOGGER_LOG_MAIN, 512*1024);
-	if (unlikely(ret))
-		goto out;
+	struct logger_size
+	{
+		int sz;
+		char *log_name;
+	} logger_info[4] = {
+		{SZ_512K, LOGGER_LOG_MAIN},
+		{SZ_512K, LOGGER_LOG_EVENTS},
+		{SZ_512K, LOGGER_LOG_RADIO},
+		{SZ_512K, LOGGER_LOG_SYSTEM},
+	};
 
-	ret = create_log(LOGGER_LOG_EVENTS, 512*1024);
-	if (unlikely(ret))
-		goto out;
+#ifdef CONFIG_SEC_FACTORY
+	logger_info[0].sz = SZ_4M;
+	logger_info[1].sz = SZ_4M;
+	logger_info[2].sz = SZ_4M;
+	logger_info[3].sz = SZ_4M;
+#else /* CONFIG_SEC_FACTORY */
+	for (i = 0; i < meminfo.nr_banks; i++)
+		memsize += meminfo.bank[i].size;
 
-	ret = create_log(LOGGER_LOG_RADIO, 512*1024);
-	if (unlikely(ret))
-		goto out;
+	if(memsize > SZ_1G) {
+		logger_info[0].sz = SZ_2M;
+		logger_info[1].sz = SZ_1M;
+		logger_info[2].sz = SZ_512K;
+		logger_info[3].sz = SZ_1M;
+	}
+#endif /* CONFIG_SEC_FACTORY */
 
-	ret = create_log(LOGGER_LOG_SYSTEM, 512*1024);
-	if (unlikely(ret))
-		goto out;
+	for (i = 0; i < 4; i++) {
+		ret = create_log(logger_info[i].log_name, logger_info[i].sz);
+		if (unlikely(ret))
+			goto out;
+	}
 
-#if defined(CONFIG_SEC_DEBUG)
-    /*{{ Mark for GetLog*/
+	/*{{ Mark for GetLog*/
 	sec_getlog_supply_loggerinfo(get_main_log_buf_addr(),
 					get_radio_log_buf_addr(),
 					get_events_log_buf_addr(),
 					get_system_log_buf_addr());
-#endif
 
 out:
 	return ret;
@@ -918,7 +942,11 @@ static void __exit logger_exit(void)
 	list_for_each_entry_safe(current_log, next_log, &log_list, logs) {
 		/* we have to delete all the entry inside log_list */
 		misc_deregister(&current_log->misc);
+#ifdef CONFIG_SEC_DEBUG
+		kfree(current_log->buffer);
+#else
 		vfree(current_log->buffer);
+#endif
 		kfree(current_log->misc.name);
 		list_del(&current_log->logs);
 		kfree(current_log);

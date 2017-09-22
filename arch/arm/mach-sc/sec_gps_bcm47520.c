@@ -4,7 +4,7 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 #include <asm/uaccess.h>
-#include "devices.h"
+//#include "devices.h"
 #include <soc/sprd/board.h>
 #include <linux/regulator/consumer.h>
 #include <soc/sprd/regulator.h>
@@ -16,8 +16,9 @@
 #include <linux/proc_fs.h>
 #include <linux/irq.h>
 
+#include <asm/sec/sec_debug.h>
+
 static struct device *gps_dev;
-extern struct class *sec_class;
 
 static int gps_clk_init(void)
 {
@@ -58,8 +59,6 @@ static int gps_regulator_on(struct device_node *root_node)
         printk("%s: Failed to get main-regulator from dts.\n", __func__);
         return -1;
     }
-    if(of_property_read_string(root_node, "tcxo-regulator", &reg_tcxo))
-        printk("%s: tcxo-regulator field is empty from dts.\n", __func__);
 
     if(gps_regulator == NULL) {
         gps_regulator = regulator_get(NULL, reg);
@@ -68,15 +67,24 @@ static int gps_regulator_on(struct device_node *root_node)
             return -1;
         }
     }
+
+     regulator_set_voltage(gps_regulator, gps_regulator_volt, gps_regulator_volt);
+     if(!regulator_enable(gps_regulator))
+        pr_info("%s: (%s) main(%d uV) regulator turned ON!!\n", __func__, reg, gps_regulator_volt);
+
+     if(of_property_read_string(root_node, "tcxo-regulator", &reg_tcxo)) {
+        printk("%s: tcxo-regulator field is empty from dts.\n", __func__);
+        return 0;
+    }
+
     if(tcxo_regulator == NULL) {
         tcxo_regulator = regulator_get(NULL, reg_tcxo);
         if(IS_ERR(tcxo_regulator)) {
             tcxo_regulator = NULL;
+            return 0;
         }
     }
-    regulator_set_voltage(gps_regulator, gps_regulator_volt, gps_regulator_volt);
-    if(!regulator_enable(gps_regulator))
-        pr_info("%s: (%s) main(%d uV) regulator turned ON!!\n", __func__, reg, gps_regulator_volt);
+
     if(of_property_read_u32(root_node, "tcxo-regulator-volt", &tcxo_regulator_volt)) {
         printk("%s: tcxo-requlator-volt field is empty from dts.\n", __func__);
         return 0;
@@ -89,11 +97,13 @@ static int gps_regulator_on(struct device_node *root_node)
 }
 
 static unsigned int gps_pwr_on = 0;
+static unsigned int ext_ldo_on= 0;
 
 static int __init gps_bcm47520_init(void)
 {
     const char *gps_node = "broadcom,bcm47520";
     const char *gps_pwr_en = "gps-pwr-en";
+    const char *ext_ldo_en = "ext-ldo-en";
     struct device_node *root_node = NULL;
     int ret = 0;
 
@@ -121,7 +131,7 @@ static int __init gps_bcm47520_init(void)
     }
     gps_pwr_on = of_get_named_gpio(root_node, gps_pwr_en, 0);
     if(!gpio_is_valid(gps_pwr_on)) {
-        printk("%s: Invalid gpio pin : %d\n", __func__, gps_pwr_on);
+        printk("%s: (%s) Invalid gpio pin : %d\n", __func__, gps_pwr_en, gps_pwr_on);
         ret = -ENODEV;
         goto err_find_node;
     }
@@ -133,6 +143,22 @@ static int __init gps_bcm47520_init(void)
     gpio_direction_output(gps_pwr_on, 0);
     gpio_export(gps_pwr_on, 1);
     gpio_export_link(gps_dev, "GPS_PWR_EN", gps_pwr_on);
+
+    ext_ldo_on = of_get_named_gpio(root_node, ext_ldo_en, 0);
+    if(ext_ldo_on > 0) {
+        if(!gpio_is_valid(ext_ldo_on)) {
+            printk("%s: (%s) Invalid gpio pin or empty field : %d\n", __func__, ext_ldo_en, ext_ldo_on);
+            return 0;
+        }
+        if (gpio_request(ext_ldo_on, "GPS_LDO_EN")) {
+            printk("fail to request gpio(GPS_LDO_EN)\n");
+            ret = -ENODEV;
+            goto err_find_node;
+        }
+        gpio_direction_output(ext_ldo_on, 1);
+        gpio_export(ext_ldo_on, 1);
+        gpio_export_link(gps_dev, "GPS_LDO_EN", ext_ldo_on);
+    }
 
     return 0;
 

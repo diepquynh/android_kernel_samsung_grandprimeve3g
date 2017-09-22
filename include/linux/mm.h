@@ -1448,6 +1448,13 @@ extern void show_mem(unsigned int flags);
 extern void si_meminfo(struct sysinfo * val);
 extern void si_meminfo_node(struct sysinfo *val, int nid);
 
+#ifdef CONFIG_E_SHOW_MEM
+enum e_show_mem_type { E_SHOW_MEM_BASIC, E_SHOW_MEM_CLASSIC, E_SHOW_MEM_ALL };
+extern void enhanced_show_mem(enum e_show_mem_type type);
+extern int register_e_show_mem_notifier(struct notifier_block *nb);
+extern int unregister_e_show_mem_notifier(struct notifier_block *nb);
+#endif
+
 extern __printf(3, 4)
 void warn_alloc_failed(gfp_t gfp_mask, int order, const char *fmt, ...);
 

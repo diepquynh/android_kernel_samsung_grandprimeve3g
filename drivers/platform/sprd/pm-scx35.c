@@ -102,6 +102,7 @@ struct ap_apb_reg_bak {
 	u32 usb_phy_tune;
 	u32 usb_phy_ctrl;
 	u32 apb_misc_ctrl;
+	u32 usb_phy_tune1;
 };
 struct pub_reg_bak {
 	u32 ddr_qos_cfg1;
@@ -490,7 +491,10 @@ void bak_restore_apb(int bak)
 #if !defined(CONFIG_ARCH_SCX35L)
 #if !defined(CONFIG_ARCH_SCX20)
 		ap_apb_reg_saved.usb_phy_tune = sci_glb_read(REG_AP_APB_USB_PHY_TUNE, -1UL);
-#endif	//#if !defined(CONFIG_ARCH_SCX20)
+#else
+		ap_apb_reg_saved.usb_phy_tune = sci_glb_read(REG_AP_APB_USB_CTRL0, -1UL);
+		ap_apb_reg_saved.usb_phy_tune1 = sci_glb_read(REG_AP_APB_USB_CTRL1, -1UL);
+#endif
 #endif
 	}else{
 		sci_glb_write(REG_AP_APB_APB_EB, ap_apb_reg_saved.apb_eb, -1UL);
@@ -498,7 +502,10 @@ void bak_restore_apb(int bak)
 #if !defined(CONFIG_ARCH_SCX35L)
 #if !defined(CONFIG_ARCH_SCX20)
 		sci_glb_write(REG_AP_APB_USB_PHY_TUNE, ap_apb_reg_saved.usb_phy_tune, -1UL);
-#endif	//#if !defined(CONFIG_ARCH_SCX20)
+#else
+		sci_glb_write(REG_AP_APB_USB_CTRL0, ap_apb_reg_saved.usb_phy_tune, -1UL);
+		sci_glb_write(REG_AP_APB_USB_CTRL1, ap_apb_reg_saved.usb_phy_tune1, -1UL);
+#endif
 #endif
 	}
 	return;
@@ -1125,6 +1132,7 @@ static int init_reset_vector(void)
 	/* just make sure*/
 	flush_cache_all();
 	outer_flush_all();
+	sp_pm_reset_vector[65] =  virt_to_phys(sp_pm_collapse_exit);
 #endif
 	return 0;
 }
@@ -1155,7 +1163,7 @@ static unsigned long *ptest = NULL;
 static void test_memory(void)
 {
 	int i;
-#ifndef CONFIG_ARCH_SCX30G
+#if ((!defined(CONFIG_ARCH_SCX30G)) || defined(CONFIG_ARCH_SCX20))
 	vtest = kmalloc(64*1024, GFP_KERNEL);
 	if (vtest) {
 		for (i = 0; i < (64*1024/4); i++) {
@@ -1383,7 +1391,9 @@ int deep_sleep(int from_idle)
 #define dmc_retention_para_vaddr	(SPRD_IRAM1_BASE + 0x2400)
 
 #ifdef CONFIG_ARCH_SCX20
-// PUB is not ready and then we temporarily disable related register manipulation.
+	/* set auto-self refresh mode */
+	sci_glb_clr(SPRD_LPDDR2_BASE+0x124, BIT(0)| BIT(1));
+	sci_glb_set(SPRD_LPDDR2_BASE+0X124, BIT(2));
 #else
 #if defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_ARCH_SCX35L) || defined(CONFIG_ARCH_SCX35L64) || defined(CONFIG_ARCH_SCX35LT8)
 	/* set auto-self refresh mode */
@@ -1415,7 +1425,9 @@ int deep_sleep(int from_idle)
 #endif
 
 #ifdef CONFIG_ARCH_SCX20
-// PUB is not ready and then we temporarily disable related register manipulation.
+	/* set auto powerdown mode */
+	sci_glb_set(SPRD_LPDDR2_BASE+0x124, BIT(0)| BIT(1));
+	sci_glb_clr(SPRD_LPDDR2_BASE+0x124, BIT(2));
 #else
 #if defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_ARCH_SCX35L) || defined(CONFIG_ARCH_SCX35L64) || defined(CONFIG_ARCH_SCX35LT8)
 	/* set auto powerdown mode */

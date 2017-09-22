@@ -59,6 +59,7 @@
 #define I2C_CTL_NOACK_INT_EN	(1 << 7)	/* no ack int enable */
 #define I2C_CTL_NOACK_INT_STS		(1 << 8)	/* no ack int status */
 #define I2C_CTL_NOACK_INT_CLR	(1 << 9)	/* no ack int clear */
+#define I2C_CTL_PULLUP_MODE	(1 << 10)		 /* I2c PULL UP*/
 
 #if defined(CONFIG_I2C_SPRD_R6P0_DUTY)
 #define I2C_CTL_DUTY			(1 << 11)		 /* I2c DUTY*/
@@ -94,18 +95,21 @@ struct sprd_i2c {
 	void __iomem *membase;
 	struct clk *clk;
 	int irq;
+	struct sprd_platform_i2c *pdata;
 };
 
 struct sprd_platform_i2c {
 	unsigned int normal_freq;	/* normal bus frequency */
 	unsigned int fast_freq;	/* fast frequency for the bus */
 	unsigned int min_freq;	/* min frequency for the bus */
+	unsigned int pull_up_mode;
 };
 
 static struct sprd_platform_i2c sprd_platform_i2c_default = {
 	.normal_freq = 100 * 1000,
 	.fast_freq = 400 * 1000,
 	.min_freq = 10 * 1000,
+	.pull_up_mode = 0,
 };
 
 static struct sprd_i2c *sprd_i2c_ctl_id[SPRD_I2C_CTL_ID];
@@ -488,11 +492,14 @@ static void sprd_i2c_enable(struct sprd_i2c *pi2c)
 	tmp = __raw_readl(pi2c->membase + I2C_CTL);
 	sprd_version_num = tmp >> 16;
 	#if defined(CONFIG_I2C_SPRD_R6P0_DUTY)
-	__raw_writel(tmp | I2C_CTL_EN | I2C_CTL_IE|I2C_CTL_DUTY, pi2c->membase + I2C_CTL);
+	tmp |= I2C_CTL_EN | I2C_CTL_IE|I2C_CTL_DUTY;
 	#else
-	__raw_writel(tmp | I2C_CTL_EN | I2C_CTL_IE, pi2c->membase + I2C_CTL);
+	tmp |= I2C_CTL_EN | I2C_CTL_IE;
 	#endif
+	if (pi2c->pdata->pull_up_mode)
+		tmp |= I2C_CTL_PULLUP_MODE;
 
+	__raw_writel(tmp, pi2c->membase + I2C_CTL);
 	__raw_writel(I2C_CMD_INT_ACK, pi2c->membase + I2C_CMD);
 
 }
@@ -538,7 +545,17 @@ static int sprd_i2c_probe(struct platform_device *pdev)
 			res->end - res->start);
 	if (!pi2c->membase)
 		panic("ioremap failed!\n");
+	pi2c->pdata = devm_kzalloc(&pdev->dev,
+			sizeof(struct sprd_platform_i2c), GFP_KERNEL);
+	if (!pi2c->pdata) {
+		ret = -ENOMEM;
+		goto free_adapter;
+	}
+	memcpy(pi2c->pdata, &sprd_platform_i2c_default,
+			sizeof(struct sprd_platform_i2c));
 	pi2c->adap.dev.of_node = pdev->dev.of_node;
+	of_property_read_u32(pdev->dev.of_node, "pull_up_mode",
+				&pi2c->pdata->pull_up_mode);
 	dev_info(&pdev->dev, "%s() id=%d, base=%p \n", __func__, pi2c->adap.nr,
 		 pi2c->membase);
 	ret = sprd_i2c_clk_init(pi2c);

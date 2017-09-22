@@ -270,6 +270,22 @@ struct sprd_codec_ldo_v_map {
 
 const static struct sprd_codec_ldo_v_map ldo_v_map[] = {
 	/*{      , 3400}, */
+	{LDO_V_29, 3500},
+	{LDO_V_30, 3600},
+	{LDO_V_31, 3700},
+	{LDO_V_31, 3800},
+	{LDO_V_31, 3900},
+	{LDO_V_31, 4000},
+	{LDO_V_31, 4100},
+	{LDO_V_31, 4300},
+	{LDO_V_33, 3500},
+	{LDO_V_33, 3600},
+	{LDO_V_33, 3700},
+	{LDO_V_33, 3800},
+	{LDO_V_33, 3900},
+	{LDO_V_33, 4000},
+	{LDO_V_33, 4100},
+	{LDO_V_33, 4300},
 	{LDO_V_28, 2800},
 	{LDO_V_29, 2900},
 	{LDO_V_30, 3000},
@@ -287,8 +303,10 @@ struct sprd_codec_ldo_cfg {
 
 struct sprd_codec_inter_pa {
 	/* FIXME little endian */
-	u32 LDO_V_sel:4;
-	u32 DTRI_F_sel:4;
+	u32 LDO_V_sel:3;
+	u32 rc_mode:1;
+	u32 DTRI_F_sel:2;
+	u32 class_d_spd:2;
 	u32 is_DEMI_mode:1;
 	u32 is_classD_mode:1;
 	u32 is_LDO_mode:1;
@@ -1236,6 +1254,26 @@ static inline void sprd_codec_pa_d_en(struct snd_soc_codec *codec, int on)
 	snd_soc_update_bits(codec, SOC_REG(ANA_CDC4), mask, val);
 }
 
+static inline void sprd_codec_pa_rc_en(struct snd_soc_codec *codec, int on)
+{
+	int mask;
+
+	sp_asoc_pr_dbg("%s set %d\n", __func__, on);
+	mask = BIT(DACBUF_I_S);
+	snd_soc_update_bits(codec, SOC_REG(ANA_CDC2), mask, on ? mask : 0);
+}
+
+static inline void sprd_codec_pa_d_spd(struct snd_soc_codec *codec, int spd)
+{
+	int mask;
+	int val;
+	sp_asoc_pr_dbg("%s set %d\n", __func__, spd);
+
+	mask = CLASS_D_SPD_MASK << CLASS_D_SPD;
+	val = (spd << CLASS_D_SPD) & mask;
+
+	snd_soc_update_bits(codec, SOC_REG(ANA_CDC2), mask, val);
+}
 static inline void sprd_codec_pa_demi_en(struct snd_soc_codec *codec, int on)
 {
 	int mask;
@@ -1436,6 +1474,8 @@ static int sprd_inter_speaker_pa(struct snd_soc_codec *codec, int on)
 		sprd_codec_ovp_irq_enable(codec);
 		sprd_codec_pa_d_en(codec, p_setting->is_classD_mode);
 		sprd_codec_pa_demi_en(codec, p_setting->is_DEMI_mode);
+		sprd_codec_pa_rc_en(codec, p_setting->rc_mode);
+		sprd_codec_pa_d_spd(codec, p_setting->class_d_spd);
 		sprd_codec_pa_ldo_en(codec, p_setting->is_LDO_mode);
 		if (p_setting->is_LDO_mode) {
 			if (p_setting->is_auto_LDO_mode) {
@@ -2171,7 +2211,14 @@ static int sprd_codec_ldo_off(struct sprd_codec_priv *sprd_codec)
 
 	return 0;
 }
-
+#ifdef CONFIG_SPRD_INTERNAL_HEADSET_SUPPORT
+static int sprd_codec_headset_plgpd_set(struct snd_soc_codec *codec, int on)
+{
+	sp_asoc_pr_dbg("%s %d\n", __func__, on);
+	return snd_soc_update_bits(codec, SOC_REG(ANA_PMU0),
+				BIT(GND_PLGPD_EN), on << GND_PLGPD_EN);
+}
+#endif
 static int sprd_codec_analog_open(struct snd_soc_codec *codec)
 {
 	int ret = 0;
@@ -2204,6 +2251,13 @@ static int sprd_codec_analog_open(struct snd_soc_codec *codec)
 	snd_soc_update_bits(codec,SOC_REG(ANA_CDC2),BIT(DACDC_RMV_EN),BIT(DACDC_RMV_EN));
 	snd_soc_update_bits(codec, SOC_REG(ANA_PMU1), BIT(LDOVBO_FAST_EN),
 				BIT(LDOVBO_FAST_EN));
+	snd_soc_write(codec, AUD_SDM_CTL0, 0x500);
+	snd_soc_write(codec, AUD_SDM_CTL0, 0x100);
+
+#ifdef CONFIG_SPRD_INTERNAL_HEADSET_SUPPORT
+	sprd_codec_headset_plgpd_set(codec, 1);
+	sprd_codec_head_l_int_pu_pd(codec, 1);
+#endif
 
 	return ret;
 }
@@ -4707,6 +4761,10 @@ static int sprd_codec_soc_probe(struct snd_soc_codec *codec)
 	sprd_codec_proc_init(sprd_codec);
 
 	sprd_codec_audio_ldo(sprd_codec);
+#ifdef CONFIG_SPRD_INTERNAL_HEADSET_SUPPORT
+	sprd_codec_headset_plgpd_set(codec, 1);
+	sprd_codec_head_l_int_pu_pd(codec, 1);
+#endif
 #ifdef  CONFIG_SND_SOC_SPRD_USE_EAR_JACK_TYPE13
 	sprd_inter_headphone_pa_pre(sprd_codec, 1);
 #else

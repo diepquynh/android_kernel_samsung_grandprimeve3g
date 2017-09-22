@@ -35,10 +35,7 @@
 #include <soc/sprd/sci_glb_regs.h>
 #include <soc/sprd/hardware.h>
 
-#ifdef CONFIG_PROC_AVC
 #include <linux/proc_avc.h>
-#endif
-
 
 extern void __init sci_reserve(void);
 extern void __init sci_map_io(void);
@@ -159,7 +156,15 @@ const struct of_device_id of_sprd_default_bus_match_table[] = {
 };
 
 static struct of_dev_auxdata of_sprd_default_bus_lookup[] = {
-	{ .compatible = "sprd,sprd_backlight",  .name = "sprd_backlight" },
+	{ .compatible = "sprd,sprd_backlight", .name = "sprd_backlight" },
+	{ .compatible = "sprd,sdhci-shark", .name = "sdio_sd",
+						.phys_addr = 0x20300000 },
+	{ .compatible = "sprd,sdhci-shark", .name = "sdio_wifi",
+						.phys_addr = 0x20400000 },
+	{ .compatible = "sprd,sdhci-shark", .name = "sprd-sdhci.2",
+						.phys_addr = 0x20500000 },
+	{ .compatible = "sprd,sdhci-shark", .name = "sdio_emmc",
+						.phys_addr = 0x20600000 },
 	{}
 };
 
@@ -203,6 +208,7 @@ do {							\
 	ADD_SPRD_DEVICE("sprd,aonapb", AONAPB);
 	ADD_SPRD_DEVICE("sprd,aonckg", AONCKG);
 	ADD_SPRD_DEVICE("sprd,apbreg", APBREG);
+	ADD_SPRD_DEVICE("sprd,coresight", CORESIGHT);
 	ADD_SPRD_DEVICE("sprd,core", CORE);
 	ADD_SPRD_DEVICE("sprd,mmahb", MMAHB);
 	ADD_SPRD_DEVICE("sprd,pmu", PMU);
@@ -228,7 +234,12 @@ do {							\
 	ADD_SPRD_DEVICE("sprd,pub", PUB);
 	ADD_SPRD_DEVICE("sprd,pin", PIN);
 	ADD_SPRD_DEVICE("sprd,d-gpio-gpio", GPIO);
+#if defined(CONFIG_ARCH_SCX30G2)
 	ADD_SPRD_DEVICE("sprd,codecahb", CODECAHB);
+#endif
+#if defined(CONFIG_ARCH_SCX30G3)
+	ADD_SPRD_DEVICE("sprd,crypto", CRYPTO);
+#endif
 	ADD_SPRD_DEVICE_BY_NAME("hwspinlock0", HWSPINLOCK0);
 	ADD_SPRD_DEVICE_BY_NAME("hwspinlock1", HWSPINLOCK1);
 
@@ -239,9 +250,7 @@ static void __init sc8830_init_machine(void)
 {
 	printk("sci get chip id = 0x%x\n",__sci_get_chip_id());
 
-#ifdef CONFIG_PROC_AVC
 	sec_avc_log_init();
-#endif
 
 	sci_adc_init();
 	sci_regulator_init();

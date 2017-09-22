@@ -16,6 +16,7 @@
 #include <linux/clk-provider.h>
 #include <linux/clkdev.h>
 #include <linux/clk-provider.h>
+#include <linux/clk-private.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/kernel.h>
@@ -125,29 +126,40 @@ static inline void __glbreg_setclr(struct clk_hw *hw, void *reg, u32 msk,
 static int sprd_clk_prepare(struct clk_hw *hw)
 {
 	struct clk_sprd *c = to_clk_sprd(hw);
-	int set = ! !(c->flags & CLK_GATE_SET_TO_DISABLE);
+	int set = !!(c->flags & CLK_GATE_SET_TO_DISABLE);
+	__glbreg_setclr(hw, c->d.pre.reg, (u32) c->d.pre.msk, set ^ 1);
+	return 0;
+}
+
+static int sprd_pll_clk_prepare(struct clk_hw *hw)
+{
+	struct clk_sprd *c = to_clk_sprd(hw);
+	int set = !!(c->flags & CLK_GATE_SET_TO_DISABLE);
 
 	__glbreg_setclr(hw, c->d.pre.reg, (u32) c->d.pre.msk, set ^ 1);
+#ifdef CONFIG_ARCH_SCX20
+	udelay(1000);
+#endif
 	return 0;
 }
 
 static void sprd_clk_unprepare(struct clk_hw *hw)
 {
 	struct clk_sprd *c = to_clk_sprd(hw);
-	int set = ! !(c->flags & CLK_GATE_SET_TO_DISABLE);
+	int set = !!(c->flags & CLK_GATE_SET_TO_DISABLE);
 	__glbreg_setclr(hw, c->d.pre.reg, (u32) c->d.pre.msk, set ^ 0);
 }
 
 static int sprd_clk_is_prepared(struct clk_hw *hw)
 {
 	struct clk_sprd *c = to_clk_sprd(hw);
-	int ret, set = ! !(c->flags & CLK_GATE_SET_TO_DISABLE);
+	int ret, set = !!(c->flags & CLK_GATE_SET_TO_DISABLE);
 
 	if (!c->d.pre.reg)
 		return 0;
 
 	/* if a set bit prepare this gate, flip it before masking */
-	ret = ! !(__raw_readl(c->d.pre.reg) & BIT(c->d.pre.msk));
+	ret = !!(__raw_readl(c->d.pre.reg) & BIT(c->d.pre.msk));
 	return set ^ ret;
 }
 
@@ -229,7 +241,7 @@ static void sprd_clk_disable(struct clk_hw *hw)
 static int sprd_clk_is_enable(struct clk_hw *hw)
 {
 	struct clk_sprd *c = to_clk_sprd(hw);
-	int ret = ! !(__raw_readl(c->enb.reg) & BIT(c->enb.msk));
+	int ret = !!(__raw_readl(c->enb.reg) & BIT(c->enb.msk));
 	return ret;
 }
 
@@ -454,6 +466,12 @@ static unsigned long sprd_clk_divider_recalc_rate(struct clk_hw *hw,
 	if (!c->d.div_hw->clk)
 		c->d.div_hw->clk = c->hw.clk;
 	clk_debug("%s %lu\n", __clk_get_name(hw->clk), parent_rate);
+#ifdef CONFIG_CPLL_1024M
+	if (hw->clk->parent != NULL && hw->clk->parent->parent != NULL)
+		if (!strcmp(__clk_get_name(hw->clk->parent->parent), "clk_cpll"))
+			if(!strcmp(__clk_get_name(hw->clk),"clk_dcam") || !strcmp(__clk_get_name(hw->clk), "clk_gpu") || !strcmp(__clk_get_name(hw->clk), "clk_isp"))
+				return hw->clk->rate;
+#endif
 	return clk_divider_ops.recalc_rate(c->d.div_hw, parent_rate);
 }
 
@@ -485,14 +503,14 @@ static int sprd_clk_divider_set_rate(struct clk_hw *hw, unsigned long rate,
 }
 
 const struct clk_ops sprd_clk_fixed_pll_ops = {
-	.prepare = sprd_clk_prepare,
+	.prepare = sprd_pll_clk_prepare,
 	.unprepare = sprd_clk_unprepare,
 	.is_prepared = sprd_clk_is_prepared,
 	.recalc_rate = sprd_clk_fixed_pll_recalc_rate,
 };
 
 const struct clk_ops sprd_clk_adjustable_pll_ops = {
-	.prepare = sprd_clk_prepare,
+	.prepare = sprd_pll_clk_prepare,
 	.unprepare = sprd_clk_unprepare,
 	.round_rate = sprd_clk_adjustable_pll_round_rate,
 	.set_rate = sprd_clk_adjustable_pll_set_rate,
@@ -1043,6 +1061,15 @@ static void __init of_sprd_adjustable_pll_clk_setup(struct device_node *node)
 	of_read_reg(&c->m.mul, mulreg);
 	of_read_reg(&c->d.pre, prereg);
 
+	/* Flags:
+	 * CLK_GATE_SET_TO_DISABLE - by default this clock sets the bit at bit_idx to
+	 *  enable the clock.  Setting this flag does the opposite: setting the bit
+	 *  disable the clock and clearing it enables the clock
+	 */
+	if ((unsigned long) c->d.pre.reg & 1) {
+		*(u32 *) & c->d.pre.reg &= ~3;
+		c->flags |= CLK_GATE_SET_TO_DISABLE;
+	}
 	sprd_clk_register(NULL, node, c, &init);
 
 	if (prereg)

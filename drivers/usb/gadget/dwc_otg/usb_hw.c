@@ -43,6 +43,9 @@
 static int    gpio_vbus =0xffffffff ;
 static int    gpio_id=0xffffffff;
 static uint32_t tune_from_uboot = 0x44073e33;
+#if defined(CONFIG_ARCH_SCX20)
+static uint32_t tune_ctrl1_value = 0x00001AA0;
+#endif
 static struct regulator *usb_regulator;
 static uint32_t tune_host = 0x44073e33;
 
@@ -137,9 +140,15 @@ void usb_phy_init(struct platform_device *_dev)
 	if (of_property_read_u32(np, "tune_value", &tune_from_uboot))
 	{
 		pr_info("read tune_value error\n");
-		return -ENODEV;
 	}
 	pr_info("Usb_hw.c: [%s]usb phy tune from uboot: 0x%x\n", __FUNCTION__, tune_from_uboot);
+#if defined(CONFIG_ARCH_SCX20)
+	if (of_property_read_u32(np, "tune_ctrl1_value", &tune_ctrl1_value))
+	{
+		pr_info("read tune_value error\n");
+	}
+	pr_info("Usb_hw.c: [%s]usb tune_ctrl1_value: 0x%x\n", __FUNCTION__, tune_ctrl1_value);
+#endif
 #endif
 
 #ifdef CONFIG_SC_FPGA
@@ -149,6 +158,9 @@ __raw_writel(0x44073e33,REG_AP_AHB_OTG_PHY_TUNE);
 	__raw_writel(tune_from_uboot,REG_AP_AHB_OTG_PHY_TUNE);
 #elif defined(CONFIG_ARCH_SCX20)
 	__raw_writel(tune_from_uboot,REG_AP_APB_USB_CTRL0);
+	__raw_writel(tune_ctrl1_value,REG_AP_APB_USB_CTRL1);
+	printk(KERN_INFO "%s ctrl0 value = 0x%x\n", __func__, __raw_readl(REG_AP_APB_USB_CTRL0));
+	printk(KERN_INFO "%s ctrl1 value = 0x%x\n", __func__, __raw_readl(REG_AP_APB_USB_CTRL1));
 #else
         __raw_writel(tune_from_uboot,REG_AP_APB_USB_PHY_TUNE);
 #endif
@@ -206,7 +218,7 @@ void usb_phy_tune_host(void)
 	__raw_writel(tune_host,REG_AP_AHB_OTG_PHY_TUNE);
 	phy_tune = __raw_readl(REG_AP_AHB_OTG_PHY_TUNE);
 #else
-#if defined(CONFIG_ARCH_SCX35L) 
+#if defined(CONFIG_ARCH_SCX35L)
 	__raw_writel(tune_host,REG_AP_AHB_OTG_PHY_TUNE);
 	phy_tune = __raw_readl(REG_AP_AHB_OTG_PHY_TUNE);
 #elif defined(CONFIG_ARCH_SCX20)
@@ -230,7 +242,7 @@ void usb_phy_tune_dev(void)
 	__raw_writel(tune_from_uboot,REG_AP_AHB_OTG_PHY_TUNE);
 	phy_tune = __raw_readl(REG_AP_AHB_OTG_PHY_TUNE);
 #else
-#if defined(CONFIG_ARCH_SCX35L) 
+#if defined(CONFIG_ARCH_SCX35L)
 	__raw_writel(tune_from_uboot,REG_AP_AHB_OTG_PHY_TUNE);
 	phy_tune = __raw_readl(REG_AP_AHB_OTG_PHY_TUNE);
 #elif defined(CONFIG_ARCH_SCX20)
@@ -244,8 +256,24 @@ void usb_phy_tune_dev(void)
 	pr_info("Usb_hw.c: [%s] set tune_from_uboot=0x%x\n", __func__, phy_tune);
 }
 
-void usb_phy_ahb_rst(void)
+/*
+spreadtrum usb phy shuttle has two reset control pins:
+utmi_RST:soft reset
+utmi_PORN:power on reset
+pike chip:
+pin ctrl AP_TOP_USB_PHY_RST:0x402A0000[0]<---->utmi_PORN
+ahb reg REG_AP_AHB_AHB_RST[7]<------->utmi_RST
+*/
+void sprd_usb_phy_rst(void)
 {
+#ifdef CONFIG_ARCH_SCX20
+	sci_glb_set(USB_GUSBCFG_REG, BIT(3));/*usc2s8c SPRD phy width:16 bit*/
+	sci_glb_clr(AP_TOP_USB_PHY_RST, BIT(0));/*for SPRD phy utmi_PORN*/
+	sci_glb_set(REG_AP_AHB_AHB_RST, BIT(7));/*for SPRD phy utmi_rst*/
+	mdelay(5);
+	sci_glb_set(AP_TOP_USB_PHY_RST, BIT(0));
+	sci_glb_clr(REG_AP_AHB_AHB_RST, BIT(7));
+#else
 #if defined(CONFIG_ARCH_SCX35)
 #if defined(CONFIG_ARCH_SCX35L)
 	sci_glb_set(REG_AP_AHB_AHB_RST,BIT(6));
@@ -261,29 +289,16 @@ void usb_phy_ahb_rst(void)
 	mdelay(3);
 #endif
 #endif
-}
-/*
-spreadtrum usb phy shuttle has two reset control pins:
-utmi_RST:soft reset
-utmi_PORN:power on reset
-pike chip:
-pin ctrl AP_TOP_USB_PHY_RST:0x402A0000[0]<---->utmi_PORN
-ahb reg REG_AP_AHB_AHB_RST[7]<------->utmi_RST
-*/
-#ifdef CONFIG_ARCH_SCX20
-void sprd_usb_phy_rst(void)
-{
-	sci_glb_set(USB_GUSBCFG_REG, BIT(3));/*usc2s8c SPRD phy width:16 bit*/
-	sci_glb_clr(AP_TOP_USB_PHY_RST, BIT(0));/*for SPRD phy utmi_PORN*/
-	sci_glb_set(REG_AP_AHB_AHB_RST, BIT(7));/*for SPRD phy utmi_rst*/
-	mdelay(5);
-	sci_glb_set(AP_TOP_USB_PHY_RST, BIT(0));
-	sci_glb_clr(REG_AP_AHB_AHB_RST, BIT(7));
-}
 #endif
-
+}
 static void usb_startup(void)
 {
+	uint32_t ahb_reset_mask;
+
+	ahb_reset_mask = BIT(5)|BIT(6)|BIT(7);
+#if defined(CONFIG_ARCH_SCX35L)
+	ahb_reset_mask = ahb_reset_mask >> 1;
+#endif
 	usb_ldo_switch(1);
 	mdelay(10);
 	usb_enable_module(1);
@@ -291,15 +306,20 @@ static void usb_startup(void)
 #if (defined(CONFIG_ARCH_SCX35)||defined(CONFIG_ARCH_SCX35L64)||defined(CONFIG_ARCH_SCX35LT8))
 #if defined(CONFIG_ARCH_SCX30G)
 #if defined(CONFIG_ARCH_SCX20)
+	mdelay(5);
 	sci_glb_set(REG_AP_AHB_AHB_RST, BIT(5)|BIT(6));
 	mdelay(5);
 	sci_glb_clr(REG_AP_AHB_AHB_RST, BIT(5)|BIT(6));
 
 	sprd_usb_phy_rst();
+	__raw_writel(tune_from_uboot, REG_AP_APB_USB_CTRL0);
+	__raw_writel(tune_ctrl1_value, REG_AP_APB_USB_CTRL1);
+	printk(KERN_INFO "%s ctrl0 value = 0x%x\n", __func__, __raw_readl(REG_AP_APB_USB_CTRL0));
+	printk(KERN_INFO "%s ctrl1 value = 0x%x\n", __func__, __raw_readl(REG_AP_APB_USB_CTRL1));
 #else
-	sci_glb_set(REG_AP_AHB_AHB_RST,BIT(5)|BIT(6)|BIT(7));
+	sci_glb_set(REG_AP_AHB_AHB_RST, ahb_reset_mask);
 	mdelay(5);
-	sci_glb_clr(REG_AP_AHB_AHB_RST,BIT(5)|BIT(6)|BIT(7));
+	sci_glb_clr(REG_AP_AHB_AHB_RST, ahb_reset_mask);
 #endif
 #else
 	sci_glb_set(REG_AP_AHB_AHB_RST,BIT_OTG_SOFT_RST|BIT_OTG_UTMI_SOFT_RST|BIT_OTG_PHY_SOFT_RST);

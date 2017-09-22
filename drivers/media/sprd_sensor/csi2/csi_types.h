@@ -7,7 +7,7 @@
 
 #ifndef TYPES_H_
 #define TYPES_H_
-#include <linux/types.h> 
+#include <linux/types.h>
 
 typedef void (*handler_t)(void *);
 typedef void* (*thread_t)(void *);

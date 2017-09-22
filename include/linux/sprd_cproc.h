@@ -56,6 +56,7 @@ struct cproc_init_data {
 	struct cproc_ctrl	*ctrl;
 
 	int			wdtirq;
+	void		*shmem;
 	uint32_t		segnr;
 	struct cproc_segments	segs[];
 };

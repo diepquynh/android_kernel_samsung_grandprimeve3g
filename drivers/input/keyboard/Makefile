@@ -59,3 +59,5 @@ obj-$(CONFIG_KEYBOARD_XTKBD)		+= xtkbd.o
 obj-$(CONFIG_KEYBOARD_W90P910)		+= w90p910_keypad.o
 obj-$(CONFIG_KEYBOARD_SC)		+= sc_keypad.o
 obj-$(CONFIG_KEYBOARD_SPRD_EIC)		+= sprd_eic_keys.o
+obj-$(CONFIG_KEYBOARD_TC300K)		+= tc300k.o
+obj-$(CONFIG_KEYBOARD_TC350K)		+= tc350k.o

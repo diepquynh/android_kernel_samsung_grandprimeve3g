@@ -4,7 +4,6 @@
 
 obj-$(CONFIG_THERMAL)		+= thermal_sys.o
 obj-$(CONFIG_THERMAL)		+= sprd_thm.o
-obj-$(CONFIG_THERMAL)           += sprd_board_thm.o
 thermal_sys-y			+= thermal_core.o
 
 # interface to/from other layers providing sensors
@@ -33,6 +32,7 @@ obj-$(CONFIG_INTEL_POWERCLAMP)	+= intel_powerclamp.o
 
 # Added for different sprd thm
 obj-$(CONFIG_THERMAL_DDIE)		+= sprd_ddie_thm.o
+obj-$(CONFIG_THERMAL_ALONE_DDIE)		+= sprd_ddie_alone_thm.o
 obj-$(CONFIG_THERMAL_SC2713)		+= sprd_2713_thm.o
 obj-$(CONFIG_THERMAL_SC2723S_PMIC)		+= sprd_pmic_2723s_thm.o
 obj-$(CONFIG_THERMAL_BOARD_SENSOR)		+= sprd_board_sensor.o

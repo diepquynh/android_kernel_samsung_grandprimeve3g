@@ -153,6 +153,8 @@ interval_tree_test-objs := interval_tree_test_main.o interval_tree.o
 
 obj-$(CONFIG_ASN1) += asn1_decoder.o
 
+obj-$(CONFIG_E_SHOW_MEM) += e_show_mem.o
+
 hostprogs-y	:= gen_crc32table
 clean-files	:= crc32table.h
 

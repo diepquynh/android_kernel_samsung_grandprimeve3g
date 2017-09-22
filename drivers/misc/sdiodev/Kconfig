@@ -13,4 +13,11 @@ config SDIODEV_TEST
 	help
 	  FOR RUN SDIODEV TEST CASE,DO NOT OPEN IT IN NORMAL MODE
 
+config WCN_EXTENSION
+        bool "WCN EXTENSION"
+        default n
+        depends on SDIODEV
+        help
+          FOR SUPPORTING MARLIN SS BRANCH
+
 endmenu

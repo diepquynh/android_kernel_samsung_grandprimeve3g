@@ -26,6 +26,7 @@ struct isp_node {
 	uint32_t irq_val2;
 	uint32_t irq_val3;
 	uint32_t reserved;
+	struct isp_time time;
 };
 
 struct isp_queue {
@@ -50,9 +51,6 @@ struct isp_k_private {
 	uint32_t block_buf_len;
 	unsigned long reg_buf_addr;
 	uint32_t reg_buf_len;
-	unsigned long lsc_buf_addr;
-	uint32_t lsc_buf_len;
-	uint32_t lsc_buf_order;
 	uint32_t lsc_load_buf_id;
 	uint32_t lsc_update_buf_id;
 	unsigned long raw_aem_buf_addr;
@@ -66,14 +64,13 @@ struct isp_k_private {
 	uint32_t yuv_ygamma_buf_id;
 	unsigned long raw_awbm_buf_addr;
 	uint32_t raw_awbm_buf_len;
-	unsigned long bing4awb_buf_addr;
-	uint32_t bing4awb_buf_len;
-	uint32_t bing4awb_buf_order;
 	struct isp_b4awb_buf b4awb_buf[ISP_BING4AWB_NUM];
 	uint32_t lsc_buf_phys_addr;
 	unsigned long yiq_antiflicker_buf_addr;
 	uint32_t yiq_antiflicker_len;
 	uint32_t yiq_antiflicker_order;
+	unsigned long yiq_aem_buf_addr;
+	uint32_t yiq_aem_buf_len;
 };
 
 struct isp_drv_private {

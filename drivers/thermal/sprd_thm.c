@@ -31,7 +31,22 @@
 
 struct thm_handle_ops *sprd_thm_handle_ops[SPRD_MAX_SENSOR] = {NULL};
 char sprd_thm_name[SPRD_MAX_SENSOR][THERMAL_NAME_LENGTH] = {{0},{0}};
-
+extern struct thermal_zone_device *thermal_zone_get_zone_by_name(const char *name);
+extern int thermal_zone_get_temp(struct thermal_zone_device *tz, unsigned long *temp);
+int  sprd_thermal_temp_get(enum sprd_thm_sensor_id thermal_id,unsigned long *temp)
+{
+	char thermal_name[SPRD_MAX_SENSOR][THERMAL_NAME_LENGTH] = {
+		"sprd_arm_thm",
+		"sprd_gpu_thm",
+		"sprd_pmic_thm"
+	};
+	struct thermal_zone_device * tz = thermal_zone_get_zone_by_name(thermal_name[thermal_id]);
+	if(IS_ERR(tz) )
+		return -1;
+	return thermal_zone_get_temp(tz, temp);
+}
+EXPORT_SYMBOL(sprd_thermal_temp_get);
+#if 0
 static int sprd_thm_ops_init(struct sprd_thermal_zone *pzone)
 {
 	if((!sprd_thm_name[pzone->sensor_id]) ||(!sprd_thm_handle_ops[pzone->sensor_id])  )
@@ -42,7 +57,7 @@ static int sprd_thm_ops_init(struct sprd_thermal_zone *pzone)
 }
 int sprd_thm_add(struct thm_handle_ops* ops, char *p,int id)
 {
-	if( (ops == NULL) ||( p == NULL) ||( id > SPRD_MAX_SENSOR))
+	if( (ops == NULL) ||( p == NULL) ||( id >=SPRD_MAX_SENSOR))
 		return -1;
 	sprd_thm_handle_ops[id] = ops;
 	strcpy(sprd_thm_name[id],p);
@@ -53,6 +68,7 @@ void sprd_thm_delete(int id)
 	sprd_thm_handle_ops[id] = NULL;
 	strcpy(sprd_thm_name[id],"");
 }
+#endif
 static int sprd_thermal_match_cdev(struct thermal_cooling_device *cdev,
 				   struct sprd_trip_point *trip_point)
 {
@@ -156,6 +172,53 @@ static int sprd_sys_set_regs(struct thermal_zone_device *thermal,
 	return pzone->ops->reg_debug_set(pzone,regs);
 }
 
+/* Callback to get thermal zone logtime */
+static int sprd_sys_get_logtime(struct thermal_zone_device *thermal,
+			     unsigned long *logtime)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	mutex_lock(&pzone->th_lock);
+	*logtime = pzone->logtime;
+	mutex_unlock(&pzone->th_lock);
+	return 0;
+}
+
+/* Callback to set thermal zone logtime */
+static int sprd_sys_set_logtime(struct thermal_zone_device *thermal,
+			     unsigned long logtime)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	mutex_lock(&pzone->th_lock);
+	pzone->logtime = logtime;
+	mutex_unlock(&pzone->th_lock);
+	return 0;
+}
+
+/* Callback to get thermal log switch status*/
+static int sprd_sys_get_logswitch(struct thermal_zone_device *thermal,
+			     enum thermal_log_switch *logswitch)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	mutex_lock(&pzone->th_lock);
+	*logswitch = pzone->thmlog_switch;
+	mutex_unlock(&pzone->th_lock);
+	return 0;
+}
+
+/* Callback to set thermal log switch status */
+static int sprd_sys_set_logswitch(struct thermal_zone_device *thermal,
+			     enum thermal_log_switch logswitch)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	mutex_lock(&pzone->th_lock);
+	pzone->thmlog_switch = logswitch;
+	if (logswitch == THERMAL_LOG_ENABLED)
+		schedule_delayed_work(&pzone->thm_logtime_work, (HZ * pzone->logtime));
+	mutex_unlock(&pzone->th_lock);
+	return 0;
+}
+
+
 static ssize_t
 debug_reg_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -234,11 +297,85 @@ trip_point_debug_temp_store(struct device *dev, struct device_attribute *attr,
 	return ret ? ret : count;
 }
 
+static ssize_t
+logtime_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	//struct thermal_zone_device *tz = to_thermal_zone(dev);
+	struct thermal_zone_device *tz = container_of(dev, struct thermal_zone_device, device);
+	unsigned long logtime;
+	int result;
+	result = sprd_sys_get_logtime(tz, &logtime);
+	if (result)
+		return result;
+
+	return sprintf(buf, "%ld\n", logtime);
+
+}
+static ssize_t
+logtime_store(struct device *dev, struct device_attribute *attr,
+	   const char *buf, size_t count)
+{
+	//struct thermal_zone_device *tz = to_thermal_zone(dev);
+	struct thermal_zone_device *tz = container_of(dev, struct thermal_zone_device, device);
+	int result;
+    unsigned long logtime;
+    if (kstrtoul(buf, 10, &logtime))
+		return -EINVAL;
+		result = sprd_sys_set_logtime(tz, logtime);
+	if (result)
+		return result;
+
+	return count;
+}
+static ssize_t
+logswitch_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	//struct thermal_zone_device *tz = to_thermal_zone(dev);
+	struct thermal_zone_device *tz = container_of(dev, struct thermal_zone_device, device);
+	enum thermal_log_switch logswtich;
+	int result;
+
+	result = sprd_sys_get_logswitch(tz, &logswtich);
+	if (result)
+		return result;
+
+	return sprintf(buf, "%s\n", logswtich == THERMAL_LOG_ENABLED ? "enabled"
+		       : "disabled");
+}
+static ssize_t
+logswitch_store(struct device *dev, struct device_attribute *attr,
+	   const char *buf, size_t count)
+{
+	struct thermal_zone_device *tz = container_of(dev, struct thermal_zone_device, device);
+	int result;
+
+	if (!strncmp(buf, "enabled", sizeof("enabled") - 1))
+		result = sprd_sys_set_logswitch(tz, THERMAL_LOG_ENABLED);
+	else if (!strncmp(buf, "disabled", sizeof("disabled") - 1))
+		result = sprd_sys_set_logswitch(tz, THERMAL_LOG_DISABLED);
+	else
+		result = -EINVAL;
+
+	if (result)
+		return result;
+
+	return count;
+}
+
+static DEVICE_ATTR(logtime, 0644, logtime_show, logtime_store);
+static DEVICE_ATTR(logswitch, 0644, logswitch_show, logswitch_store);
+
 static int create_trip_attrs(struct thermal_zone_device *tz)
 {
 	int indx;
 	int size = sizeof(struct thermal_attr) * tz->trips;
-
+    int result;
+	result = device_create_file(&tz->device, &dev_attr_logswitch);
+	if (result)
+		return result;
+	result = device_create_file(&tz->device, &dev_attr_logtime);
+	if (result)
+	    return result;
 	tz->trip_temp_attrs = kzalloc(size, GFP_KERNEL);
 	if (!tz->trip_temp_attrs) {
 		return -ENOMEM;
@@ -265,6 +402,8 @@ static int create_trip_attrs(struct thermal_zone_device *tz)
 static void remove_trip_attrs(struct thermal_zone_device *tz)
 {
 	int indx;
+	device_remove_file(&tz->device, &dev_attr_logswitch);
+	device_remove_file(&tz->device, &dev_attr_logtime);
 	for (indx = 0; indx < tz->trips; indx++) {
 		device_remove_file(&tz->device,
 				   &tz->trip_temp_attrs[indx].attr);
@@ -272,6 +411,35 @@ static void remove_trip_attrs(struct thermal_zone_device *tz)
 	kfree(tz->trip_temp_attrs);
 }
 #endif
+
+void sprd_thermal_remove(struct sprd_thermal_zone *pzone)
+{
+#ifdef THM_TEST
+	remove_trip_attrs(pzone->therm_dev);
+	device_remove_file(&pzone->therm_dev->device, &dev_attr_debug_reg);
+	cancel_delayed_work_sync(&pzone->thm_logtime_work);
+#endif
+	thermal_zone_device_unregister(pzone->therm_dev);
+	cancel_delayed_work_sync(&pzone->thm_read_work);
+	cancel_delayed_work_sync(&pzone->resume_delay_work);
+	mutex_destroy(&pzone->th_lock);
+}
+
+static int sprd_sys_get_trend(struct thermal_zone_device *thermal,
+		int trip, enum thermal_trend * ptrend)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	return pzone->ops->get_trend(pzone, trip, ptrend);
+}
+
+static int sprd_sys_get_hyst(struct thermal_zone_device *thermal,
+		int trip, unsigned long *physt)
+{
+	struct sprd_thermal_zone *pzone = thermal->devdata;
+	return pzone->ops->get_hyst(pzone, trip, physt);
+}
+
+
 /* Callback to get trip point type */
 static int sprd_sys_get_trip_type(struct thermal_zone_device *thermal,
 				  int trip, enum thermal_trip_type *type)
@@ -320,35 +488,10 @@ static struct thermal_zone_device_ops thdev_ops = {
 	.set_mode = sprd_sys_set_mode,
 	.get_trip_type = sprd_sys_get_trip_type,
 	.get_trip_temp = sprd_sys_get_trip_temp,
+	.get_trip_hyst = sprd_sys_get_hyst,
 	.get_crit_temp = sprd_sys_get_crit_temp,
+	.get_trend = sprd_sys_get_trend,
 };
-
-static irqreturn_t sprd_thm_irq_handler(int irq, void *irq_data)
-{
-	struct sprd_thermal_zone *pzone = irq_data;
-
-	dev_dbg(&pzone->therm_dev->device, "sprd_thm_irq_handler\n");
-	if (!pzone->ops->irq_handle(pzone)) {
-		schedule_work(&pzone->therm_work);
-	}
-	return IRQ_HANDLED;
-}
-
-static void sprd_thermal_work(struct work_struct *work)
-{
-	enum thermal_device_mode cur_mode;
-	struct sprd_thermal_zone *pzone;
-
-	pzone = container_of(work, struct sprd_thermal_zone, therm_work);
-	mutex_lock(&pzone->th_lock);
-	cur_mode = pzone->mode;
-	mutex_unlock(&pzone->th_lock);
-	if (cur_mode == THERMAL_DEVICE_DISABLED)
-		return;
-	thermal_zone_device_update(pzone->therm_dev);
-	dev_dbg(&pzone->therm_dev->device, "thermal work finished.\n");
-}
-
 static void sprd_thermal_resume_delay_work(struct work_struct *work)
 {
 	struct sprd_thermal_zone *pzone;
@@ -358,282 +501,87 @@ static void sprd_thermal_resume_delay_work(struct work_struct *work)
 	pzone->ops->resume(pzone);
 	dev_dbg(&pzone->therm_dev->device, "thermal resume delay work finished.\n");
 }
-
-#ifdef CONFIG_OF
-static struct sprd_thm_platform_data *thermal_detect_parse_dt(
-                         struct device *dev)
+#ifdef THM_TEST
+static void thm_logtime_work(struct work_struct *work)
 {
-	struct sprd_thm_platform_data *pdata;
-	struct device_node *np = dev->of_node;
-	const char *cooling_names = "cooling-names";
-	const char *point_arr[5];
-	//char cool_name[COOLING_DEV_MAX][THERMAL_NAME_LENGTH];
+	struct sprd_thermal_zone *pzone;
+	unsigned long temp;
+	pzone = container_of(work, struct sprd_thermal_zone, thm_logtime_work.work);
+	temp = pzone->ops->read_temp(pzone);
+	if(pzone->thmlog_switch == THERMAL_LOG_ENABLED ){
+		schedule_delayed_work(&pzone->thm_logtime_work, (HZ * pzone->logtime));
+	}
+}
+#endif
+
+static void thm_read_work(struct work_struct *work)
+{
 	int ret;
-	u32 trip_points_critical,trip_num,cool_num;
-	u32 trip_temp[COOLING_DEV_MAX], trip_lowoff[COOLING_DEV_MAX];
-	int i = 0;
-	int j = 0;
-	static int cool=1;
-
-	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "could not allocate memory for platform data\n");
-		return NULL;
+	enum thermal_device_mode cur_mode;
+	struct sprd_thermal_zone *pzone;
+	pzone = container_of(work, struct sprd_thermal_zone, thm_read_work.work);
+	mutex_lock(&pzone->th_lock);
+	cur_mode = pzone->mode;
+	mutex_unlock(&pzone->th_lock);
+	if (cur_mode == THERMAL_DEVICE_DISABLED)
+		return;
+	if(pzone->temp_inteval == 0)
+		return;
+	ret = thermal_zone_get_temp(pzone->therm_dev, &pzone->cur_temp);
+	if (ret) {
+		dev_warn(&pzone->therm_dev->device, "failed to read out thermal zone %d\n",
+			 pzone->therm_dev->id);
+		return;
 	}
-	ret = of_property_read_u32(np, "trip_points_critical", &trip_points_critical);
-	if(ret){
-		dev_err(dev, "fail to get trip_points_critical\n");
-		goto fail;
-	}
-	ret = of_property_read_u32(np, "trip_num", &trip_num);
-	if(ret){
-		dev_err(dev, "fail to get trip_num\n");
-		goto fail;
-	}
-	ret = of_property_read_u32(np, "cool_num", &cool_num);
-	if(ret){
-		cool=0;
-	}
-	for (i = 0; i < trip_num-1; i++) {
-		ret = of_property_read_u32_index(np, "trip_points_active", i,
-						 &trip_temp[i]);
-		if(ret){
-			dev_err(dev, "fail to get trip_points_active\n");
-			goto fail;
+	printk("thm id:%d, inteval:%d, last_temp:%ld,cur_temp:%ld\n", pzone->sensor_id,pzone->temp_inteval,pzone->last_temp,pzone->cur_temp);
+    if(pzone->cur_temp > pzone->last_temp)
+	{
+		pzone->trend_val = THERMAL_TREND_RAISING;
+		if (pzone->cur_temp >= pzone->trip_tab->trip_points[pzone->current_trip_num].temp ){
+			if((pzone->trip_tab->num_trips-1) > pzone->current_trip_num )
+			pzone->current_trip_num++;
+			thermal_zone_device_update(pzone->therm_dev);
 		}
-		ret = of_property_read_u32_index(np, "trip_points_lowoff", i,
-						 &trip_lowoff[i]);
-		if(ret){
-			dev_err(dev, "fail to get trip_points_lowoff\n");
-			goto fail;
+	}else if(pzone->cur_temp < pzone->last_temp){
+		pzone->trend_val = THERMAL_TREND_DROPPING;
+			printk("pzone->trend_val = THERMAL_TREND_DROPPING\n");
+		if (pzone->cur_temp < pzone->trip_tab->trip_points[pzone->current_trip_num].lowoff ){
+			pzone->current_trip_num--;
+			thermal_zone_device_update(pzone->therm_dev);
 		}
+	}else{
+		printk("pzone->trend_val = THERMAL_TREND_STABLE\n");
+		pzone->trend_val = THERMAL_TREND_STABLE;
 	}
-	if(cool==1){
-	    for (j = 0; j < cool_num; ++j){
-			ret = of_property_read_string_index(np, cooling_names, j,
-							  &point_arr[j]);
-			if (ret) {
-				printk("cooling_names: %s: missing %s in dt node\n", __func__, cooling_names);
-				} else {
-				printk("cooling_names: %s: %s is %s\n", __func__, cooling_names, point_arr[j]);
-			}
-	    }
-	}
-	pdata->num_trips = trip_num;
-    
-	for (i = 0; i < trip_num -1; ++i){
-			pdata->trip_points[i].temp = trip_temp[i];
-			pdata->trip_points[i].lowoff = trip_lowoff[i];
-			pdata->trip_points[i].type = THERMAL_TRIP_ACTIVE;
-			if(cool==1){
-					for (j = 0; j < cool_num; ++j){
-					memcpy(pdata->trip_points[i].cdev_name[j],
-							point_arr[j], strlen(point_arr[j])+1);
-					dev_info(dev,"cdev name: %s is %s\n", pdata->trip_points[i].cdev_name[j], point_arr[j]);
-				}
-			}
-			else{
-				memcpy(pdata->trip_points[i].cdev_name[0],
-					"thermal-cpufreq-0", sizeof("thermal-cpufreq-0"));
-				dev_info(dev, "def cdev name:is %s\n",  pdata->trip_points[i].cdev_name[0]);
-				
-			}
-			dev_info(dev, "trip[%d] temp: %d lowoff: %d\n",
-					i, trip_temp[i], trip_lowoff[i]);
-				
-	}
-	pdata->trip_points[i].temp = trip_points_critical;
-	pdata->trip_points[i].type = THERMAL_TRIP_CRITICAL;
-
-	return pdata;
-
-fail:
-	kfree(pdata);
-	return NULL;
-
+    pzone->last_temp = pzone->cur_temp;
+	schedule_delayed_work(&pzone->thm_read_work, (HZ * pzone->temp_inteval));
 }
 
-#endif
-
-#ifdef CONFIG_OF
-extern int of_address_to_resource(struct device_node *dev, int index,
-				  struct resource *r);
-#endif
-
-static int sprd_thermal_probe(struct platform_device *pdev)
+int sprd_thermal_init(struct sprd_thermal_zone *pzone)
 {
-	struct sprd_thermal_zone *pzone = NULL;
-	struct sprd_thm_platform_data *ptrips = NULL;
-	struct resource *regs;
-	int thm_irq, ret = 0;
-#ifdef CONFIG_OF
-	struct device_node *np = pdev->dev.of_node;
-#endif
-
-	printk(KERN_INFO " sprd_thermal_probe id:%d\n", pdev->id);
-#ifdef CONFIG_OF
-	if (!np) {
-		dev_err(&pdev->dev, "device node not found\n");
-		return -EINVAL;
-	}
-	ptrips = thermal_detect_parse_dt(&pdev->dev);
-#else
-	ptrips = dev_get_platdata(&pdev->dev);
-#endif
-	if (!ptrips)
-		return -EINVAL;
-	pzone = devm_kzalloc(&pdev->dev, sizeof(*pzone), GFP_KERNEL);
-	if (!pzone)
-		return -ENOMEM;
-	mutex_init(&pzone->th_lock);
-	mutex_lock(&pzone->th_lock);
+	int ret=0;
 	pzone->mode = THERMAL_DEVICE_DISABLED;
-	pzone->trip_tab = ptrips;
-#ifdef CONFIG_OF
-	ret = of_property_read_u32(np, "id", &pdev->id);
-	if(ret){
-		printk(KERN_INFO "sprd_thermal_probe No sensor ID \n");
-		return -EINVAL;
-	}
-	pzone->sensor_id = pdev->id;
-#else
-	pzone->sensor_id = pdev->id;
-#endif
-
-	ret = sprd_thm_ops_init(pzone);
-	if(ret){
-		dev_err(&pdev->dev, " pzone->ops =NULL id =%d\n",pzone->sensor_id);
-		return -ENODEV;
-	}
-	INIT_WORK(&pzone->therm_work, sprd_thermal_work);
+	pzone->trend_val = THERMAL_TREND_STABLE;
+	INIT_DELAYED_WORK(&pzone->thm_read_work, thm_read_work);
 	INIT_DELAYED_WORK(&pzone->resume_delay_work,sprd_thermal_resume_delay_work);
-#ifdef CONFIG_OF
-	regs = kzalloc(sizeof(*regs), GFP_KERNEL);
-	ret = of_address_to_resource(np, 0, regs);
-#else
-	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-#endif
-	if (!regs) {
-		return -ENXIO;
-	}
-	ret = pzone->ops->get_reg_base(pzone , regs);
-	if(ret<0){
-		dev_err(&pdev->dev, "Failed to get_reg_base.\n");
-		return ret;
-	}
-	printk(KERN_INFO "sprd_thermal_probe id:%d,base:0x%lx \n", pdev->id,
-	       (unsigned long)pzone->reg_base);
-#ifdef CONFIG_OF
-	thm_irq = irq_of_parse_and_map(np, 0);
-#else
-	thm_irq = platform_get_irq(pdev, 0);
-#endif
-	if (thm_irq < 0) {
-		dev_err(&pdev->dev, "Get IRQ_THM_INT failed.\n");
-		return thm_irq;
-	}
-	ret =
-	    devm_request_threaded_irq(&pdev->dev, thm_irq, NULL,
-				      sprd_thm_irq_handler,
-				      IRQF_NO_SUSPEND | IRQF_ONESHOT | IRQF_SHARED,
-				      "sprd_thm_irq", pzone);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Failed to allocate temp low irq.\n");
-		return ret;
-	}
-
 	pzone->therm_dev =
 	    thermal_zone_device_register(pzone->thermal_zone_name,
-					 ptrips->num_trips, 0, pzone,
-					 &thdev_ops, 0, 0, 0); 
+					 pzone->trip_tab->num_trips, 0, pzone,
+					 &thdev_ops, 0, 0, 0);
 	if (IS_ERR_OR_NULL(pzone->therm_dev)) {
-		dev_err(&pdev->dev, "Register thermal zone device failed.\n");
+		printk("Register thermal zone device failed.\n");
 		return PTR_ERR(pzone->therm_dev);
 	}
-	dev_info(&pdev->dev, "Thermal zone device registered.\n");
-
-	pzone->ops->hw_init(pzone);
-	platform_set_drvdata(pdev, pzone);
 	pzone->mode = THERMAL_DEVICE_ENABLED;
-	mutex_unlock(&pzone->th_lock);
-
+	schedule_delayed_work(&pzone->thm_read_work, (HZ * pzone->temp_inteval));
 #ifdef THM_TEST
-	create_trip_attrs(pzone->therm_dev);	
+	pzone->logtime= 2;
+	pzone->thmlog_switch= THERMAL_LOG_DISABLED;
+	INIT_DELAYED_WORK(&pzone->thm_logtime_work, thm_logtime_work);
+	create_trip_attrs(pzone->therm_dev);
 	ret = device_create_file(&pzone->therm_dev->device, &dev_attr_debug_reg);
-		if (ret)
-			dev_err(&pdev->dev, "create regs debug fail\n");
 #endif
+   printk(" sprd_thermal_init end\n");
 	return 0;
 }
 
-static int sprd_thermal_remove(struct platform_device *pdev)
-{
-	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
-#ifdef THM_TEST
-	remove_trip_attrs(pzone->therm_dev);
-	device_remove_file(&pzone->therm_dev->device, &dev_attr_debug_reg);
-#endif
-	thermal_zone_device_unregister(pzone->therm_dev);
-	cancel_work_sync(&pzone->therm_work);
-	mutex_destroy(&pzone->th_lock);
-	return 0;
-}
-
-static int sprd_thermal_suspend(struct platform_device *pdev,
-				pm_message_t state)
-{
-	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
-	flush_work(&pzone->therm_work);
-	flush_delayed_work(&pzone->resume_delay_work);
-	pzone->ops->suspend(pzone);
-	return 0;
-}
-
-static int sprd_thermal_resume(struct platform_device *pdev)
-{
-	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
-	schedule_delayed_work(&pzone->resume_delay_work, (HZ * 1));
-	//sprd_thm_hw_resume(pzone);
-
-	return 0;
-}
-
-#ifdef CONFIG_OF
-static const struct of_device_id thermal_of_match[] = {
-	{ .compatible = "sprd,sprd-thermal", },
-       {}
-};
-#endif
-
-static struct platform_driver sprd_thermal_driver = {
-	.probe = sprd_thermal_probe,
-	.suspend = sprd_thermal_suspend,
-	.resume = sprd_thermal_resume,
-	.remove = sprd_thermal_remove,
-	.driver = {
-		   .owner = THIS_MODULE,
-		   .name = "sprd-thermal",
-#ifdef CONFIG_OF
-			.of_match_table = of_match_ptr(thermal_of_match),
-#endif
-		   },
-};
-static int __init sprd_thermal_init(void)
-{
-	return platform_driver_register(&sprd_thermal_driver);
-}
-
-static void __exit sprd_thermal_exit(void)
-{
-	platform_driver_unregister(&sprd_thermal_driver);
-}
-
-//module_init(sprd_thermal_init);
-//module_exit(sprd_thermal_exit);
-
-device_initcall_sync(sprd_thermal_init);
-module_exit(sprd_thermal_exit);
-// module_platform_driver(sprd_thermal_driver);
-MODULE_AUTHOR("Mingwei Zhang <mingwei.zhang@spreadtrum.com>");
-MODULE_DESCRIPTION("sprd thermal driver");
-MODULE_LICENSE("GPL");

@@ -27,10 +27,10 @@
 #include <linux/notifier.h>
 //#ifdef CONFIG_MUIC_SUPPORT_FACTORY
 #include <linux/platform_data/mv_usb.h>
-#ifdef CONFIG_MUIC_FACTORY_EVENT
 #include <linux/switch.h>
-#endif
 //#endif
+#include <asm/sec/sec_debug.h>
+
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF)
 #include <linux/battery/sec_charger.h>
 extern int sec_vf_adc_check(void);
@@ -71,12 +71,15 @@ bool is_factory_start = false;
 extern int switch_dev_register(struct switch_dev *sdev);
 extern void switch_set_state(struct switch_dev *sdev, int state);
 #endif
+int dock_status = MUIC_DOCK_DETACHED;
+bool dock_switch_init_fail = false;
 extern struct class *sec_class;
 //#endif
 
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF)
 bool is_close_uart_path = false;
 bool enable_muic_uart = false;
+bool is_first_sleep = false;
 #endif
 
 static irqreturn_t sm5504_irq_handler(int irq, void *data);
@@ -130,102 +133,102 @@ static const struct id_desc id_to_cable_type_mapping[] = {
 	 },
 	{			/* 00001, 1 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00010, 2 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00011, 3 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00100, 4 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00101, 5 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00110, 6 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 00111, 7 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01000, 8 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01001, 9 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01010, 10 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01011, 11 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01100, 12 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01101, 13 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01110, 14 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 01111, 15 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10000, 16 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10001, 17 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10010, 18 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10011, 19 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10100, 20 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10101, 21 */
@@ -235,7 +238,7 @@ static const struct id_desc id_to_cable_type_mapping[] = {
 	 },
 	{			/* 10110, 22 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 10111, 23 */
@@ -255,12 +258,12 @@ static const struct id_desc id_to_cable_type_mapping[] = {
 	 },
 	{			/* 11010, 26 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
-	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_0x1A_WITH_VBUS,
+	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_0x1A,
 	 },
 	{			/* 11011, 27 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 11100, 28 */
@@ -275,7 +278,7 @@ static const struct id_desc id_to_cable_type_mapping[] = {
 	 },
 	{			/* 11110, 30 */
 	 .name = "AT&T TA/Unknown",
-	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+	 .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 	 .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN,
 	 },
 	{			/* 11111, 31 */
@@ -285,7 +288,7 @@ static const struct id_desc id_to_cable_type_mapping[] = {
 	 },
 	{           /* 100000, 32 */  // MHL 0x20
 	  .name = "AT&T TA/No cable",
-        .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_ATT_TA,
+        .cable_type_with_vbus = MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS,
         .cable_type_without_vbus = MUIC_SM5504_CABLE_TYPE_NONE,
         },
 };
@@ -357,14 +360,10 @@ typedef struct sm5504_chip {
 static sm5504_chip_t *g_sm5504_chip = NULL;
 
 
-//#ifdef CONFIG_MUIC_SUPPORT_FACTORY
 static struct sm5504_status *current_status;
-#ifdef CONFIG_MUIC_FACTORY_EVENT
 static struct switch_dev switch_dock = {
         .name = "dock",
 };
-#endif
-//#endif
 
 static void sm5504_init_registers(sm5504_chip_t *chip);
 
@@ -712,6 +711,7 @@ static char *sm5504_cable_names[] = {
 	"MUIC_SM5504_CABLE_TYPE_0x15",
 	"MUIC_SM5504_CABLE_TYPE_TYPE1_CHARGER",
 	"MUIC_SM5504_CABLE_TYPE_0x1A",
+	"MUIC_SM5504_CABLE_TYPE_0x1A_WITH_VBUS",
 	/* JIG Group */
 	"MUIC_SM5504_CABLE_TYPE_JIG_USB_OFF",
 	"MUIC_SM5504_CABLE_TYPE_JIG_USB_ON",
@@ -727,6 +727,7 @@ static char *sm5504_cable_names[] = {
 	"MUIC_SM5504_CABLE_TYPE_INVALID",
 
 	"MUIC_SM5504_CABLE_TYPE_OTG_WITH_VBUS",
+	"MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS"
 };
 #endif /*RTDBGINFO_LEVEL<=RTDBGLEVEL */
 
@@ -754,6 +755,19 @@ static void sm5504_cable_change_handler(struct sm5504_chip *chip,
 		sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
 	    sm5504_reg_write(chip, SM5504_REG_MANUAL_SW2, 0x01);	
 		RTINFO("DCP detach \n");
+	}
+	
+	if ( chip->curr_status.cable_type == MUIC_SM5504_CABLE_TYPE_0x1A_WITH_VBUS
+	    || chip->curr_status.cable_type == MUIC_SM5504_CABLE_TYPE_0x1A) {
+		if( dock_status == MUIC_DOCK_DETACHED && dock_switch_init_fail == false )
+		{
+			dock_status = MUIC_DOCK_DESKDOCK;
+			muic_dock_cb(MUIC_DOCK_DESKDOCK);
+		}
+	}
+	else if (dock_status == MUIC_DOCK_DESKDOCK && dock_switch_init_fail == false) {
+		dock_status = MUIC_DOCK_DETACHED;
+                muic_dock_cb(MUIC_DOCK_DETACHED);
 	}
 
 #if defined(CONFIG_BATTERY_SAMSUNG) || defined(CONFIG_RT_BATTERY)
@@ -816,16 +830,14 @@ static void sm5504_usb_attach_handler(struct sm5504_chip *chip,
 				      *handler, unsigned int old_status,
 				      unsigned int new_status)
 {
-	uint8_t usb_type;
+	//uint8_t usb_type;
 	struct muic_notifier_param param = { .vbus_status = chip->curr_status.vbus_status, .cable_type = chip->curr_status.cable_type};
 
 	RTINFO("USB attached\n");
-
 	atomic_notifier_call_chain(&muic_notifier_list,
 					MUIC_USB_ATTACH_NOTI, &param);
-					
 	if (chip->pdata->usb_callback)
-		chip->pdata->usb_callback(usb_type);
+		chip->pdata->usb_callback(1);
 }
 
 static void sm5504_usb_detach_handler(struct sm5504_chip *chip,
@@ -834,7 +846,6 @@ static void sm5504_usb_detach_handler(struct sm5504_chip *chip,
 				      unsigned int new_status)
 {
 	struct muic_notifier_param param = { .vbus_status = chip->curr_status.vbus_status, .cable_type = chip->curr_status.cable_type};
-
 	atomic_notifier_call_chain(&muic_notifier_list,
 					MUIC_USB_DETACH_NOTI, &param);
 
@@ -852,11 +863,7 @@ static void sm5504_uart_attach_handler(struct sm5504_chip *chip,
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF) && !defined(CONFIG_MUIC_SUPPORT_FACTORY) && !defined(CONFIG_MUIC_SUPPORT_RUSTPROOF_INBATT) 
 	RTINFO("UART attached\n");
 
-#if defined(CONFIG_MACH_YOUNG23GDTV)
-    if (sec_vf_adc_current_check() && !enable_muic_uart && !get_sec_debug_level())
-#else
     if (sec_vf_adc_check() && !enable_muic_uart && !get_sec_debug_level())
-#endif		
 	{
 		sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
         	sm5504_clr_bits(chip, SM5504_REG_CONTROL, 1 << 2);
@@ -867,6 +874,22 @@ static void sm5504_uart_attach_handler(struct sm5504_chip *chip,
 			chip->pdata->uart_callback(1);    
         RTINFO("SM5504 enable UART PATH  enable_muic_uart : %d \n", enable_muic_uart);
     }
+#elif defined(CONFIG_MUIC_SUPPORT_RUSTPROOF) && !defined(CONFIG_MUIC_SUPPORT_FACTORY) && defined(CONFIG_MUIC_SUPPORT_RUSTPROOF_INBATT)
+	RTINFO("INBATT UART attached\n");
+
+	if ( is_first_sleep && !enable_muic_uart && !get_sec_debug_level())		
+	{
+		sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
+		sm5504_reg_write(chip, SM5504_REG_MANUAL_SW2, 0x04);
+		sm5504_clr_bits(chip, SM5504_REG_CONTROL, 1 << 2);
+		
+		is_close_uart_path = true;
+		RTINFO("SM5504 INBATTT disable UART PATH enable_muic_uart : %d is_first_sleep: %d \n", enable_muic_uart, is_first_sleep);
+	} else {
+		if (chip->pdata->uart_callback)
+		chip->pdata->uart_callback(1);    
+		RTINFO("SM5504 INBATT enable UART PATH  enable_muic_uart : %d is_first_sleep: %d \n", enable_muic_uart, is_first_sleep);
+	}
 #else
 	RTINFO("UART attached\n");
 
@@ -881,14 +904,16 @@ static void sm5504_uart_detach_handler(struct sm5504_chip *chip,
 				       *handler, unsigned int old_status,
 				       unsigned int new_status)
 {
+	
+#if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF) && !defined(CONFIG_MUIC_SUPPORT_FACTORY)
 	RTINFO("UART detached\n");
-#if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF) && !defined(CONFIG_MUIC_SUPPORT_FACTORY) && !defined(CONFIG_MUIC_SUPPORT_RUSTPROOF_INBATT) 
+
 	if(is_close_uart_path)
 	{
 	        sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
         	sm5504_set_bits(chip, SM5504_REG_CONTROL, 1 << 2);
 		is_close_uart_path = false;
-		RTINFO("Open UART PATH by detaching\n");
+		RTINFO("SM5504 enable UART PATH by detaching\n");
 	} else {
 		if (chip->pdata->uart_callback)
 			chip->pdata->uart_callback(0);
@@ -978,24 +1003,24 @@ static inline jig_type_t get_jig_type(int cable_type)
 	return type;
 }
 
-#ifdef CONFIG_MUIC_FACTORY_EVENT
-void muic_factory_cb(int type)
+void muic_dock_cb(int type)
 {
-        pr_info("%s:%s= MUIC dock type=%d\n", "sec-switch.c", __func__, type);
+        pr_info("%s:%s MUIC dock type=%d\n", "sec-switch.c", __func__, type);
         switch_set_state(&switch_dock, type);
 }
 
-void muic_init_factory_cb(void)
+void muic_init_dock_cb(void)
 {
         int ret;
         /* for CarDock, DeskDock */
         ret = switch_dev_register(&switch_dock);
-        pr_info("MUIC ret=%d\n", ret);
-
+        pr_info("%s switch_dev_register ret=%d\n", __func__, ret);
         if (ret < 0)
+        {
                 pr_err("Failed to register dock switch. %d\n", ret);
+		dock_switch_init_fail = 1; 
+        }
 }
-#endif
 
 static void sm5504_jig_attach_handler(struct sm5504_chip *chip,
 				      const struct sm5504_event_handler
@@ -1004,10 +1029,11 @@ static void sm5504_jig_attach_handler(struct sm5504_chip *chip,
 {
 	jig_type_t type;
 	type = get_jig_type(chip->curr_status.cable_type);
-        #ifdef CONFIG_MUIC_FACTORY_EVENT
+	/* remove this code cause of screen rotation error in Semi function test    */
+        #if 0//def CONFIG_MUIC_FACTORY_EVENT 
         if(is_factory_start)
         {
-                muic_factory_cb(1);
+            muic_dock_cb(1);
         }
         #endif
 	RTINFO("JIG attached (type = %d)\n", (int)type);
@@ -1211,12 +1237,12 @@ static void sm5504_irq_work(sm5504_chip_t *chip)
 	}
 	RTINFO("%s : CONTROL = 0x%x\n",__FUNCTION__, ret);
 
-	if ( ((ret&0xF0) != 0xE0) || (ret&0x01 == 0x01) ) {  // control register 肋给凳.
-		RTINFO("%s : SM5504 RESET \n",__FUNCTION__);
-		sm5504_reg_write(chip,SM5504_REG_RESET , 0x01);  // sm5504 reset
-		sm5504_init_registers(chip);
-		return;
-	}
+	if ( ((ret&0xF0) != 0xE0) || (ret&0x01 == 0x01) ) {  // control register abnormal
+        RTINFO("%s : SM5504 RESET \n",__FUNCTION__);
+        sm5504_reg_write(chip,SM5504_REG_RESET , 0x01);  // sm5504 reset
+        sm5504_init_registers(chip);
+        return;
+    }
 
 	if ( (chip->curr_status.id_adc == 0x17)
 		&& ( (chip->curr_status.irq_flags[0] & 0x01) == 0x01 )
@@ -1344,12 +1370,12 @@ static void sm5504_init_work(struct work_struct *work)
 	RTINFO("INT1 = 0x%x \n", ret);
 	ret = sm5504_reg_read(chip, SM5504_REG_INT_FLAG2);
 	RTINFO("INT2 = 0x%x \n", ret);
-
 	/* enable interrupt */
 	ret = sm5504_clr_bits(chip, SM5504_REG_CONTROL, 0x01);
 	if (ret < 0) {
-	    dev_err(&chip->iic->dev, "can't enable sm5504's INT (%d)\r\n",ret);
+		dev_err(&chip->iic->dev, "can't enable sm5504's INT (%d)\r\n",ret);
 	}
+	RTINFO("sm5504_irq_work(chip) \n");
 	sm5504_irq_work(chip);
 }
 
@@ -1371,9 +1397,9 @@ static void sm5504_init_regs(sm5504_chip_t *chip)
 
 static void sm5504_init_registers(sm5504_chip_t *chip)
 {
-	int ret;
+    int ret;
 
-	pr_info("[SM5504] %s \n", __FUNCTION__);
+    pr_info("[SM5504] %s \n", __FUNCTION__);
 
 	chip->curr_status.id_adc = 0x1f;
 	chip->adc_reg_addr = SM5504_REG_ADC;
@@ -1383,7 +1409,7 @@ static void sm5504_init_registers(sm5504_chip_t *chip)
 	/* Only mask OCP_LATCH and POR */
 	sm5504_reg_write(chip, SM5504_REG_INTERRUPT_MASK2, 0x24);
 
-	sm5504_reg_write(chip, 0x20,0x06);
+    sm5504_reg_write(chip, 0x20,0x06);
 
 	/* enable interrupt */
 	ret = sm5504_clr_bits(chip, SM5504_REG_CONTROL, 0x01);
@@ -1391,10 +1417,10 @@ static void sm5504_init_registers(sm5504_chip_t *chip)
 	    dev_err(&chip->iic->dev, "can't enable sm5504's INT (%d)\r\n",ret);
 	}
 
-	ret = sm5504_reg_read(chip, SM5504_REG_CONTROL);    
-	pr_info("[SM5504]%s CONTROL : 0x%x \n", __FUNCTION__, ret);
+    ret = sm5504_reg_read(chip, SM5504_REG_CONTROL);    
+    pr_info("[SM5504]%s CONTROL : 0x%x \n", __FUNCTION__, ret);
     
-	return;
+    return;
 }
 
 
@@ -1442,7 +1468,6 @@ static DEVICE_ATTR(apo_factory, 0666,
 
 #endif /* CONFIG_MUIC_FACTORY_EVENT */
 
-//#ifdef CONFIG_MUIC_SUPPORT_FACTORY
 static ssize_t adc_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
@@ -1480,6 +1505,8 @@ static ssize_t dev_show(struct device *dev,
 	u8 dev_value_2[] = "JIG UART ON";	
 	u8 dev_value_3[] = "JIG USB OFF";
 	u8 dev_value_4[] = "JIG USB ON";	
+	u8 dev_value_5[] = "CABLE_NONE";
+	u8 dev_value_6[] = "TA";
 	u8 dev_fail = 0;
 
 	if (current_status->cable_type == MUIC_SM5504_CABLE_TYPE_JIG_UART_OFF) {
@@ -1497,6 +1524,14 @@ static ssize_t dev_show(struct device *dev,
 	else if (current_status->cable_type == MUIC_SM5504_CABLE_TYPE_JIG_USB_ON) {
 		RTINFO("dev_show JIG USB BOOT ON\n");
 		return sprintf(buf, "%s\n", dev_value_4);
+	}
+	else if (current_status->cable_type == MUIC_SM5504_CABLE_TYPE_NONE) {
+		RTINFO("dev_show no cable \n");
+		return sprintf(buf, "%s\n", dev_value_5);
+	}
+	else if (current_status->cable_type == MUIC_SM5504_CABLE_TYPE_ATT_TA || current_status->cable_type == MUIC_SM5504_CABLE_TYPE_REGULAR_TA) {
+		RTINFO("dev_show TA \n");
+		return sprintf(buf, "%s\n", dev_value_6);
 	}
 	else {
 		RTINFO("dev_show no detect\n");
@@ -1545,7 +1580,6 @@ static const struct attribute_group sm5504_muic_group = {
         .attrs = sm5504_muic_attributes,
 };
 
-//#endif
 
 static int sm5504_parse_dt(struct device *dev,
                            struct sm5504_platform_data *pdata)
@@ -1570,10 +1604,10 @@ static int sm5504_probe(struct i2c_client *client,
 {
 	struct sm5504_platform_data *pdata;
 	struct sm5504_chip *chip;
-//#ifdef CONFIG_MUIC_SUPPORT_FACTORY
 	struct device *switch_dev;
-//#endif
+
 	int ret;
+	dock_status = MUIC_DOCK_DETACHED;
 	RTINFO("SiliconMitus SM5504 driver %s probing...\n", SM5504_DRV_VER);
 	if(client->dev.of_node) {
 		pdata = devm_kzalloc(&client->dev, sizeof(*pdata), GFP_KERNEL);
@@ -1606,9 +1640,7 @@ static int sm5504_probe(struct i2c_client *client,
 		goto err_nomem;
 	}
 	g_sm5504_chip = chip;
-//#ifdef CONFIG_MUIC_SUPPORT_FACTORY
 	current_status = &chip->curr_status;
-//#endif
 	wake_lock_init(&chip->muic_wake_lock, WAKE_LOCK_SUSPEND,
 		       "sm5504_wakelock");
 
@@ -1632,6 +1664,12 @@ static int sm5504_probe(struct i2c_client *client,
 	client->irq = chip->irq;
 	RTINFO("Request IRQ %d(GPIO %d)...\n",
 	       chip->irq, pdata->irq_gpio);
+		   
+	switch_dev = device_create(sec_class, NULL, 0, NULL, "switch");
+	chip->switch_dev = switch_dev;
+	ret = sysfs_create_group(&switch_dev->kobj, &sm5504_muic_group);
+	muic_init_dock_cb();
+	
 	ret = request_threaded_irq(chip->irq, NULL,
 		sm5504_irq_handler, SM5504_IRQF_MODE |
 		IRQF_NO_SUSPEND | IRQF_ONESHOT,
@@ -1642,16 +1680,7 @@ static int sm5504_probe(struct i2c_client *client,
 		     chip->irq, pdata->irq_gpio, ret);
 		goto err_request_irq_fail;
 	}
-//#ifdef CONFIG_MUIC_SUPPORT_FACTORY
-	switch_dev = device_create(sec_class, NULL, 0, NULL, "switch");
-	chip->switch_dev = switch_dev;
-	ret = sysfs_create_group(&switch_dev->kobj, &sm5504_muic_group);
-//#endif
-
 	sm5504_init_regs(chip);
-#ifdef CONFIG_MUIC_FACTORY_EVENT
-	muic_init_factory_cb();
-#endif
 
 	pr_info("SM5504 : SiliconMitus SM5504 MUIC driver %s initialize successfully\n", SM5504_DRV_VER);
 	return 0;
@@ -1668,7 +1697,7 @@ err_parse_dt:
 	return ret;
 }
 
-static int __exit sm5504_remove(struct i2c_client *client)
+static int sm5504_remove(struct i2c_client *client)
 {
 	struct sm5504_chip *chip;
 	RTINFO("SM5504 driver removing...\n");
@@ -1719,6 +1748,7 @@ static int sm5504_suspend(struct device *dev)
 
 	RTINFO("SM5504 curr_status.uart_connect : %d \n", chip->curr_status.uart_connect);
 
+#if 0 // for new inbatt model muic rustproof
 	if(chip->curr_status.uart_connect== 1)
 	{
 		sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
@@ -1726,11 +1756,30 @@ static int sm5504_suspend(struct device *dev)
 		is_close_uart_path = true;
 		RTINFO("SM5504 disable UART PATH in sleep mode enable_muic_uart : %d \n", enable_muic_uart);
 	}
+#endif
+	if(is_first_sleep == 0)
+	{
+		is_first_sleep = 1;
+		RTINFO("SM5504 INBATT model set the first sleep flag is_first_sleep : %d \n", is_first_sleep);
+
+		if(chip->curr_status.uart_connect== 1 && !enable_muic_uart && !get_sec_debug_level())
+		{
+			sm5504_reg_write(chip, SM5504_REG_MANUAL_SW1, 0x00);
+			sm5504_reg_write(chip, SM5504_REG_MANUAL_SW2, 0x04);
+			sm5504_clr_bits(chip, SM5504_REG_CONTROL, 1 << 2);
+			
+			is_close_uart_path = true;
+			RTINFO("SM5504 disable UART PATH in sleep mode enable_muic_uart : %d \n", enable_muic_uart);
+		}
+	}
+
 	return 0;
 }
 
 static int sm5504_resume(struct device *dev)
 {
+
+#if 0 // for new inbatt model muic rustproof
 	struct sm5504_chip *chip;
 	struct i2c_client *client = to_i2c_client(dev);
 	chip = i2c_get_clientdata(client);
@@ -1742,6 +1791,8 @@ static int sm5504_resume(struct device *dev)
 		is_close_uart_path = false;
 		RTINFO(" SM5504 enable UART PATH  in wake up mode \n");
 	}
+
+#endif	
 	return 0;
 }
 

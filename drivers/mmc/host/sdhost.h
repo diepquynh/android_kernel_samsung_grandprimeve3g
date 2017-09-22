@@ -28,9 +28,10 @@
 * Controller flag
 *------------------------------------------------------------------------------
 */
-#define SDHOST_FLAG_ENABLE_ACMD12	1
+#define SDHOST_FLAG_ENABLE_ACMD12	0
 #define SDHOST_FLAG_ENABLE_ACMD23	0
 #define SDHOST_FLAG_USE_ADMA		1
+#define SDHOST_MAX_TIMEOUT  3
 /*
  * Controller registers
  */
@@ -300,20 +301,20 @@ static inline void _sdhost_Clk_set_and_on(void __iomem * ioadr, uint32_t div)
 
 #define SDHOST_8_TIMEOUT		0x2E
 #define __DATA_TIMEOUT_MAX_VAL		0xe
-static inline uint8_t _sdhost_calcTimeout(uint32_t baseClk, uint32_t div, uint32_t seconds)
+static inline uint8_t _sdhost_calcTimeout(unsigned int clock, uint8_t TimeOutValue)
 {
-	uint32_t sdClk = seconds * (baseClk / ((div + 1) << 1));
-	uint8_t i;
-
-	for (i = 0; i < 15; i++) {
-		if ((((uint32_t) 1) << (16 + i)) > sdClk) {
-			if (0 != i) {
-				i--;
-			}
-			break;
-		}
+	unsigned target_timeout, current_timeout;
+	uint8_t count = 0;
+	target_timeout = TimeOutValue * clock;
+	current_timeout = 1 << 16;
+	while (target_timeout > current_timeout) {
+		count++;
+		current_timeout <<= 1;
 	}
-	return i;
+	count--;
+	if (count >= 0xF)
+		count = 0xE;
+	return count;
 }
 
 #define SDHOST_8_RST			0x2F

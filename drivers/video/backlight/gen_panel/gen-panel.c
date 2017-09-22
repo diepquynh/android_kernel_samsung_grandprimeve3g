@@ -46,29 +46,41 @@
 #include "../../sprdfb/sprdfb_dispc_reg.h"
 
 
-#ifdef CONFIG_GEN_PANEL_SMART_MTP
-#include "smart_dimming.h"
+#ifdef CONFIG_GEN_PANEL_DYNAMIC_AID
+#include "dynamic_aid.h"
 #endif
 
 u32 boot_panel_id;
+static int panel_id_index;
+static int nr_panel_id;
 static struct lcd *glcd;
 static LIST_HEAD(extpin_list);
 static LIST_HEAD(mani_list);
 static LIST_HEAD(attr_list);
 #ifdef CONFIG_GEN_PANEL_OCTA
-static struct oled_brt_map brt_map[MAX_OLED_BRT];
-static struct candela_map elvss_map_table;
-static struct candela_map aid_map_table;
-static struct candela_map brt_map_table;
+static int *aid_table;
+static int *elvss_table;
+static int *mps_table;
+static int *elvss_temp_table;
+static int *acl_table;
+static int *rgb_offset;
+static int *candela_offset;
+static int *base_lux_table;
+static int *gamma_curve_table;
 static unsigned int *candela_table;
 static unsigned int nr_candela;
-#ifdef CONFIG_GEN_PANEL_SMART_MTP
+static u8 *gamma_table;
+static int vregout_voltage;
+static u8 date[7];
+static u8 coordinate[4];
+#ifdef CONFIG_GEN_PANEL_DYNAMIC_AID
 static struct smartdim_conf *sdimconf;
+static int gen_panel_dimming_init(struct lcd *);
 #endif
 #endif
 static int gen_panel_init_dev_attr(struct gen_dev_attr *);
-
-//extern void dispc_write(uint32_t value, uint32_t reg);
+static inline void print_data(char *data, int len);
+static int prev_intensity;
 
 enum {
 	GEN_DTYPE_NONE = 0,
@@ -77,14 +89,10 @@ enum {
 	GEN_DTYPE_32BIT = 4,
 };
 
-#define OUTDOOR_MODE 6
-
 static int addr_offset;
 static int addr_type;
 static int data_offset;
 static int data_type;
-
-#define DISPC_RSTN   (0x0008)
 
 static int __init get_boot_panel_id(char *str)
 {
@@ -118,7 +126,19 @@ static inline int op_cmd_valid(struct lcd *lcd, int index)
 			!op_cmd_index_valid(index) ||
 			!lcd->op_cmds[index].nr_desc ||
 			!lcd->op_cmds[index].desc)
-			return 0;
+		return 0;
+	return 1;
+}
+
+static inline int op_cmd_desc_valid(struct lcd *lcd, int index, int desc_index)
+{
+	if (!op_cmd_valid(lcd, index))
+		return 0;
+
+	if (desc_index < 0 ||
+			desc_index >= lcd->op_cmds[index].nr_desc)
+		return 0;
+
 	return 1;
 }
 
@@ -233,26 +253,29 @@ static inline void free_op_cmds_array(struct lcd *lcd)
 	}
 }
 
+static inline void free_action_list(struct list_head *head)
+{
+	struct manipulate_action *action, *naction;
+
+	list_for_each_entry_safe(action, naction, head, list) {
+		list_del(&action->list);
+		kfree(action->pmani);
+		kfree(action);
+	}
+}
+
 static inline void free_gen_dev_attr(void)
 {
 	struct gen_dev_attr *gen_attr, *ngen_attr;
-	struct manipulate_action *action, *naction;
-	int config;
 
-	pr_info("[LCD] %s +\n", __func__);
+	pr_info("%s +\n", __func__);
 	list_for_each_entry_safe(gen_attr, ngen_attr, &attr_list, list) {
 		list_del(&gen_attr->list);
-		list_for_each_entry_safe(action, naction,
-				&gen_attr->action_list, list) {
-			list_del(&action->list);
-			for (config = 0; config < action->nr_mani; config++)
-				kfree(action->pmani);
-			kfree(action);
-		}
+		free_action_list(&gen_attr->action_list);
 		gen_attr->action = NULL;
 		kfree(gen_attr);
 	}
-	pr_info("[LCD] %s -\n", __func__);
+	pr_info("%s -\n", __func__);
 }
 
 static inline void free_manipulate_table(void)
@@ -357,6 +380,24 @@ static inline int brt_to_candela(int br_stt, int br_end,
 	return -1;
 }
 
+static inline int find_candela_index_from_table(unsigned int candela,
+		unsigned int *table, size_t size)
+{
+	int index;
+
+	if (candela <= table[0])
+		return 0;
+	if (candela >= table[size - 1])
+		return size - 1;
+
+	for (index = 0; index < size - 1; index++)
+		if ((table[index] <= candela) &&
+				(candela < table[index + 1]))
+			break;
+	return index;
+}
+
+
 static inline int find_candela_from_table(unsigned int candela,
 		unsigned int *table, size_t size)
 {
@@ -373,91 +414,6 @@ static inline int find_candela_from_table(unsigned int candela,
 			return table[i];
 
 	return -1;
-}
-
-static inline void print_brt_map(void)
-{
-	int i;
-
-	for (i = 0; i <= MAX_OLED_BRT; i++)
-		pr_info("[LCD] [%d] cd:%d,  elvss_index:%d,  aid_index:%d\n",
-				i, brt_map[i].candela,
-				brt_map[i].elvss, brt_map[i].aid);
-}
-
-static inline int gen_panel_init_brt_map(void)
-{
-	unsigned int brt, candela;
-	unsigned int i, stt, end, cd_stt, cd_end;
-	struct candela_map *table;
-
-	table = &brt_map_table;
-	if (!table)
-		return 0;
-
-	for (i = 0; i < table->size; i++) {
-		cd_stt = table->candela[i];
-		cd_end = table->candela[i + 1];
-		stt = table->value[i];
-		if (i < table->size - 1)
-			end = table->value[i + 1];
-		else
-			end = stt + 1;
-		for (brt = stt; brt < end; brt++) {
-			candela = brt_to_candela(stt, end, cd_stt, cd_end, brt);
-			brt_map[brt].candela =
-				find_candela_from_table(candela,
-						candela_table, nr_candela);
-		}
-	}
-
-	table = &elvss_map_table;
-	if (!table)
-		return 0;
-
-	for (i = 0, brt = 0; i < table->size; i++) {
-		cd_stt = table->candela[i];
-		if (i < table->size - 1)
-			cd_end = table->candela[i + 1];
-		else
-			cd_end = cd_stt + 1;
-		for (; brt <= MAX_OLED_BRT; brt++) {
-			if (brt_map[brt].candela >= cd_end)
-				break;
-			if (brt_map[brt].candela >= cd_stt)
-				brt_map[brt].elvss = table->value[i];
-		}
-	}
-
-	table = &aid_map_table;
-	if (!table)
-		return 0;
-
-	for (i = 0, brt = 0; i < table->size; i++) {
-		cd_stt = table->candela[i];
-		if (i < table->size - 1)
-			cd_end = table->candela[i + 1];
-		else
-			cd_end = cd_stt + 1;
-		for (; brt <= MAX_OLED_BRT; brt++) {
-			if (brt_map[brt].candela >= cd_end)
-				break;
-			if (brt_map[brt].candela >= cd_stt)
-				brt_map[brt].aid = table->value[i];
-		}
-	}
-
-	return 0;
-}
-
-static inline void free_candela_map_table(void)
-{
-	kfree(elvss_map_table.candela);
-	kfree(elvss_map_table.value);
-	kfree(aid_map_table.candela);
-	kfree(aid_map_table.value);
-	kfree(brt_map_table.candela);
-	kfree(brt_map_table.value);
 }
 #endif	/* CONFIG_GEN_PANEL_OCTA */
 
@@ -568,6 +524,57 @@ static size_t gen_panel_read_reg(struct lcd *lcd,
 	return gen_panel_rx_cmds(lcd, buf, read_desc, ARRAY_SIZE(read_desc));
 }
 
+#define MAX_READ_BYTES	(100)
+
+static size_t gen_panel_read_reg1(struct lcd *lcd,
+                u8 *buf, u8 addr, u8 pos, u8 len)
+{
+        static char read_len[] = {0x00};
+        static char read_addr[] = {0x00};
+        static char gpara[] = {0xB0, 0x00};
+        static struct gen_cmd_desc read_desc[] = {
+                {MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE, DSI_HS_MODE, 0,
+                        sizeof(read_len), read_len},
+                {MIPI_DSI_DCS_SHORT_WRITE_PARAM, DSI_HS_MODE, 0,
+                        sizeof(gpara), gpara},
+                {MIPI_DSI_DCS_READ, DSI_HS_MODE, 0,
+                        sizeof(read_addr), read_addr},
+        };
+	int ret, tlen = len;
+        read_addr[0] = addr;
+        gpara[1] = pos;
+
+	while (tlen > 0) {
+		read_len[0] = tlen < MAX_READ_BYTES ? len : MAX_READ_BYTES;
+		ret = gen_panel_rx_cmds(lcd, buf, read_desc, ARRAY_SIZE(read_desc));
+		if (ret != read_len[0]) {
+			pr_err("%s, failed to read addr:%2Xh, pos:%d, len:%u\n",
+					__func__, addr, pos, len);
+			return -EINVAL;
+		}
+		gpara[1] += read_len[0];
+		tlen -= read_len[0];
+	}
+
+        pr_info("[LCD] addr:%2Xh, pos:%d, len:%u\n", addr, pos, len);
+	return len;
+}
+
+static size_t gen_panel_write_reg(struct lcd *lcd, u8 addr, u8 data)
+{
+	static char write_data[] = {0x00, 0x00};
+	static struct gen_cmd_desc write_desc[] = {
+		{MIPI_DSI_DCS_SHORT_WRITE_PARAM	, DSI_HS_MODE, 0,
+			sizeof(write_data), write_data},
+	};
+
+	write_data[0] = addr;
+	write_data[1] = data;
+
+	pr_info("[LCD] %s: addr:0x%2x, data:0x%2x\n", __func__, addr, data);
+	return gen_panel_tx_cmds(lcd, write_desc, ARRAY_SIZE(write_desc));
+}
+
 static u32 set_panel_id(struct lcd *lcd)
 {
 	u32 read_id;
@@ -575,6 +582,7 @@ static u32 set_panel_id(struct lcd *lcd)
 
 	mutex_lock(&lcd->access_ok);
 	memset(out_buf, 0, sizeof(out_buf));
+	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
 	gen_panel_read_reg(lcd, out_buf, 0x04, 4);
 	gen_panel_read_reg(lcd, out_buf, lcd->id_rd_info[0].reg,
 			lcd->id_rd_info[0].len);
@@ -585,7 +593,7 @@ static u32 set_panel_id(struct lcd *lcd)
 	gen_panel_read_reg(lcd, out_buf, lcd->id_rd_info[2].reg,
 			lcd->id_rd_info[2].len);
 	read_id |= out_buf[0];
-
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
 	mutex_unlock(&lcd->access_ok);
 
 	return read_id;
@@ -661,10 +669,12 @@ int gen_dsi_panel_verify_reg(struct lcd *lcd,
 }
 EXPORT_SYMBOL(gen_dsi_panel_verify_reg);
 
+#ifdef CONFIG_GEN_PANEL_BACKLIGHT
 #ifdef CONFIG_GEN_PANEL_OCTA
-static int gen_panel_set_hbm(struct lcd *lcd, int on)
+static int gen_panel_set_hbm(struct lcd *lcd)
 {
-	if (on)
+	pr_info("%s, hbm %s\n", __func__, lcd->hbm ? "on" : "off");
+	if (lcd->hbm)
 		gen_panel_write_op_cmds(lcd, PANEL_HBM_ON);
 	else
 		gen_panel_write_op_cmds(lcd, PANEL_HBM_OFF);
@@ -672,35 +682,110 @@ static int gen_panel_set_hbm(struct lcd *lcd, int on)
 	return 0;
 }
 
-static int gen_panel_set_elvss(struct lcd *lcd, int intensity)
+static int gen_panel_set_elvss(struct lcd *lcd, int candela_index)
 {
-	gen_panel_write_op_cmd_desc(lcd, PANEL_ELVSS_CMD,
-			brt_map[intensity].elvss);
+	struct gen_cmd_desc *desc;
+	int itemp;
+
+	/* Write TSET parameter */
+	desc = find_op_cmd_desc(lcd, PANEL_TSET_CMD, 0xB8);
+	if (desc) {
+		u8 *tset_data = &desc->data[data_offset + lcd->tset_param_offset];
+		*tset_data = abs(lcd->temperature) +
+			((lcd->temperature < 0) ? 0x80 : 0x00);
+		gen_panel_write_op_cmds(lcd, PANEL_TSET_CMD);
+	}
+
+	/* Write ELVSS Parameters */
+	desc = find_op_cmd_desc(lcd, PANEL_ELVSS_CMD, 0xB6);
+	if (desc) {
+		if (mps_table) {
+			u8 *mps_data = &desc->data[data_offset +
+				lcd->mps_param_offset];
+			*mps_data = mps_table[candela_index];
+			pr_debug("%s, mps 0x%02X\n", __func__, *mps_data);
+		}
+
+		if (elvss_table) {
+			u8 *elvss_data = &desc->data[data_offset +
+				lcd->elvss_param_offset];
+			*elvss_data = elvss_table[candela_index];
+			pr_debug("%s, elvss 0x%02X\n", __func__, *elvss_data);
+		}
+
+		if (elvss_temp_table) {
+			u8 *elvss_temp_data = &desc->data[data_offset +
+				lcd->elvss_temp_param_offset];
+			if (lcd->temperature > 0)
+				itemp = 0;
+			else if (lcd->temperature > -20)
+				itemp = 1;
+			else
+				itemp = 2;
+
+			*elvss_temp_data =
+				elvss_temp_table[itemp * nr_candela + candela_index];
+			pr_debug("%s, elvss_temp 0x%02X\n", __func__, *elvss_temp_data);
+		}
+		gen_panel_write_op_cmds(lcd, PANEL_ELVSS_CMD);
+	}
 
 	return 0;
 }
 
-static int gen_panel_set_aid(struct lcd *lcd, int intensity)
+static int gen_panel_set_aid(struct lcd *lcd, int candela_index)
 {
-	gen_panel_write_op_cmd_desc(lcd, PANEL_AID_CMD,
-			brt_map[intensity].aid);
+	struct gen_cmd_desc *desc;
+	u16 *aid_data;
+	desc = find_op_cmd_desc(lcd, PANEL_AID_CMD, 0xB2);
+	if (!desc) {
+		pr_warn("%s, %s not found\n", __func__,
+				op_cmd_names[PANEL_AID_CMD]);
+		return -EINVAL;
+	}
+	if (aid_table) {
+		aid_data = (u16 *)&desc->data[data_offset + lcd->aid_param_offset];
+		*aid_data = htons((u16)aid_table[candela_index]);
+		pr_debug("%s, aid 0x%04X\n", __func__, ntohs(*aid_data));
+	}
+	gen_panel_write_op_cmds(lcd, PANEL_AID_CMD);
 
 	return 0;
 }
 
-static int gen_panel_set_acl(struct lcd *lcd, int bl_level)
+static int gen_panel_set_acl(struct lcd *lcd, int candela_index)
 {
+	struct gen_cmd_desc *desc;
+	u8 *acl_data;
+
+	if (lcd->acl) {
+		desc = find_op_cmd_desc(lcd, PANEL_ACL_ON_CMD, 0x55);
+		if (!desc) {
+			pr_warn("%s, %s not found\n", __func__,
+					op_cmd_names[PANEL_ACL_ON_CMD]);
+			return -EINVAL;
+		}
+		if (acl_table) {
+			acl_data = &desc->data[data_offset];
+			*acl_data = acl_table[candela_index];
+		}
+		gen_panel_write_op_cmds(lcd, PANEL_ACL_ON_CMD);
+	} else {
+		gen_panel_write_op_cmds(lcd, PANEL_ACL_OFF_CMD);
+	}
+
 	return 0;
 }
 
-static int gen_panel_set_gamma(struct lcd *lcd, int intensity)
+static int gen_panel_set_gamma(struct lcd *lcd, int candela_index)
 {
 	struct device *dev = lcd->dev;
 	struct gen_cmd_desc *desc;
 
-#ifdef CONFIG_GEN_PANEL_SMART_MTP
-	BUG_ON(!sdimconf || !sdimconf->generate_gamma);
-#endif
+	if (!gamma_table) {
+		pr_err("%s, gamma_table not exist\n", __func__);
+		return -EINVAL;
+	}
 
 	/* FIX ME : GAMMA REG should be variable by DT */
 	desc = find_op_cmd_desc(lcd, PANEL_GAMMA_CMD, 0xCA);
@@ -708,16 +793,14 @@ static int gen_panel_set_gamma(struct lcd *lcd, int intensity)
 		dev_err(dev, "[LCD] not found gamma cmd\n");
 		return 0;
 	}
-
-#ifdef CONFIG_GEN_PANEL_SMART_MTP
-	sdimconf->generate_gamma(brt_map[intensity].candela,
-			&desc->data[1]);
-#endif
+	memcpy(&desc->data[data_offset],
+			&gamma_table[candela_index * 33], 33);
 	gen_panel_write_op_cmds(lcd, PANEL_GAMMA_CMD);
 
 	return 0;
 }
-#endif // #ifdef CONFIG_GEN_PANEL_OCTA
+#endif /* #ifdef CONFIG_GEN_PANEL_OCTA */
+
 static int gen_panel_set_bl_level(struct lcd *lcd, int intensity)
 {
 	struct device *dev = lcd->dev;
@@ -734,7 +817,7 @@ static int gen_panel_set_bl_level(struct lcd *lcd, int intensity)
 
 	if (data_type)
 		memcpy(&desc->data[data_offset], &intensity, data_type);
-	//gen_panel_write_op_cmds(lcd, index);
+	/* gen_panel_write_op_cmds(lcd, index); */
 	#endif
 
 	gen_panel_write_op_cmds(lcd, PANEL_BL_ON_CMD);
@@ -743,11 +826,13 @@ static int gen_panel_set_bl_level(struct lcd *lcd, int intensity)
 	return intensity;
 }
 
-/* support to control brightness by transmission of MIPI command to LDI */
-static int gen_panel_set_brightness(void *prvinfo, int intensity)
+static int gen_panel_set_brightness(void *bd_data, int intensity)
 {
-	struct lcd *lcd = (struct lcd *)prvinfo;
+	struct lcd *lcd = (struct lcd *)bd_data;
+	struct gen_panel_backlight_info *bl_info =
+		(struct gen_panel_backlight_info *)bl_get_data(lcd->bd);
 	struct device *dev = lcd->dev;
+	int ret, index;
 
 	dev_dbg(dev, "set brightness (%d)\n", intensity);
 
@@ -767,10 +852,33 @@ static int gen_panel_set_brightness(void *prvinfo, int intensity)
 	 * 5. ACL
 	 * 6. GAMMA
 	 * */
-	gen_panel_set_elvss(lcd, intensity);
-	gen_panel_set_aid(lcd, intensity);
-	gen_panel_set_acl(lcd, intensity);
-	gen_panel_set_gamma(lcd, intensity);
+	if (!intensity) {
+		pr_debug("%s, amoled not support 0 level\n", __func__);
+		mutex_unlock(&lcd->access_ok);
+		return 0;
+	}
+
+	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	if (IS_HBM(bl_info->auto_brightness) &&
+			op_cmd_valid(lcd, PANEL_HBM_ON)) {
+		lcd->hbm = 1;
+		gen_panel_set_hbm(lcd);
+	} else {
+		if (lcd->hbm) {
+			lcd->hbm = 0;
+			gen_panel_set_hbm(lcd);
+		}
+
+		index = find_candela_index_from_table(intensity,
+				candela_table, nr_candela);
+		gen_panel_set_gamma(lcd, index);
+		gen_panel_set_aid(lcd, index);
+		gen_panel_set_elvss(lcd, index);
+		gen_panel_set_acl(lcd, index);
+	}
+	gen_panel_write_op_cmds(lcd, PANEL_GAMMA_UPDATE_CMD);
+	prev_intensity = intensity;
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
 #else
 	/* set backlight-ic level directly */
 	gen_panel_set_bl_level(lcd, intensity);
@@ -779,6 +887,12 @@ static int gen_panel_set_brightness(void *prvinfo, int intensity)
 
 	return intensity;
 }
+#else
+static int gen_panel_set_brightness(void *bd_data, int intensity)
+{
+	return 0;
+}
+#endif
 
 static const struct gen_panel_backlight_ops backlight_ops = {
 	.set_brightness = gen_panel_set_brightness,
@@ -800,58 +914,59 @@ static int gen_panel_set_mdnie(struct mdnie_config *config)
 
 	if (config->tuning) {
 		pr_info("[LCD] %s: set tuning data\n", __func__);
-	} else if ((config->accessibility == NEGATIVE) || (config->negative)) {
-		pr_info("[LCD] %s: set negative\n", __func__);
-		index = PANEL_MDNIE_NEGATIVE_CMD;
-	} else if (config->accessibility == COLOR_BLIND) {
-		pr_info("[LCD] %s: set color adjustment\n", __func__);
-		index = PANEL_MDNIE_COLOR_ADJ_CMD;
-	} else if (IS_HBM(config->auto_brightness)) {
-		pr_info("[LCD] %s: set outdoor\n", __func__);
-		index = PANEL_MDNIE_OUTDOOR_CMD;
-	} else {
-		pr_info("%s: set scenario(%d)\n", __func__, config->scenario);
-		switch (config->scenario) {
-		case MDNIE_CAMERA_MODE:
-			index = PANEL_MDNIE_CAMERA_CMD;
+	} else if (config->accessibility) {
+		pr_info("[LCD] %s: set accessibility(%d)\n",
+				__func__, config->accessibility);
+		switch (config->accessibility) {
+		case NEGATIVE:
+			index = PANEL_MDNIE_NEGATIVE_CMD;
 			break;
-		case MDNIE_GALLERY_MODE:
-			index = PANEL_MDNIE_GALLERY_CMD;
+		case COLOR_BLIND:
+			index = PANEL_MDNIE_COLOR_ADJ_CMD;
 			break;
-		case MDNIE_VIDEO_WARM_MODE:
-		case MDNIE_VIDEO_COLD_MODE:
-		case MDNIE_VIDEO_MODE:
-			index = PANEL_MDNIE_VIDEO_CMD;
+		case SCREEN_CURTAIN:
+			index = PANEL_MDNIE_CURTAIN_CMD;
 			break;
-		case MDNIE_VT_MODE:
-			index = PANEL_MDNIE_VT_CMD;
+		case GRAY_SCALE:
+			index = PANEL_MDNIE_GRAY_SCALE_CMD;
 			break;
-		case MDNIE_BROWSER_MODE:
-			index = PANEL_MDNIE_BROWSER_CMD;
+		case GRAY_SCALE_NEGATIVE:
+			index = PANEL_MDNIE_GRAY_SCALE_NEGATIVE_CMD;
 			break;
-		case MDNIE_EBOOK_MODE:
-			index = PANEL_MDNIE_EBOOK_CMD;
-			break;
-		case MDNIE_EMAIL_MODE:
-			index = PANEL_MDNIE_EMAIL_CMD;
-			break;
-		case MDNIE_OUTDOOR_MODE:
+		case OUTDOOR:
 			index = PANEL_MDNIE_OUTDOOR_CMD;
 			break;
-		case MDNIE_UI_MODE:
 		default:
-			index = PANEL_MDNIE_UI_CMD;
+			pr_warn("[LCD] %s, accessibility(%d) not exist\n",
+					__func__, config->accessibility);
 			break;
 		}
-		if (!lcd->op_cmds[index].desc) {
-			pr_warn("[LCD] %s: scenario(%d) not exist\n",
-					__func__, config->scenario);
+	} else if (config->negative) {
+		pr_info("[LCD] %s: set negative\n", __func__);
+		index = PANEL_MDNIE_NEGATIVE_CMD;
+	} else if (IS_HBM(config->auto_brightness)) {
+		pr_info("[LCD] %s: set outdoor\n", __func__);
+		if (config->scenario == MDNIE_EBOOK_MODE ||
+				config->scenario == MDNIE_BROWSER_MODE)
+			index = PANEL_MDNIE_HBM_TEXT_CMD;
+		else
+			index = PANEL_MDNIE_HBM_CMD;
+	} else {
+		index = MDNIE_OP_INDEX(config->mode, config->scenario);
+		pr_info("[LCD] %s: mode(%d), scenario(%d), index(%d)\n",
+				__func__, config->mode, config->scenario, index);
+		if (!op_cmd_valid(lcd, index)) {
+			pr_warn("%s: mode(%d), scenario(%d) not exist\n",
+					__func__, config->mode,
+					config->scenario);
 			index = PANEL_MDNIE_UI_CMD;
 		}
 	}
 
 	mdnie->config = *config;
+	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
 	gen_panel_write_op_cmds(lcd, index);
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
 	mutex_unlock(&lcd->access_ok);
 
 	return 1;
@@ -862,17 +977,20 @@ static int gen_panel_set_color_adjustment(struct mdnie_config *config)
 	struct lcd *lcd = glcd;
 	struct mdnie_lite *mdnie = &lcd->mdnie;
 	struct gen_cmd_desc *desc;
-	int i;
+	int i, j;
 
 	desc = find_op_cmd_desc(lcd, PANEL_MDNIE_COLOR_ADJ_CMD,
 			lcd->color_adj_reg);
 	if (!desc) {
-		pr_err("[LCD] %s: cmd not found\n", __func__);
+		pr_err("%s: cmd not found\n", __func__);
 		return 0;
 	}
+
 	for (i = 0; i < NUMBER_OF_SCR_DATA; i++) {
-		desc->data[i * 2 + 1] = GET_LSB_8BIT(mdnie->scr[i]);
-		desc->data[i * 2 + 2] = GET_MSB_8BIT(mdnie->scr[i]);
+		j = (lcd->rgb == GEN_PANEL_RGB) ?
+			i : NUMBER_OF_SCR_DATA - 1 - i;
+		desc->data[i * 2 + 1] = GET_LSB_8BIT(mdnie->scr[j]);
+		desc->data[i * 2 + 2] = GET_MSB_8BIT(mdnie->scr[j]);
 	}
 
 	return 1;
@@ -1005,7 +1123,6 @@ static int gen_panel_set_extpin(struct lcd *lcd,
 
 	if (on) {
 		if (pin->type == EXT_PIN_REGULATOR) {
-         printk(">>pin->type = EXT_PIN_REGULATOR\n");
 			if (!pin->supply) {
 				dev_err(lcd->dev, "[LCD] invalid regulator(%s)\n",
 						pin->name);
@@ -1103,25 +1220,37 @@ static int gen_panel_set_pin_state(struct lcd *lcd, int on)
 
 static void gen_panel_set_power(struct lcd *lcd, int on)
 {
-	struct extpin_ctrl *pin_ctrl;
-	size_t nr_pin_ctrl;
+	struct extpin_ctrl *pin_ctrl = NULL;
+	size_t nr_pin_ctrl = 0;
 	struct extpin *pin;
 	unsigned long expires;
 	unsigned int remain_msec, i;
 	int state;
 
-	if (lcd->power == !!on) {
-		pr_warn("[LCD] %s: power already %s state\n",
-				__func__, on ? "on" : "off");
+	pr_debug("%s, pwr %d, on %d\n", __func__, lcd->power, on);
+
+	if ((on && (lcd->power & on)) || (!on && !lcd->power)) {
+		pr_warn("%s: power already %s(%d) state\n",
+				__func__, on ? "on" : "off", on);
 		return;
 	}
 
 	if (on) {
-		pin_ctrl = lcd->extpin_on_seq.ctrls;
-		nr_pin_ctrl = lcd->extpin_on_seq.nr_ctrls;
+		if (on == GEN_PANEL_PWR_ON_0) {
+			pin_ctrl = lcd->extpin_on_0_seq.ctrls;
+			nr_pin_ctrl = lcd->extpin_on_0_seq.nr_ctrls;
+		} else if (on == GEN_PANEL_PWR_ON_1) {
+			pin_ctrl = lcd->extpin_on_seq.ctrls;
+			nr_pin_ctrl = lcd->extpin_on_seq.nr_ctrls;
+		}
 	} else {
 		pin_ctrl = lcd->extpin_off_seq.ctrls;
 		nr_pin_ctrl = lcd->extpin_off_seq.nr_ctrls;
+	}
+
+	if (!pin_ctrl || !nr_pin_ctrl) {
+		pr_err("%s, pin_ctrl not exist\n", __func__);
+		return;
 	}
 
 	for (i = 0; i < nr_pin_ctrl; i++) {
@@ -1129,9 +1258,9 @@ static void gen_panel_set_power(struct lcd *lcd, int on)
 		if (mutex_is_locked(&pin->expires_lock)) {
 			expires = pin->expires;
 			if (!time_after(jiffies, expires)) {
-				remain_msec =
-					jiffies_to_msecs(abs((long)(expires)
-							- (long)(jiffies)));
+				remain_msec = jiffies_to_msecs(
+						abs((long)(expires) -
+							(long)(jiffies)));
 				if (remain_msec > 1000) {
 					pr_warn("[LCD] %s, wait (%d msec) too long\n",
 							__func__, remain_msec);
@@ -1158,15 +1287,19 @@ static void gen_panel_set_power(struct lcd *lcd, int on)
 						state ? "on" : "off",
 						pin_ctrl[i].usec);
 		} else {
-			gen_panel_set_extpin(lcd,
-					pin_ctrl[i].pin, pin_ctrl[i].on);
+			gen_panel_set_extpin(lcd, pin_ctrl[i].pin,
+					pin_ctrl[i].on);
 			panel_usleep(pin_ctrl[i].usec);
 			pr_info("[LCD] %s %s %d usec\n", pin->name,
 					pin_ctrl[i].on ? "on" : "off",
 					pin_ctrl[i].usec);
 		}
 	}
-	lcd->power = on;
+
+	if (on)
+		lcd->power |= on;
+	else
+		lcd->power = on;
 	return;
 }
 #else
@@ -1203,34 +1336,107 @@ static bool gen_panel_connected(struct lcd *lcd)
 	return false;
 }
 
-static inline void print_mtp_value(char *mtp_data, int len)
+static inline void print_data(char *data, int len)
 {
-	unsigned char buffer[250];
+	unsigned char buffer[1000];
 	unsigned char *p = buffer;
 	int i;
 
-	p += sprintf(p, "[MTP] ");
-	for (i = 0; i < len; i++)
-		p += sprintf(p, "0x%02X ", mtp_data[i]);
+	if (len < 0 || len > 200) {
+		pr_warn("%s, out of range (len %d)\n",
+				__func__, len);
+		return;
+	}
 
-	pr_debug("[LCD] %s\n", buffer);
+	p += sprintf(p, "========== [DATA DUMP - stt] ==========\n");
+	for (i = 0; i < len; i++) {
+		p += sprintf(p, "0x%02X", data[i]);
+		if (!((i + 1) % 8) || (i + 1 == len))
+			p += sprintf(p, "\n");
+		else
+			p += sprintf(p, " ");
+	}
+	p += sprintf(p, "========== [DATA DUMP - end] ==========\n");
+	pr_info("%s", buffer);
+}
+
+#ifdef CONFIG_GEN_PANEL_DYNAMIC_AID
+static int gen_panel_read_hbm_info(struct lcd *lcd, u8 *dest)
+{
+	u8 *t = dest;
+	int i = 0, len = 0;
+
+	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	for (i = 0; i < ARRAY_SIZE(lcd->hbm_rd_info) &&
+			lcd->hbm_rd_info[i].len; i++) {
+		len = gen_panel_read_reg1(lcd, dest,
+				lcd->hbm_rd_info[i].reg,
+				lcd->hbm_rd_info[i].idx,
+				lcd->hbm_rd_info[i].len);
+		if (len != lcd->hbm_rd_info[i].len) {
+			pr_warn("%s, hbm read failed\n", __func__);
+			return -EINVAL;
+		}
+		dest += len;
+	}
+	print_data(t, (int)(dest - t));
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
+
+	return (int)(dest - t);
+}
+
+size_t gen_panel_read_ldi_info(struct lcd *lcd)
+{
+	int len, i;
+	u8 reg_B6h[22];
+
+	struct gen_cmds_info *cmd;
+	struct gen_cmd_desc *desc;
+	u8 octa_product_reg = lcd->octa_product_reg;
+	u8 octa_coordinate_reg = lcd->octa_coordinate_reg;
+	int product_reg_gpara = lcd->octa_product_gpara;
+	int coordinate_gpara = lcd->octa_coordinate_gpara;
+
+	desc = find_op_cmd_desc(lcd, PANEL_HBM_ON, 0xB4);
+	if (desc) {
+		u8 *hbm_gamma = &desc->data[data_offset +
+			lcd->hbm_gamma_param_offset];
+		len = gen_panel_read_hbm_info(lcd, hbm_gamma);
+		if (len < 0)
+			pr_err("%s, hbm read failed\n", __func__);
+	}
+
+	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	panel_usleep(20000);
+
+	/* read OCTA cell ID */
+	gen_panel_read_reg1(lcd, date, octa_product_reg, product_reg_gpara, 7);
+	gen_panel_read_reg1(lcd, coordinate, octa_coordinate_reg, coordinate_gpara, 4);
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
+
+	if (elvss_temp_table) {
+		u8 temp_data;
+		gen_panel_read_reg1(lcd, &temp_data, 0xB6,
+				lcd->elvss_temp_param_offset, 1);
+		for (i = 0; i < nr_candela * 3; i++)
+			if (!elvss_temp_table[i])
+				elvss_temp_table[i] = temp_data;
+	}
+
+	return 0;
 }
 
 size_t gen_panel_read_mtp(struct lcd *lcd, char *mtp_data)
 {
 	unsigned char default_mtp_buffer[] = {
 		0x00, 0x3E, 0x00, 0x41, 0x00, 0x7A,
-		0x5E, 0x5E, 0x5C,
-		0x59, 0x59, 0x58,
-		0x49, 0x49, 0x48,
-		0x54, 0x55, 0x52,
-		0x61, 0x64, 0x67,
-		0x64, 0x66, 0x65,
-		0x55, 0x60, 0x54,
-		0x50, 0x63, 0x57,
+		0x5E, 0x5E, 0x5C, 0x59, 0x59, 0x58,
+		0x49, 0x49, 0x48, 0x54, 0x55, 0x52,
+		0x61, 0x64, 0x67, 0x64, 0x66, 0x65,
+		0x55, 0x60, 0x54, 0x50, 0x63, 0x57,
 		0x02, 0x03, 0x02
 	};
-	int len;
+	int len, ret;
 	u8 rd_reg = lcd->mtp_rd_info[0].reg;
 	u8 rd_len = lcd->mtp_rd_info[0].len;
 	u8 *out_buf = kzalloc(sizeof(u8) * rd_len, GFP_KERNEL);
@@ -1239,53 +1445,82 @@ size_t gen_panel_read_mtp(struct lcd *lcd, char *mtp_data)
 		return -ENOMEM;
 	}
 
-	gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	ret = gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	if (!ret) {
+		pr_err("[LCD] %s: gen_panel_write_op_cmds failed\n", __func__);
+		kfree(out_buf);
+		return -EINVAL;
+	}
+	panel_usleep(20000);
 	len = gen_panel_read_reg(lcd, out_buf, rd_reg, rd_len);
 	if (len == rd_len) {
 		memcpy(mtp_data, out_buf, rd_len);
-		print_mtp_value(mtp_data, len);
+		print_data(mtp_data, len);
 	} else
 		memcpy(mtp_data, default_mtp_buffer,
 				ARRAY_SIZE(default_mtp_buffer));
+	gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
 
 	kfree(out_buf);
 	return 0;
 }
 
-#ifdef CONFIG_GEN_PANEL_SMART_MTP
 static int gen_panel_dimming_init(struct lcd *lcd)
 {
+	int i, ret;
+
 	GET_CONF_FUNC get_conf =
-		smartdim_get_conf_func("s6e88a");
+		smartdim_get_conf_func("sdim_oled");
 
 	if (!get_conf) {
 		pr_err("[LCD] %s, smartdim not found\n", __func__);
-		return 0;
+		return -EINVAL;
 	}
 
 	if (sdimconf) {
-		pr_debug("[LCD] %s, smartdim already initialized\n", __func__);
+		pr_debug("%s, already initialized\n", __func__);
 		return 0;
 	}
 
 	sdimconf = get_conf();
 	sdimconf->lux_tab = candela_table;
 	sdimconf->lux_tabsize = nr_candela;
-	gen_panel_read_mtp(lcd, sdimconf->mtp_buffer);
+	sdimconf->rgb_offset = rgb_offset;
+	sdimconf->candela_offset = candela_offset;
+	sdimconf->base_lux_table = base_lux_table;
+	sdimconf->gamma_curve_table = gamma_curve_table;
+	sdimconf->vregout_voltage = vregout_voltage;
+
+	ret = gen_panel_read_mtp(lcd, sdimconf->mtp_buffer);
+	if (ret < 0)
+		return -EINVAL;
 	sdimconf->man_id = lcd->id;
 	sdimconf->init();
+
+	gamma_table = kzalloc(sizeof(u8) * nr_candela * 33, GFP_KERNEL);
+	for (i = 0; i < nr_candela; i++) {
+		sdimconf->generate_gamma(candela_table[i],
+				&gamma_table[i * 33]);
+	}
+	gen_panel_read_ldi_info(lcd);
 
 	return 0;
 }
 #else
 static inline int gen_panel_dimming_init(struct lcd *lcd) { return 0; }
-#endif
+#endif	/* CONFIG_GEN_PANEL_DYNAMIC_AID */
 
 void gen_panel_set_external_pin(struct lcd *lcd, int status)
 {
-   gen_panel_set_pin_state(lcd, status);
-   gen_panel_set_power(lcd, status);
+	gen_panel_set_pin_state(lcd, status);
+	gen_panel_set_power(lcd, status);
 }
+
+void gen_panel_set_external_pin_1(struct lcd *lcd, int status)
+{
+	gen_panel_set_power(lcd, GEN_PANEL_PWR_ON_1);
+}
+
 void gen_panel_set_status(struct lcd *lcd, int status)
 {
 	int skip_on = (status == GEN_PANEL_ON_REDUCED);
@@ -1301,8 +1536,8 @@ void gen_panel_set_status(struct lcd *lcd, int status)
 			pr_warn("[LCD] %s: no panel\n", __func__);
 			if (gen_panel_backlight_is_on(lcd->bd))
 				gen_panel_backlight_onoff(lcd->bd, 0);
-         gen_panel_set_external_pin(lcd, 0);
-         return;
+			gen_panel_set_external_pin(lcd, 0);
+			return;
 		}
 		mutex_lock(&lcd->access_ok);
 		if (!skip_on) {
@@ -1328,7 +1563,8 @@ void gen_panel_set_status(struct lcd *lcd, int status)
 
 void gen_panel_start(struct lcd *lcd, int status)
 {
-	int skip_on = (status == GEN_PANEL_ON_REDUCED);
+	struct gen_panel_backlight_info *bl_info =
+		(struct gen_panel_backlight_info *)bl_get_data(lcd->bd);
 
 	pr_debug("[LCD] %s\n", __func__);
 	if (!lcd->active) {
@@ -1336,20 +1572,39 @@ void gen_panel_start(struct lcd *lcd, int status)
 		return;
 	}
 
-	if (status) {
-		if (!skip_on) {
-			pr_info("[LCD] tx post enable cmd after video on\n");
-			gen_panel_write_op_cmds(lcd, PANEL_POST_ENABLE_CMD);
-		}
-		/* after video on, delay for stabilization */
-		panel_usleep(10000);
+	if (gen_panel_is_reduced_on(status)) {
 		if (lcd->mdnie.config.cabc)
 			update_cabc_mode(&lcd->mdnie);
 		update_mdnie_mode(&lcd->mdnie);
-		/* after video on, wait more than 2 frames */
-		panel_usleep(33 * 1000);
 		if (!gen_panel_backlight_is_on(lcd->bd))
 			gen_panel_backlight_onoff(lcd->bd, 1);
+	} else if (gen_panel_is_on(status)) {
+		gen_panel_write_op_cmds(lcd,
+				PANEL_POST_ENABLE_CMD);
+#ifdef CONFIG_GEN_PANEL_OCTA
+		gen_panel_set_brightness(bl_info->bd_data,
+				prev_intensity);
+#endif
+		if (lcd->mdnie.config.cabc)
+			update_cabc_mode(&lcd->mdnie);
+		update_mdnie_mode(&lcd->mdnie);
+		/* To wait 2 frames for stability need to be applied
+		   seperately in LDI. so it need to be moved on dts
+		   If you need it, please add delay on dts mdnie cmd
+		 */
+		/* after video on, wait more than 2 frames */
+		/* panel_usleep(33 * 1000); */
+		if (!gen_panel_backlight_is_on(lcd->bd))
+			gen_panel_backlight_onoff(lcd->bd, 1);
+		gen_panel_write_op_cmds(lcd,
+				PANEL_POST_ENABLE_1_CMD);
+	} else {
+		if (gen_panel_backlight_is_on(lcd->bd))
+			gen_panel_backlight_onoff(lcd->bd, 0);
+		mutex_lock(&lcd->access_ok);
+		lcd->active = false;
+		gen_panel_write_op_cmds(lcd, PANEL_DISABLE_CMD);
+		mutex_unlock(&lcd->access_ok);
 	}
 }
 
@@ -1412,7 +1667,8 @@ static struct device_node *gen_panel_find_dt_panel(
 	struct device_node *parent;
 	struct device_node *panel_node = NULL;
 	char *panel_name;
-	u32 panel_id;
+	u32 panel_ids[8];
+	int i, sz;
 
 	/*
 	 * priority of panel node being found
@@ -1437,20 +1693,39 @@ static struct device_node *gen_panel_find_dt_panel(
 
 		/* Find a node corresponding panel id */
 		for_each_child_of_node(parent, np) {
-			ret = of_property_read_u32(np,
-					"gen-panel-id", &panel_id);
-			if (unlikely(ret < 0)) {
-				pr_warn("[LCD] not found id from (%s)\n",
+			if (!of_find_property(np, "gen-panel-id", &sz)) {
+				pr_warn("not found id from (%s)\n",
 						np->name);
 				continue;
 			}
-			if (boot_panel_id && panel_id) {
-				if (boot_panel_id == panel_id) {
+
+			nr_panel_id = (sz / sizeof(u32));
+			if (nr_panel_id > 8) {
+				pr_warn("%s, constrain 8 panel_ids\n",
+						__func__);
+				nr_panel_id = 8;
+			}
+
+			ret = of_property_read_u32_array(np,
+					"gen-panel-id", panel_ids, nr_panel_id);
+			if (unlikely(ret < 0)) {
+				pr_warn("[LCD] %s, failed to get panel_id\n",
+					__func__);
+				continue;
+			}
+
+			for (i = 0; i < nr_panel_id; i++) {
+				if (boot_panel_id == panel_ids[i]) {
 					panel_node = np;
+					panel_id_index = i;
 					pr_info("[LCD] found (%s) by id(0x%X)\n",
-						np->name, panel_id);
+							np->name, panel_ids[i]);
 					break;
 				}
+			}
+			if (panel_node) {
+				pr_debug("found successfully\n");
+				break;
 			}
 		}
 
@@ -1469,6 +1744,45 @@ static struct device_node *gen_panel_find_dt_panel(
 }
 
 #ifdef CONFIG_GEN_PANEL_OCTA
+static int gen_panel_parse_dt_offset_table(struct device_node *np,
+		const char *propname, int **table)
+{
+	int i, sz, sz_table;
+	unsigned int value;
+
+	if (unlikely(!table || !propname)) {
+		pr_err("[LCD] %s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!of_find_property(np, propname, &sz)) {
+		pr_err("[LCD] %s: %s not exist\n", __func__, propname);
+		return -EINVAL;
+	}
+
+	if (sz % (nr_candela)) {
+		pr_err("[LCD] %s: %s wrong table size(%d)\n",
+				__func__, propname, sz);
+		return -EINVAL;
+	}
+
+	*table = kzalloc(sz, GFP_KERNEL);
+	if (!(*table)) {
+		pr_err("[LCD] %s: %s memory allocation failed\n",
+				__func__, propname);
+		return -ENOMEM;
+	}
+	sz_table = sz / sizeof(u32);
+
+	for (i = 0; i < sz_table; i++) {
+		if (of_property_read_u32_index(np, propname, i, &value))
+			return -EINVAL;
+		(*table)[i] = (int)value;
+	}
+
+	return 0;
+}
+
 static int gen_panel_parse_dt_candela_map_table(struct device_node *np,
 		const char *propname, struct candela_map *table)
 {
@@ -1546,8 +1860,8 @@ static int gen_panel_parse_dt_dcs_cmds(struct device_node *np,
 		gchdr->dlen = ntohs(gchdr->dlen);
 		gchdr->wait = ntohs(gchdr->wait);
 		if (i + gchdr->dlen > sz) {
-			pr_err("[LCD] %s: parse error dtsi type:0x%02x, txmode:0x%02x, len:0x%02x, nr_desc:%d\n",
-				__func__, gchdr->dtype, gchdr->txmode,
+			pr_err("[LCD] %s: parse error dtsi name:%s type:0x%02x, txmode:0x%02x, len:0x%02x, nr_desc:%d\n",
+				__func__, propname, gchdr->dtype, gchdr->txmode,
 				gchdr->dlen, nr_desc);
 			gchdr = NULL;
 			kfree(data);
@@ -1865,63 +2179,91 @@ static int gen_panel_manipulate_cmd_table(struct lcd *lcd,
 	return 0;
 }
 
-static int gen_panel_parse_dt_sysfs_node(struct device_node *parent)
+static int gen_panel_parse_dt_action(struct device_node *sysfs_node,
+		struct gen_dev_attr *gen_attr)
 {
-	struct device_node *sysfs_node, *np_mani;
-	struct gen_dev_attr *gen_attr;
+	struct device_node *np_mani;
+	int config, state, size, ret;
 	struct manipulate_action *action;
 	struct property *prop;
-	int config, state, size, ret;
 	const __be32 *list;
 	char *propname;
 	phandle phandle;
+
+	for (state = 0; ; state++) {
+		/* Retrieve the action-* property */
+		propname = kasprintf(GFP_KERNEL, "action-%d", state);
+		prop = of_find_property(sysfs_node, propname, &size);
+		kfree(propname);
+		if (!prop) {
+			pr_debug("end of action\n");
+			break;
+		}
+
+		list = prop->value;
+		size /= sizeof(*list);
+		action = kmalloc(sizeof(struct manipulate_action),
+				GFP_KERNEL);
+		ret = of_property_read_string_index(sysfs_node,
+				"action-names", state, &action->name);
+		if (unlikely(ret < 0)) {
+			pr_err("%s, action-names[%d] not exist\n",
+					__func__, state);
+			kfree(action);
+			goto err_parse_action;
+		}
+
+		pr_info("add action - %s\n", action->name);
+		action->nr_mani = size;
+		action->pmani =
+			kzalloc(sizeof(struct manipulate_table *)
+					* size, GFP_KERNEL);
+		for (config = 0; config < size; config++) {
+			phandle = be32_to_cpup(list++);
+			np_mani = of_find_node_by_phandle(phandle);
+			if (!np_mani) {
+				pr_err("%s, invalid phandle\n", __func__);
+				kfree(action->pmani);
+				kfree(action);
+				of_node_put(np_mani);
+				goto err_parse_action;
+			}
+
+			action->pmani[config] =
+				find_manipulate_table_by_node(np_mani);
+			of_node_put(np_mani);
+		}
+		list_add_tail(&action->list, &gen_attr->action_list);
+	}
+
+	return 0;
+
+err_parse_action:
+	free_action_list(&gen_attr->action_list);
+	return ret;
+}
+
+static int gen_panel_parse_dt_sysfs_node(struct device_node *parent)
+{
+	struct device_node *sysfs_node;
+	struct gen_dev_attr *gen_attr;
+	struct manipulate_action *action;
+	int config, state, size, ret;
+	const __be32 *list;
 
 	for_each_child_of_node(parent, sysfs_node) {
 		gen_attr = kmalloc(sizeof(struct gen_dev_attr), GFP_KERNEL);
 		INIT_LIST_HEAD(&gen_attr->action_list);
 		gen_attr->attr_name = sysfs_node->name;
-		for (state = 0; ; state++) {
-			pr_info("[LCD] %s, %s\n", __func__, sysfs_node->name);
-			/* Retrieve the pinctrl-* property */
-			propname = kasprintf(GFP_KERNEL, "action-%d", state);
-			prop = of_find_property(sysfs_node, propname, &size);
-			if (!prop)
-				break;
-			list = prop->value;
-			size /= sizeof(*list);
-			kfree(propname);
+		pr_info("add sysfs_node - %s\n", sysfs_node->name);
 
-			action = kmalloc(sizeof(struct manipulate_action),
-					GFP_KERNEL);
-			ret = of_property_read_string_index(sysfs_node,
-					"action-names", state, &action->name);
-			if (ret < 0) {
-				pr_err("[LCD] %s, action-names[%d] not exist\n",
-						__func__, state);
-				kfree(action);
-				goto err_parse_sysfs_node;
-			}
-
-			action->nr_mani = size;
-			action->pmani =
-				kzalloc(sizeof(struct manipulate_table *)
-						* size, GFP_KERNEL);
-			for (config = 0; config < size; config++) {
-				phandle = be32_to_cpup(list++);
-				np_mani = of_find_node_by_phandle(phandle);
-				if (!np_mani) {
-					pr_err("[LCD] %s, invalid phandle\n",
-							__func__);
-					kfree(action->pmani);
-					kfree(action);
-					goto err_parse_sysfs_node;
-				}
-				action->pmani[config] =
-					find_manipulate_table_by_node(np_mani);
-				of_node_put(np_mani);
-			}
-			list_add_tail(&action->list, &gen_attr->action_list);
+		ret = gen_panel_parse_dt_action(sysfs_node, gen_attr);
+		if (unlikely(ret < 0)) {
+			pr_warn("%s, failed to parse action\n", __func__);
+			kfree(gen_attr);
+			goto err_parse_sysfs_node;
 		}
+
 		gen_panel_init_dev_attr(gen_attr);
 		gen_attr->action =
 			list_entry(gen_attr->action_list.next,
@@ -1994,8 +2336,8 @@ static int gen_panel_parse_dt_panel(
 {
 	const char *panel_type;
 	struct device_node *temp_comp_node;
-	u32 tmp, panel_id;
-	int ret, i;
+	u32 tmp, panel_ids[8];
+	int ret, i, sz;
 
 	if (!np)
 		return -EINVAL;
@@ -2006,8 +2348,8 @@ static int gen_panel_parse_dt_panel(
 			&lcd->panel_model_name);
 	ret = of_property_read_string(np, "gen-panel-name",
 			&lcd->panel_name);
-	ret = of_property_read_u32(np, "gen-panel-id",
-			&lcd->id);
+	ret = of_property_read_u32_array(np, "gen-panel-id",
+			panel_ids, nr_panel_id);
 	ret = of_property_read_string(np, "gen-panel-type",
 			&panel_type);
 	ret = of_property_read_u32(np, "gen-panel-refresh",
@@ -2076,20 +2418,63 @@ static int gen_panel_parse_dt_panel(
 				&lcd->op_cmds[i]);
 
 #ifdef CONFIG_GEN_PANEL_OCTA
-	gen_panel_parse_dt_candela_map_table(np,
-			"gen-panel-brt-map-table", &brt_map_table);
-	gen_panel_parse_dt_candela_map_table(np,
-			"gen-panel-aid-map-table", &aid_map_table);
-	gen_panel_parse_dt_candela_map_table(np,
-			"gen-panel-elvss-map-table", &elvss_map_table);
+	of_property_read_u8(np, "gen-panel-octa-product-reg",
+			&lcd->octa_product_reg);
+	of_property_read_u32(np, "gen-panel-octa-product-gpara",
+			&lcd->octa_product_gpara);
+	of_property_read_u8(np, "gen-panel-octa-coordinate-reg",
+			&lcd->octa_coordinate_reg);
+	of_property_read_u32(np, "gen-panel-octa-coordinate-gpara",
+			&lcd->octa_coordinate_gpara);
+	of_property_read_u32(np, "gen-panel-octa-vregout",
+			&vregout_voltage);
+	of_property_read_u32(np, "gen-panel-octa-tset-param-offset",
+			&lcd->tset_param_offset);
+	of_property_read_u32(np, "gen-panel-octa-mps-param-offset",
+			&lcd->mps_param_offset);
+	of_property_read_u32(np, "gen-panel-octa-elvss-param-offset",
+			&lcd->elvss_param_offset);
+	of_property_read_u32(np, "gen-panel-octa-elvss-temp-param-offset",
+			&lcd->elvss_temp_param_offset);
+	of_property_read_u32(np, "gen-panel-octa-aid-param-offset",
+			&lcd->aid_param_offset);
+	of_property_read_u32(np, "gen-panel-octa-hbm-gamma-param-offset",
+			&lcd->hbm_gamma_param_offset);
 	if (of_find_property(np, "gen-panel-candela-table", &sz)) {
 		nr_candela = sz / sizeof(u32);
 		candela_table =
 			kzalloc(sizeof(unsigned int) * nr_candela, GFP_KERNEL);
 		of_property_read_u32_array(np, "gen-panel-candela-table",
 				candela_table, nr_candela);
-		gen_panel_init_brt_map();
 	}
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-aid-table", &aid_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-acl-table", &acl_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-mps-table", &mps_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-elvss-table", &elvss_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-elvss-temperature-table",
+			&elvss_temp_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-candela-compensation-table",
+			&candela_offset);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-rgb-compensation-table",
+			&rgb_offset);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-base-lux-table",
+			&base_lux_table);
+	gen_panel_parse_dt_offset_table(np,
+			"gen-panel-gamma-curve-table",
+			&gamma_curve_table);
+
+	if (of_property_read_bool(np, "gen-panel-acl-always-on"))
+		lcd->acl = 1;
+	else
+		lcd->acl = 0;
 #endif
 	ret = of_property_read_u32(np,
 			"gen-panel-backlight-set-brightness-reg",
@@ -2099,6 +2484,8 @@ static int gen_panel_parse_dt_panel(
 			&lcd->color_adj_reg);
 	gen_panel_parse_dt_rd_info(np, "gen-panel-read-id",
 			lcd->id_rd_info);
+	gen_panel_parse_dt_rd_info(np, "gen-panel-read-hbm",
+			lcd->hbm_rd_info);
 	gen_panel_parse_dt_rd_info(np, "gen-panel-read-mtp",
 			lcd->mtp_rd_info);
 	of_property_read_u32(np, "gen-panel-read-status-regs",
@@ -2267,11 +2654,14 @@ static int gen_panel_parse_dt_external_pin(struct device_node *pin_node,
 		if (gen_panel_parse_dt_extpin(np, dev, pin_node->name, pin)) {
 			pr_err("[LCD] %s: failed to parse %s node\n",
 					__func__, pin_node->name);
+			kfree(pin);
 			goto extpin_add_fail;
 		}
 		list_add_tail(&pin->list, &extpin_list);
 	}
 
+	gen_panel_parse_dt_extpin_ctrl_seq(pin_node,
+			"panel-ext-pin-on-0", &lcd->extpin_on_0_seq);
 	gen_panel_parse_dt_extpin_ctrl_seq(pin_node,
 			"panel-ext-pin-on", &lcd->extpin_on_seq);
 	gen_panel_parse_dt_extpin_ctrl_seq(pin_node,
@@ -2308,7 +2698,7 @@ static ssize_t lcd_type_show(struct device *dev,
 				lcd->panel_model_name);
 	}
 
-	return sprintf(buf, "%s_%x%x%x",
+	return sprintf(buf, "%s_%02x%02x%02x",
 			manufacturer_name,
 			(panel_id >> 16) & 0xFF,
 			(panel_id >> 8) & 0xFF,
@@ -2332,22 +2722,164 @@ static ssize_t window_type_show(struct device *dev,
 	return strnlen(buf, 15);
 }
 
-static ssize_t manufacture_code_show(struct device *dev,
+#ifdef CONFIG_GEN_PANEL_OCTA
+static ssize_t power_reduce_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct lcd *lcd = dev_get_drvdata(dev);
-	unsigned int len = 0, i;
-
-	for (i = 0; i < ARRAY_SIZE(lcd->manufacturer_code); i++)
-		len += sprintf(buf + len, "%02X", lcd->manufacturer_code[i]);
-
-	return len;
+	return sprintf(buf, "%d\n", lcd->acl);
 }
 
+static ssize_t power_reduce_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int value;
+	struct lcd *lcd = dev_get_drvdata(dev);
+
+	if (kstrtoul(buf, 0, (unsigned long *)&value))
+		return -EINVAL;
+
+	if (lcd->acl != !!value) {
+		lcd->acl = !!value;
+		backlight_update_status(lcd->bd);
+	}
+	return size;
+}
+
+static ssize_t read_mtp_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return strlen(buf);
+}
+
+static ssize_t read_mtp_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd *lcd = dev_get_drvdata(dev);
+	unsigned int rd_reg, rd_pos, rd_len, i;
+	unsigned char readbuf[256] = {0xff, };
+	struct gen_cmds_info *cmd;
+	struct gen_cmd_desc *desc;
+	int len, ret;
+
+	sscanf(buf, "%x %d %d", &rd_reg, &rd_pos, &rd_len);
+
+	ret = gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	if (!ret) {
+		pr_err("[LCD] %s: gen_panel_write_op_cmds failed\n", __func__);
+		return -EINVAL;
+	}
+	mdelay(20);
+	len = gen_panel_read_reg(lcd, readbuf, rd_reg, rd_len);
+
+	if (len != rd_len)
+		pr_err("[LCD] %s: gen_panel_read_reg failed\n", __func__);
+
+	ret = gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
+	if (!ret) {
+		pr_err("[LCD] %s: gen_panel_write_op_cmds failed\n", __func__);
+		return -EINVAL;
+	}
+
+	pr_info("[LCD] READ_Reg addr : %02x, start pos : %d len : %d \n",
+		rd_reg, rd_pos, rd_len);
+
+	for (i = 0; i < rd_len; i++)
+		pr_info("[LCD] READ_Reg %dth : %02x \n", i + 1, readbuf[i]);
+
+	return size;
+}
+
+static ssize_t write_mtp_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return strlen(buf);
+}
+
+static ssize_t write_mtp_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd *lcd = dev_get_drvdata(dev);
+	unsigned int write_reg, write_pos, write_value, i;
+	struct gen_cmds_info *cmd;
+	struct gen_cmd_desc *desc;
+	int len, ret;
+
+	sscanf(buf, "%x %d %x", &write_reg, &write_pos, &write_value);
+
+	ret = gen_panel_write_op_cmds(lcd, PANEL_NV_ENABLE_CMD);
+	if (!ret) {
+		pr_err("[LCD] %s: gen_panel_write_op_cmds failed\n", __func__);
+		return -EINVAL;
+	}
+
+	gen_panel_write_reg(lcd, 0xB0, write_pos-1);
+	gen_panel_write_reg(lcd, (u8)write_reg, (u8)write_value);
+
+
+	ret = gen_panel_write_op_cmds(lcd, PANEL_NV_DISABLE_CMD);
+	if (!ret) {
+		pr_err("[LCD] %s: gen_panel_write_op_cmds failed\n", __func__);
+		return -EINVAL;
+	}
+
+	pr_info("[LCD] QRITE_Reg addr : %02x, start pos : %d write_value : %d \n",
+		write_reg, write_pos, write_value);
+
+	return size;
+}
+
+static ssize_t temperature_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	char temp[] = "-20, -19, 0, 1\n";
+
+	strcat(buf, temp);
+	return strlen(buf);
+}
+
+static ssize_t temperature_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct lcd *lcd = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = kstrtoint(buf, 10, &value);
+
+	if (rc < 0)
+		return rc;
+		lcd->temperature = value;
+	pr_info("%s, temperature %d\n", __func__, lcd->temperature);
+	backlight_update_status(lcd->bd);
+
+	return size;
+}
+
+static ssize_t cell_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	sprintf(buf, "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\n",
+			date[0], date[1], date[2], date[3],
+			date[4], date[5], date[6],
+			coordinate[0], coordinate[1],
+			coordinate[2], coordinate[3]);
+	return strlen(buf);
+}
+
+static DEVICE_ATTR(power_reduce, S_IRUGO | S_IWUSR | S_IWGRP,
+		power_reduce_show, power_reduce_store);
+static DEVICE_ATTR(read_mtp, S_IRUGO | S_IWUSR | S_IWGRP,
+		read_mtp_show, read_mtp_store);
+static DEVICE_ATTR(write_mtp, S_IRUGO | S_IWUSR | S_IWGRP,
+		write_mtp_show, write_mtp_store);
+static DEVICE_ATTR(temperature, S_IRUGO | S_IWUSR | S_IWGRP,
+		temperature_show, temperature_store);
+static DEVICE_ATTR(cell_id, S_IRUGO, cell_id_show, NULL);
+#endif
 static DEVICE_ATTR(panel_name, S_IRUGO | S_IXOTH, panel_name_show, NULL);
 static DEVICE_ATTR(lcd_type, S_IRUGO | S_IXOTH, lcd_type_show, NULL);
 static DEVICE_ATTR(window_type, S_IRUGO | S_IXOTH, window_type_show, NULL);
-static DEVICE_ATTR(manufacture_code, S_IRUGO | S_IXOTH, manufacture_code_show, NULL);
 
 static ssize_t gen_panel_common_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -2355,11 +2887,18 @@ static ssize_t gen_panel_common_show(struct device *dev,
 	struct gen_dev_attr *gen_attr =
 		container_of(attr, struct gen_dev_attr, dev_attr);
 	const char *action_name = "none";
+	unsigned int len;
+
+	struct manipulate_action *action, *naction;
+
+	len = sprintf(buf, "[action list]\n");
+	list_for_each_entry(action, &gen_attr->action_list, list)
+		len += sprintf(buf + len, "%s\n", action_name);
 
 	if (gen_attr->action && gen_attr->action->name)
 		action_name = gen_attr->action->name;
 
-	return sprintf(buf, "%s : %s\n", attr->attr.name, action_name);
+	return sprintf(buf + len, "%s : %s\n", attr->attr.name, action_name);
 }
 
 static ssize_t gen_panel_common_store(struct device *dev,
@@ -2438,8 +2977,16 @@ int gen_panel_probe(struct device_node *node, struct lcd *lcd)
 		}
 		of_node_put(pin_node);
 
-		no_external_pin:
-		/* 4. Find & Parse dt of panel node */
+no_external_pin:
+		/* 4. Find dt of backlight */
+		backlight_node = gen_panel_find_dt_backlight(node,
+				"gen-panel-backlight");
+		if (backlight_node) {
+			lcd->bd = of_find_backlight_by_node(backlight_node);
+			of_node_put(backlight_node);
+		}
+
+		/* 5. Find & Parse dt of panel node */
 		panel_node = gen_panel_find_dt_panel(node, NULL);
 		if (unlikely(!panel_node)) {
 			dev_err(&pdev->dev, "not found panel_node!\n");
@@ -2451,38 +2998,6 @@ int gen_panel_probe(struct device_node *node, struct lcd *lcd)
 			of_node_put(panel_node);
 			goto err_no_platform_data;
 		}
-
-		/* 5. Find dt of backlight */
-			backlight_node = gen_panel_find_dt_backlight(node,
-					"gen-panel-backlight");
-			if (backlight_node) {
-				struct platform_device *pdev_bl =
-					of_find_device_by_node(backlight_node);
-				/* There are two types for backlight driver.
-				1) LDI controls brightness:
-					- transmit mipi commands to control brightness.
-					- no specific backlight driver. (backlight ops is in gen-panel.c)
-					- driver name is GEN_PANEL_BL_NAME.
-				2) the other case
-					- controls brightness with I2C, single wired protocol or AP PWM.
-					- specific backlight driver with probe() which should be
-					called prior to below of_find_backlight_by_node().
-				*/
-				if (of_property_match_string(backlight_node,
-						"compatible", GEN_PANEL_BL_NAME) >= 0)
-					lcd->bd = gen_panel_backlight_device_register(
-							pdev_bl, lcd, &backlight_ops,
-							NULL);
-				else
-					lcd->bd = of_find_backlight_by_node(
-							backlight_node);
-					of_node_put(backlight_node);
-
-					if (!lcd->bd) {
-						dev_err(&pdev->dev, "failed to get bd\n");
-						goto err_no_platform_data;
-					}
-			}
 
 		/* 6. Parse manipulation command table node */
 		mani_node = of_find_node_by_name(panel_node,
@@ -2521,8 +3036,10 @@ int gen_panel_probe(struct device_node *node, struct lcd *lcd)
 		of_node_put(panel_node);
 	}
 
+	lcd->id = boot_panel_id;
 	lcd->set_panel_id = &set_panel_id;
 	lcd->power = 1;
+	lcd->temperature = 25;
 
 	lcd->class = class_create(THIS_MODULE, "lcd");
 	if (IS_ERR(lcd->class)) {
@@ -2561,13 +3078,6 @@ int gen_panel_probe(struct device_node *node, struct lcd *lcd)
 		goto err_lcd_type;
 	}
 
-	ret = device_create_file(lcd->dev, &dev_attr_manufacture_code);
-	if (unlikely(ret < 0)) {
-		pr_err("Failed to create device file(%s)!\n",
-				dev_attr_manufacture_code.attr.name);
-		goto err_manufacture_code;
-	}
-
 	list_for_each_entry(gen_attr, &attr_list, list) {
 		ret = device_create_file(lcd->dev, &gen_attr->dev_attr);
 		if (unlikely(ret < 0)) {
@@ -2577,15 +3087,67 @@ int gen_panel_probe(struct device_node *node, struct lcd *lcd)
 		}
 	}
 
+#ifdef CONFIG_GEN_PANEL_OCTA
+	ret = device_create_file(lcd->dev, &dev_attr_power_reduce);
+	if (unlikely(ret < 0)) {
+		pr_err("Failed to create device file(%s)!\n",
+				dev_attr_power_reduce.attr.name);
+		goto err_power_reduce;
+	}
+
+	ret = device_create_file(lcd->dev, &dev_attr_read_mtp);
+	if (unlikely(ret < 0)) {
+		pr_err("Failed to create device file(%s)!\n",
+				dev_attr_read_mtp.attr.name);
+		goto err_read_mtp;
+	}
+
+	ret = device_create_file(lcd->dev, &dev_attr_write_mtp);
+	if (unlikely(ret < 0)) {
+		pr_err("Failed to create device file(%s)!\n",
+				dev_attr_read_mtp.attr.name);
+		goto err_write_mtp;
+	}
+
+	ret = device_create_file(lcd->dev, &dev_attr_temperature);
+	if (unlikely(ret < 0)) {
+		pr_err("Failed to create device file(%s)!\n",
+				dev_attr_temperature.attr.name);
+		goto err_temperature;
+	}
+
+	ret = device_create_file(lcd->dev, &dev_attr_cell_id);
+	if (unlikely(ret < 0)) {
+		pr_err("Failed to create device file(%s)!\n",
+				dev_attr_cell_id.attr.name);
+		goto err_cell_id;
+	}
+#endif
+
 	glcd = lcd;
 
 	gen_panel_attach_mdnie(&lcd->mdnie, &mdnie_ops);
+	if (gen_panel_match_backlight(lcd->bd, GEN_PANEL_BL_NAME))
+		gen_panel_backlight_device_register(lcd->bd,
+				lcd, &backlight_ops);
 	gen_panel_attach_tuning(lcd);
 	dev_info(lcd->dev, "[LCD] device init done\n");
 
 	return 0;
-err_manufacture_code:
-	device_remove_file(lcd->dev, &dev_attr_window_type);	
+
+#ifdef CONFIG_GEN_PANEL_OCTA
+err_cell_id:
+	device_remove_file(lcd->dev, &dev_attr_temperature);
+err_temperature:
+	device_remove_file(lcd->dev, &dev_attr_write_mtp);
+err_write_mtp:
+	device_remove_file(lcd->dev, &dev_attr_read_mtp);
+err_read_mtp:
+	device_remove_file(lcd->dev, &dev_attr_power_reduce);
+err_power_reduce:
+	list_for_each_entry(gen_attr, &attr_list, list)
+		device_remove_file(lcd->dev, &gen_attr->dev_attr);
+#endif
 err_window_type:
 	device_remove_file(lcd->dev, &dev_attr_window_type);
 err_lcd_type:
@@ -2610,28 +3172,41 @@ int gen_panel_remove(struct lcd *lcd)
 
 	gen_panel_detach_tuning(lcd);
 	gen_panel_detach_mdnie(&lcd->mdnie);
-
 	if (gen_panel_match_backlight(lcd->bd, GEN_PANEL_BL_NAME))
 		gen_panel_backlight_device_unregister(lcd->bd);
-
 	list_for_each_entry(gen_attr, &attr_list, list)
 		device_remove_file(lcd->dev, &gen_attr->dev_attr);
 	device_remove_file(lcd->dev, &dev_attr_panel_name);
 	device_remove_file(lcd->dev, &dev_attr_lcd_type);
 	device_remove_file(lcd->dev, &dev_attr_window_type);
-	device_remove_file(lcd->dev, &dev_attr_manufacture_code);
+
 	device_destroy(lcd->class, 0);
 	class_destroy(lcd->class);
 
 	free_gen_dev_attr();
 	free_manipulate_table();
+	kfree(lcd->extpin_on_0_seq.ctrls);
 	kfree(lcd->extpin_on_seq.ctrls);
 	kfree(lcd->extpin_off_seq.ctrls);
 	free_extpin();
 #ifdef CONFIG_GEN_PANEL_OCTA
+	device_remove_file(lcd->dev, &dev_attr_power_reduce);
+	device_remove_file(lcd->dev, &dev_attr_read_mtp);
+	device_remove_file(lcd->dev, &dev_attr_write_mtp);
+	device_remove_file(lcd->dev, &dev_attr_temperature);
+	device_remove_file(lcd->dev, &dev_attr_cell_id);
 	/* free candela map tables */
+	kfree(aid_table);
+	kfree(acl_table);
+	kfree(mps_table);
+	kfree(elvss_table);
+	kfree(elvss_temp_table);
+	kfree(base_lux_table);
+	kfree(gamma_curve_table);
+	kfree(rgb_offset);
+	kfree(candela_offset);
 	kfree(candela_table);
-	free_candela_map_table();
+	kfree(gamma_table);
 #endif
 	/* free command tables */
 	free_op_cmds_array(lcd);

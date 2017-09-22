@@ -308,6 +308,21 @@ config CRYPTO_DEV_TEGRA_AES
 	  To compile this driver as a module, choose M here: the module
 	  will be called tegra-aes.
 
+config CRYPTO_DEV_SPRD_AES
+	tristate "Support for SPRD AES hw crypto engine"
+	depends on MACH_SP7730SW
+	select CRYPTO_AES
+	select CRYPTO_ECB
+	select CRYPTO_CBC
+	select CRYPTO_CTR
+	select CRYPTO_XTS
+	help
+	  SPREADTRUM processors have AES crypto module accelerator. Select this if you
+	  want to use the SPREADTRUM module for AES algorithms.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called sprd-aes.
+
 config CRYPTO_DEV_NX
 	bool "Support for IBM Power7+ in-Nest cryptographic acceleration"
 	depends on PPC64 && IBMVIO

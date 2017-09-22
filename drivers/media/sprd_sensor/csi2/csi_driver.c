@@ -46,7 +46,12 @@ static const struct csi_pclk_cfg csi_pclk_setting[CSI_PCLK_CFG_COUNTER] = {
 	{800, 850, 0x29, 38},
 	{850, 900, 0x39, 38},
 	{900, 950, 0x0A, 52},
-	{950, 1000, 0x1A, 52}
+	{950, 1000, 0x1A, 52},
+	{1000, 1050, 0x2A, 52},
+	{1050, 1100, 0x3A, 52},
+	{1100, 1150, 0x0B, 68},
+	{1150, 1200, 0x1B, 68},
+	{1200, 1250, 0x2B, 68},
 };
 
 #if IS_ENABLED(VERSION3T)
@@ -206,7 +211,7 @@ static void dphy_init_common(u32 bps_per_lane, u32 phy_id, u32 rx_mode)
 	udelay(1);
 	dphy_cfg_start();
 
-#if defined(CONFIG_MACH_SP7720EA)
+#if defined(CONFIG_MACH_SP7720EA) || defined(CONFIG_MACH_SP7720EB) || defined(CONFIG_MACH_SP7720EB_PRIME)
 #if defined(CONFIG_SC_FPGA)
 	sci_glb_write(SPRD_GPIO_BASE + 0x0008, 0xd, -1UL);
 	dphy_write(0x30, 0xc0, &temp);

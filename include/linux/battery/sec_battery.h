@@ -31,6 +31,9 @@
 #include <linux/proc_fs.h>
 #include <linux/jiffies.h>
 #include <linux/of_gpio.h>
+#if defined(CONFIG_MFD_SMUIC)
+#include <linux/mfd/muic_noti.h>
+#endif
 #if defined(CONFIG_MUIC_NOTIFIER)
 #include <linux/muic/muic.h>
 #include <linux/muic/muic_notifier.h>
@@ -191,10 +194,10 @@ struct sec_battery_info {
 
 	/* MTBF test for CMCC */
 	bool is_hc_usb;
-
-
+	bool ignore_siop;
 
 	int siop_level;
+	int r_siop_level;
 	int stability_test;
 	int eng_not_full_status;
 

@@ -24,7 +24,7 @@
 #define CSI2_RST             (SPRD_MMAHB_BASE + 0x4)
 #define CSI2_RST_BIT         (1 << 5)
 
-#if defined(CONFIG_SC_FPGA) && defined(CONFIG_MACH_SP7720EA)
+#if defined(CONFIG_SC_FPGA) && (defined(CONFIG_MACH_SP7720EA) || defined(CONFIG_MACH_SP7720EB) || defined(CONFIG_MACH_SP7720EB_PRIME))
 extern void usc28c_csi_init(void);
 #endif
 void csi_api_event1_handler(int irq, void *handle);
@@ -131,7 +131,7 @@ u8 csi_api_init(u32 bps_per_lane, u32 phy_id)
 	csi_error_t e = SUCCESS;
     u64 base_address = CSI2_BASE;
 
-#if defined(CONFIG_SC_FPGA) && defined(CONFIG_MACH_SP7720EA)
+#if defined(CONFIG_SC_FPGA) && (defined(CONFIG_MACH_SP7720EA) || defined(CONFIG_MACH_SP7720EB) || defined(CONFIG_MACH_SP7720EB_PRIME))
 	usc28c_csi_init();
 #endif
 
@@ -151,7 +151,7 @@ u8 csi_api_init(u32 bps_per_lane, u32 phy_id)
 
 u8 csi_api_start(void *handle)
 {
-	csi_error_t e = SUCCESS;  
+	csi_error_t e = SUCCESS;
 	int         ret = 0;
 	struct csi_context *csi_handle = handle;
 
@@ -195,18 +195,18 @@ u8 csi_api_start(void *handle)
 		csi_event_disable(0xffffffff, 2);
 		ret = request_irq(IRQ_CSI_INT0,
 				(irq_handler_t)csi_api_event1_handler,
-				IRQF_SHARED, 
-				"CSI2_0", 
+				IRQF_SHARED,
+				"CSI2_0",
 				(void *)csi_handle);
 		if (ret) {
 			e = ERR_UNDEFINED;
 			break;
 		}
 
-		ret = request_irq(IRQ_CSI_INT1, 
+		ret = request_irq(IRQ_CSI_INT1,
 				(irq_handler_t)csi_api_event2_handler,
-				IRQF_SHARED, 
-				"CSI2_1", 
+				IRQF_SHARED,
+				"CSI2_1",
 				(void *)csi_handle);
 		if (ret) {
 			e = ERR_UNDEFINED;
@@ -245,7 +245,7 @@ u8 csi_api_get_on_lanes()
 {
     return csi_get_on_lanes();
 }
- 
+
 csi_lane_state_t csi_api_get_clk_state()
 {
     return csi_clk_state();
@@ -449,10 +449,10 @@ u8 csi_api_register_line_event(void *handle, u8 vc, csi_data_type_t data_type, c
 	}
 
 	return e;
-}                                                                                                                          
-                                                                                                                           
+}
+
 u8 csi_api_unregister_line_event(void *handle, u8 vc, csi_data_type_t data_type, csi_line_event_t line_event)
-{                                                                                                                          
+{
 	u8 id = 0;
 	int counter = 0;
 	int replace_slot = -1;
@@ -534,11 +534,11 @@ u8 csi_api_unregister_line_event(void *handle, u8 vc, csi_data_type_t data_type,
 	}
 
 	return SUCCESS;
-} 
- 
+}
+
 void csi_api_event1_handler(int irq, void *handle)
-{ 
-	u32 source = 0; 
+{
+	u32 source = 0;
 	unsigned long flag;
 	struct csi_context *csi_handle = handle;
 	if (NULL == handle) {
@@ -588,11 +588,11 @@ void csi_api_event1_handler(int irq, void *handle)
 		}
 	}
 #endif
-}                                                                                                                          
+}
 
 void csi_api_event2_handler(int irq, void *handle)
-{                                                                                                                          
-	u32 source = 0;                                                                                                        
+{
+	u32 source = 0;
 	unsigned long flag;
 	struct csi_context *csi_handle = handle;
 	if (NULL == handle) {
@@ -608,45 +608,45 @@ void csi_api_event2_handler(int irq, void *handle)
 	spin_unlock_irqrestore(&csi_handle->csi2_lock, flag);
 
 	return;
- 
-#if 0		
-	source = csi_event_get_source(2); 
+
+#if 0
+	source = csi_event_get_source(2);
 
 	if (source > 0) {
-		/* map to enumerator csi_event_t or csi_line_event_t */ 
+		/* map to enumerator csi_event_t or csi_line_event_t */
 		if ((source & (0xf << 0)) > 0) {
-			tmp = ERR_PHY_ESCAPE_ENTRY + ((source & 0xf) >> 1); 
-		}  
-		
-		if ((source & (0xf << 4)) > 0) {
-			; /* error discarded */ 
+			tmp = ERR_PHY_ESCAPE_ENTRY + ((source & 0xf) >> 1);
 		}
-		
+
+		if ((source & (0xf << 4)) > 0) {
+			; /* error discarded */
+		}
+
 		if ((source & (0xf << 8)) > 0) {
-			tmp = ERR_ECC_SINGLE + ((source & (0xf << 8)) >> 9); 
-		} 
+			tmp = ERR_ECC_SINGLE + ((source & (0xf << 8)) >> 9);
+		}
 		if ((source & (0xf << 12)) > 0) {
-			tmp = ERR_UNSUPPORTED_DATA_TYPE + ((source & (0xf << 12)) >> 13); 
-		} 
+			tmp = ERR_UNSUPPORTED_DATA_TYPE + ((source & (0xf << 12)) >> 13);
+		}
 		if ((source & (0xf << 16)) > 0) {
-			tmp = ERR_LINE_BOUNDARY_MATCH + 4 + ((source & (0xf << 16)) >> 17); 
-			/* 4 added because its in ERR2. ERR1 already has 4 */ 
-		} 
+			tmp = ERR_LINE_BOUNDARY_MATCH + 4 + ((source & (0xf << 16)) >> 17);
+			/* 4 added because its in ERR2. ERR1 already has 4 */
+		}
 		if ((source & (0xf << 20)) > 0) {
-			tmp = ERR_LINE_SEQUENCE + 4 + ((source & (0xf << 20)) >> 21); 
-		} 
-		/* call callback if valid */ 
+			tmp = ERR_LINE_SEQUENCE + 4 + ((source & (0xf << 20)) >> 21);
+		}
+		/* call callback if valid */
 		if (tmp != 0x80000000) {
 			if (csi_api_event_registry[tmp] != NULL) {
-				csi_api_event_registry[tmp](param); 
-			} 
-		} 
+				csi_api_event_registry[tmp](param);
+			}
+		}
 	}
 #endif
-} 
- 
+}
+
 u8 csi_api_unregister_all_events(void *handle)
-{ 
+{
 	u8 e = SUCCESS;
 	u8 counter = 0;
 	struct csi_context *csi_handle = handle;

@@ -26,21 +26,39 @@ struct sprd_thermal_zone {
 	struct mutex th_lock;
 	struct work_struct therm_work;
 	struct delayed_work resume_delay_work;
-        struct delayed_work thm_read_work;
+    struct delayed_work thm_read_work;
 	struct sprd_thm_platform_data *trip_tab;
-        struct sprd_board_sensor_config *sensor_config;
+    struct sprd_board_sensor_config *sensor_config;
 	struct thm_handle_ops *ops;
+	struct delayed_work thm_logtime_work;
 	enum thermal_device_mode mode;
 	int sensor_id;
-        unsigned long temp_inteval;
-	void __iomem *reg_base;
+	int thm_cal;
+	int off_set;
+	int temp_inteval;
+	int logtime;
+	int thmlog_switch;
+	struct regmap * thm_glb;
+    struct spi_device *spi_dev;
+	unsigned long reg_base;
+	unsigned long cur_temp;
+	unsigned long last_temp;
+	int current_trip_num;
+	int sen_cal_offset;
 	char thermal_zone_name[30];
 	enum thermal_trend trend_val;
+};
+
+enum thermal_log_switch{
+	THERMAL_LOG_DISABLED = 0,
+	THERMAL_LOG_ENABLED,
 };
 struct thm_handle_ops{
 	int (*hw_init)(struct sprd_thermal_zone*);
 	int (*get_reg_base)(struct sprd_thermal_zone*,struct resource *regs);
 	unsigned long (*read_temp)(struct sprd_thermal_zone*);
+	int (*get_trend)(struct sprd_thermal_zone*,int, enum thermal_trend *);
+	int (*get_hyst)(struct sprd_thermal_zone*,int,unsigned long *);
 	int (*irq_handle)(struct sprd_thermal_zone*);
 	int (*suspend)(struct sprd_thermal_zone*);
 	int (*resume)(struct sprd_thermal_zone*);
@@ -51,6 +69,8 @@ struct thm_handle_ops{
 extern int  sprd_thm_add(struct thm_handle_ops* ops, char *p,int id);
 extern void sprd_thm_delete(int id);
 extern int  sci_efuse_thermal_cal_get(int *cal);
+extern int  sci_efuse_arm_thm_cal_get(int *cal,int *offset);
+extern int  sci_efuse_bcore_thm_cal_get(int *cal,int *offset);
 extern int  sprd_boardthm_add(struct thm_handle_ops* ops, char *p,int id);
 extern void sprd_boardthm_delete(int id);
 #endif

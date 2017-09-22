@@ -291,33 +291,44 @@ static int sipc_parse_dt(struct sipc_init_data **init, struct device *dev)
 		pr_info("sipc:[%d] ap2cp_bit_trig=0x%x, ap2cp_bit_clr=0x%x\n",
 			i, info[i].ap2cp_bit_trig, info[i].ap2cp_bit_clr);
 #endif
-		/* get cp base addr */
-		ret = of_address_to_resource(nchd, 0, &res);
-		if (ret) {
-			goto error;
-		}
-		info[i].cp_base = (uint32_t)res.start;
-		info[i].cp_size = (uint32_t)(res.end - res.start + 1);
-		pr_info("sipc:[%d] cp_base=0x%x, cp_size=0x%x\n",
-			i, info[i].cp_base, info[i].cp_size);
+		if (strcmp(info[i].name, "sipc-pmsys") != 0) {
+			/* get cp base addr */
+			ret = of_address_to_resource(nchd, 0, &res);
+			if (ret) {
+				goto error;
+			}
+			info[i].cp_base = (uint32_t)res.start;
+			info[i].cp_size = (uint32_t)(res.end - res.start + 1);
+			pr_info("sipc:[%d] cp_base=0x%x, cp_size=0x%x\n",
+				i, info[i].cp_base, info[i].cp_size);
 
-		/* get smem base addr */
-		ret = of_address_to_resource(nchd, 1, &res);
-		if (ret) {
-			goto error;
-		}
-		info[i].smem_base = (uint32_t)res.start;
-		info[i].smem_size = (uint32_t)(res.end - res.start + 1);
-		pr_info("sipc:[%d] smem_base=0x%x, smem_size=0x%x\n", i, info[i].smem_base, info[i].smem_size);
+			/* get smem base addr */
+			ret = of_address_to_resource(nchd, 1, &res);
+			if (ret) {
+				goto error;
+			}
+			info[i].smem_base = (uint32_t)res.start;
+			info[i].smem_size = (uint32_t)(res.end - res.start + 1);
+			pr_info("sipc:[%d] smem_base=0x%x, smem_size=0x%x\n", i, info[i].smem_base, info[i].smem_size);
 
-		/* get ring base addr */
-		ret = of_address_to_resource(nchd, 2, &res);
-		if (ret) {
-			goto error;
+			/* get ring base addr */
+			ret = of_address_to_resource(nchd, 2, &res);
+			if (ret) {
+				goto error;
+			}
+			info[i].ring_base = (uint32_t)res.start;
+			info[i].ring_size = (uint32_t)(res.end - res.start + 1);
+			pr_info("sipc:[%d] ring_base=0x%x, ring_size=0x%x\n", i, info[i].ring_base, info[i].ring_size);
+		} else {
+			/* get ring base addr */
+			ret = of_address_to_resource(nchd, 0, &res);
+			if (ret) {
+				goto error;
+			}
+			info[i].ring_base = (uint32_t)res.start;
+			info[i].ring_size = (uint32_t)(res.end - res.start + 1);
+			pr_info("sipc:[%d] pmsys ring_base=0x%x, ring_size=0x%x\n", i, info[i].ring_base, info[i].ring_size);
 		}
-		info[i].ring_base = (uint32_t)res.start;
-		info[i].ring_size = (uint32_t)(res.end - res.start + 1);
-		pr_info("sipc:[%d] ring_base=0x%x, ring_size=0x%x\n", i, info[i].ring_base, info[i].ring_size);
 
 #ifdef CONFIG_SPRD_MAILBOX
 		ret = of_property_read_u32(nchd, "mailbox,core", &info[i].core_id);

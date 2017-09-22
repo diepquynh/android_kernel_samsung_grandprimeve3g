@@ -49,6 +49,7 @@
 unsigned long dcam_regbase = 0 ;
 unsigned long isp_regbase = 0;
 unsigned long csi_regbase = 0;
+unsigned long isp_phybase = 0;
 #else
 #endif
 static atomic_t	mm_enabe_cnt = ATOMIC_INIT(0);
@@ -69,6 +70,7 @@ void parse_baseaddress(struct device_node *dn)
 		PARSE_TRACE("Dcam register base addr: 0x%lx\n", dcam_regbase);
 	} else if (isp_regbase == 0 && strcmp(dn->name, "sprd_isp") == 0) {
 		isp_regbase = ioremap_nocache(r.start, resource_size(&r));
+		isp_phybase = r.start;
 		PARSE_TRACE("Isp register base addr: 0x%lx\n", isp_regbase);
 	} else if (csi_regbase == 0 && strcmp(dn->name, "sprd_sensor") == 0) {
 		csi_regbase = ioremap_nocache(r.start, resource_size(&r));
@@ -189,6 +191,9 @@ int get_gpio_id(struct device_node *dn, int *pwn, int *reset, uint32_t sensor_id
 	} else if (1 == sensor_id) {
 		*pwn   = of_get_gpio(dn, 3);
 		*reset = of_get_gpio(dn, 2);
+	} else if (2 == sensor_id) {
+		*pwn   = of_get_gpio(dn, 9);
+		*reset = of_get_gpio(dn, 8);
 	} else {
 		*pwn   = 0;
 		*reset = 0;
@@ -216,13 +221,39 @@ int get_gpio_id_ex(struct device_node *dn, int type, int *id, uint32_t sensor_id
 
 #ifdef CONFIG_OF
 	switch (type) {
-	case GPIO_CAMDVDD:
-		*id = of_get_gpio(dn, 4);
-		break;
-
-	default:
-		*id = 0;
-		break;
+		case GPIO_MAINDVDD:
+			*id = of_get_gpio(dn, 4);
+			break;
+		case GPIO_SUBDVDD:
+			*id = of_get_gpio(dn, 5);
+			break;
+		case GPIO_FLASH_EN:
+			*id = of_get_gpio(dn, 6);
+			break;
+		case GPIO_SWITCH_MODE:
+			*id = of_get_gpio(dn, 7);
+			break;
+		case GPIO_MIPI_SWITCH_EN:
+			*id = of_get_gpio(dn, 10);
+			break;
+		case GPIO_MIPI_SWITCH_MODE:
+			*id = of_get_gpio(dn, 11);
+			break;
+		case GPIO_MAINCAM_ID:
+			*id = of_get_gpio(dn, 12);
+			break;
+		case GPIO_MAINAVDD:
+			*id = of_get_gpio(dn, 13);
+			break;
+		case GPIO_SUBAVDD:
+			*id = of_get_gpio(dn, 14);
+			break;
+		case GPIO_SUB2DVDD:
+			*id = of_get_gpio(dn, 15);
+			break;
+		default:
+			*id = 0;
+			break;
 	}
 #else
 	*id = 0;

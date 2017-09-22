@@ -2231,6 +2231,8 @@ static void complete_ep(dwc_otg_pcd_ep_t * ep)
 						deptsiz.b.pktcnt);
 				}
 			} else {
+				uint32_t sts = 0;
+
 				dma_desc = ep->dwc_ep.desc_addr;
 				byte_count = 0;
 				ep->dwc_ep.sent_zlp = 0;
@@ -2251,13 +2253,14 @@ static void complete_ep(dwc_otg_pcd_ep_t * ep)
 					for (i = 0; i < ep->dwc_ep.desc_cnt;
 					     ++i) {
 						desc_sts = dma_desc->status;
-						byte_count += desc_sts.b.bytes;
+						sts |= (desc_sts.b.bs != BS_DMA_DONE)
+							|| (desc_sts.b.sts != RTS_SUCCESS);
 						dma_desc++;
 					}
 #ifdef DWC_UTE_CFI
 				}
 #endif
-				if (byte_count == 0) {
+				if (sts == 0) {
 					ep->dwc_ep.xfer_count =
 					    ep->dwc_ep.total_len;
 					is_last = 1;
@@ -3135,7 +3138,6 @@ static void dwc_otg_pcd_handle_noniso_bna(dwc_otg_pcd_ep_t * ep)
 		    &GET_CORE_IF(pcd)->dev_if->in_ep_regs[dwc_ep->num]->diepctl;
 		dmaaddr = &GET_CORE_IF(pcd)->dev_if->in_ep_regs[dwc_ep->num]->diepdma;
 		dmskaddr = &GET_CORE_IF(pcd)->dev_if->dev_global_regs->diepmsk;
-                
 	}
 
 	DWC_WARN("Ep%d %s, DescCnt = %d, depctl = 0x%x, \

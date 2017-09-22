@@ -1,7 +1,11 @@
 
 ifneq ($(KERNELRELEASE),)
 
-	autotst-objs := autotstdrv.o dispc.o dsi.o lcd_dummy.o mipi_dsih_api.o mipi_dsih_dphy.o mipi_dsih_hal.o
+	ifeq ($(CONFIG_FB_USE_MEGACORES_MIPI_DPHY), y)
+		autotst-objs := autotstdrv.o dispc.o dsi.o lcd_dummy.o mipi_dsih_api.o mipi_dsih_dphy_megacores.o mipi_dsih_hal.o
+	else
+		autotst-objs := autotstdrv.o dispc.o dsi.o lcd_dummy.o mipi_dsih_api.o mipi_dsih_dphy.o mipi_dsih_hal.o
+	endif
 	obj-m := autotst.o
 
 else

@@ -11,7 +11,7 @@ export CROSS_COMPILE=../PLATFORM/prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin/ar
 export ARCH=arm
 
 PLATFORM=sc8830
-DEFCONFIG=grandprimeve3g-dt_defconfig
+DEFCONFIG=j3x3g-dt_defconfig
 
 KERNEL_PATH=$(pwd)
 MODULE_PATH=${KERNEL_PATH}/modules
@@ -24,7 +24,7 @@ function build_kernel() {
 	make -j${JOBS}
 	make modules
 	make dtbs
-	#make -C ${EXTERNAL_MODULE_PATH}/wifi KDIR=${KERNEL_PATH}
+	make -C ${EXTERNAL_MODULE_PATH}/wifi KDIR=${KERNEL_PATH}
 	make -C ${EXTERNAL_MODULE_PATH}/mali MALI_PLATFORM=${PLATFORM} BUILD=release KDIR=${KERNEL_PATH}
 
 	[ -d ${MODULE_PATH} ] && rm -rf ${MODULE_PATH}

@@ -287,11 +287,6 @@
 		#size-cells = <0>;
 	};
 
-	usb_notifier {
-		compatible = "samsung,usb-notifier";
-		booster-name = "sm5701_booster";
-	};
-
 	sprd_thermal {
 		compatible = "sprd,sprd-thermal";
 		id = <0>;
@@ -354,9 +349,8 @@
 		compatible = "sprd,sprd_vsp";
 		reg = <0Xf5300000 0xc000>;
 		interrupts = <0 43 0x0>;
-		clock-names = "clk_mm_i", "clk_vsp", "clk_parent_0", "clk_parent_1", "clk_parent_2", "clk_parent_3";
-		clocks = <&clk_mm>, <&clk_vsp>, <&clk_256m>, <&clk_192m>, <&clk_128m>, <&clk_76m8>;
-		clock-parent-info = <2 4>;
+		clock-names = "clk_mm_i", "clk_vsp","clk_mm_axi";
+		clocks = <&clk_mm>, <&clk_vsp>, <&clk_mm_axi>;
 		version = <0>;
 	};
 

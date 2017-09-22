@@ -90,7 +90,41 @@ typedef struct {
  ***************************************************************/
 
 static gpio_pinmap_t gpio_pinmap_table[] = {
-#if defined (CONFIG_ARCH_SCX30G)
+#if defined (CONFIG_ARCH_SCX20)
+	{10,	17,  REG_PIN_U0TXD},
+	{27,	29,  REG_PIN_CP2_RFCTL0},
+	{30,	32,  REG_PIN_RFSDA0},
+	{34,	35,  REG_PIN_RF_ADC_ON},
+	{44,	59,  REG_PIN_RFCTL0},
+	{71,	83,  REG_PIN_EXTINT0},
+	{88,	93,  REG_PIN_SD1_CLK},
+	{94,	94,  REG_PIN_SD0_CLK0},
+	{96,	98,  REG_PIN_SD0_CMD},
+	{99,	99,  REG_PIN_SD0_D2},
+	{100,	100,  REG_PIN_SD0_D3},
+	{103,	103,  REG_PIN_LCD_RSTN},
+	{105, 	105, REG_PIN_LCD_FMARK},
+	{132, 	135, REG_PIN_SPI1_CSN},
+	{138, 	139, REG_PIN_U2CTS},
+	{146, 	149, REG_PIN_NFWPN},
+	{150, 	151, REG_PIN_NFCEN0},
+	{152, 	152, REG_PIN_NFREN},
+	{153, 	157, REG_PIN_NFWEN},
+	{158, 	161, REG_PIN_NFD4},
+	{162, 	163, REG_PIN_NFD8},
+	{164, 	165, REG_PIN_NFD10},
+	{166, 	167, REG_PIN_NFD12},
+	{168, 	168, REG_PIN_NFD14},
+	{169, 	169, REG_PIN_NFD15},
+	{173, 	173, REG_PIN_CCIRMCLK},
+	{186, 	193, REG_PIN_CCIRRST},
+	{199, 	201, REG_PIN_KEYIN0},
+	{207,	208, REG_PIN_SCL2},
+	{209,	209, REG_PIN_CLK_AUX0},
+	{210,	213, REG_PIN_IIS0DI},
+	{214,	214, REG_PIN_CLK_AUX1},
+	{225, 	239, REG_PIN_MTDO},
+#elif defined (CONFIG_ARCH_SCX30G)
 	{10,	21,  REG_PIN_U0TXD},
 	{27,	29,  REG_PIN_CP2_RFCTL0},
 	{30,	32,  REG_PIN_RFSDA0},
@@ -338,7 +372,76 @@ static void check_gpio_status(unsigned char phonestate)
 	pr_info("[secgpio_dvs][%s] state : %s\n", __func__,
 			(phonestate == PHONE_INIT) ? "init" : "sleep");
 
-#if defined (CONFIG_ARCH_SCX30G)
+#if defined (CONFIG_ARCH_SCX20)
+	for(i=10 ; i < 18 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=27 ; i < 33 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=34 ; i < 36 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=44 ; i < 60 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=71 ; i < 84 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=88 ; i < 95 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=96 ; i < 101 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=103 ; i < 104 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=105 ; i < 106 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=132 ; i < 136 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=138 ; i < 140 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=146 ; i < 170 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=173 ; i < 174 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=186 ; i < 194 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=199 ; i < 202 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=207 ; i < 215 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+	for(i=225 ; i < 240 ; i++)
+	{
+		tshark_check_gpio_status(phonestate, i);
+	}
+#elif defined (CONFIG_ARCH_SCX30G)
 	// GPIO 0-9 doesn't exist
 	// Read 10 ~ 21, 22~26 doesn't exist
 	for(i=10 ; i < 22 ; i++)

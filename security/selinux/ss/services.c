@@ -2346,6 +2346,9 @@ int security_fs_use(
 {
 	int rc = 0;
 	struct ocontext *c;
+	//SEC_SELinux : when sdcardd(maybe also other daemon) try to mount filesystem which uses xattr type, 
+	//filesystem has wrong contexts(unlabeled) because two or more daemons enter same time at critical section but that is not handled.
+	u32 tmpsid;
 
 	read_lock(&policy_rwlock);
 
@@ -2360,7 +2363,8 @@ int security_fs_use(
 		*behavior = c->v.behavior;
 		if (!c->sid[0]) {
 			rc = sidtab_context_to_sid(&sidtab, &c->context[0],
-						   &c->sid[0]);
+						   &tmpsid);
+			c->sid[0] = tmpsid;
 			if (rc)
 				goto out;
 		}

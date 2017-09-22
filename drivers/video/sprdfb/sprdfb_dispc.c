@@ -84,12 +84,21 @@
 #define SPRDFB_SATURATION_V         (0x100<<0)//(0x12A<<0)//10-bits
 
 #elif ((defined CONFIG_FB_SCX15) || (defined CONFIG_FB_SCX30G))
+#if ((defined CONFIG_MACH_J1X3G) || (defined CONFIG_MACH_J1MINI3G))
+#define SPRDFB_BRIGHTNESS           (0x00<<16)//(0x03<<16)// 9-bits
+#define SPRDFB_CONTRAST             (0x100<<0) //10-bits
+#define SPRDFB_OFFSET_U             (0x81<<16)//8-bits
+#define SPRDFB_SATURATION_U         (0x100<<0)//(0x12A<<0)//10-bits
+#define SPRDFB_OFFSET_V             (0x82<<16)//8-bits
+#define SPRDFB_SATURATION_V         (0x100<<0)//(0x12A<<0)//10-bits
+#else
 #define SPRDFB_BRIGHTNESS           (0x02<<16)//(0x03<<16)// 9-bits
 #define SPRDFB_CONTRAST             (0x12A<<0) //10-bits
 #define SPRDFB_OFFSET_U             (0x81<<16)//8-bits
 #define SPRDFB_SATURATION_U         (0x123<<0)//(0x12A<<0)//10-bits
 #define SPRDFB_OFFSET_V             (0x82<<16)//8-bits
 #define SPRDFB_SATURATION_V         (0x123<<0)//(0x12A<<0)//10-bits
+#endif
 #else
 #define SPRDFB_CONTRAST (74)
 #define SPRDFB_SATURATION (73)
@@ -137,7 +146,7 @@ struct sprdfb_dispc_context {
 	struct vm_area_struct *vma;
 #endif
 };
-
+static DEFINE_MUTEX(dispc_lock);
 static struct sprdfb_dispc_context dispc_ctx = {0};
 #ifdef CONFIG_OF
 unsigned long g_dispc_base_addr = 0;
@@ -146,6 +155,7 @@ EXPORT_SYMBOL(g_dispc_base_addr);
 
 extern void sprdfb_panel_start(struct sprdfb_device *dev);
 extern void sprdfb_panel_suspend(struct sprdfb_device *dev);
+extern void sprdfb_panel_shutdown(struct sprdfb_device *dev);
 extern void sprdfb_panel_resume(struct sprdfb_device *dev, bool from_deep_sleep);
 extern void sprdfb_panel_before_refresh(struct sprdfb_device *dev);
 extern void sprdfb_panel_after_refresh(struct sprdfb_device *dev);
@@ -157,7 +167,9 @@ extern void sprdfb_panel_invalidate_rect(struct panel_spec *self,
 #ifdef CONFIG_FB_ESD_SUPPORT
 extern uint32_t sprdfb_panel_ESD_check(struct sprdfb_device *dev);
 #endif
-
+#ifdef CONFIG_LCD_ESD_RECOVERY
+extern void sprdfb_panel_ESD_reset(struct sprdfb_device *dev);
+#endif
 #ifdef CONFIG_FB_LCD_OVERLAY_SUPPORT
 static int overlay_start(struct sprdfb_device *dev, uint32_t layer_index);
 static int overlay_close(struct sprdfb_device *dev);
@@ -167,7 +179,7 @@ static int sprdfb_dispc_clk_disable(struct sprdfb_dispc_context *dispc_ctx_ptr, 
 static int sprdfb_dispc_clk_enable(struct sprdfb_dispc_context *dispc_ctx_ptr, SPRDFB_DYNAMIC_CLK_SWITCH_E clock_switch_type);
 static int32_t sprdfb_dispc_init(struct sprdfb_device *dev);
 static void dispc_reset(void);
-static void dispc_stop(struct sprdfb_device *dev);
+void dispc_stop(struct sprdfb_device *dev);
 static void dispc_module_enable(void);
 //#if (defined(CONFIG_FB_DYNAMIC_FREQ_SCALING) || !defined(FB_CHECK_ESD_IN_VFP))
 static void dispc_stop_for_feature(struct sprdfb_device *dev);
@@ -651,7 +663,7 @@ static void dispc_run(struct sprdfb_device *dev)
 #endif
 }
 
-static void dispc_stop(struct sprdfb_device *dev)
+void dispc_stop(struct sprdfb_device *dev)
 {
 	if(SPRDFB_PANEL_IF_DPI == dev->panel_if_type){
 		/*dpi register update with SW only*/
@@ -1136,7 +1148,7 @@ static int32_t sprdfb_dispc_init(struct sprdfb_device *dev)
 
 	pr_debug(KERN_INFO "sprdfb: [%s]\n",__FUNCTION__);
 
-	if(NULL == dev){
+	if (unlikely(!dev)) {
             printk("sprdfb: [%s] Invalid parameter!\n", __FUNCTION__);
             return -1;
 	}
@@ -1236,7 +1248,8 @@ static void sprdfb_dispc_clean_lcd (struct sprdfb_device *dev)
 	dispc_sync(dev);
 #endif	/* CONFIG_FB_SCX30G */
 	up(&dev->refresh_lock);
-	msleep(33);
+	/* need 1 frame delay for stability */
+	msleep(17);
 }
 
 static int32_t sprdfb_dispc_refresh (struct sprdfb_device *dev)
@@ -1391,6 +1404,12 @@ ERROR_REFRESH:
 	return 0;
 }
 
+static int32_t sprdfb_dispc_shutdown(struct sprdfb_device *dev)
+{
+	sprdfb_panel_shutdown(dev);
+	return 0;
+}
+
 static int32_t sprdfb_dispc_suspend(struct sprdfb_device *dev)
 {
 	printk(KERN_INFO "sprdfb: [%s], dev->enable = %d\n",__FUNCTION__, dev->enable);
@@ -1421,13 +1440,12 @@ static int32_t sprdfb_dispc_suspend(struct sprdfb_device *dev)
 		}
 
 #endif
-
 		sprdfb_panel_suspend(dev);
-
+#ifndef CONFIG_GEN_PANEL_OCTA
 		dispc_stop(dev);
-		dispc_write(0, DISPC_INT_EN);
-
-		msleep(50); /*fps>20*/
+#endif
+                dispc_write(0, DISPC_INT_EN);
+                msleep(50); /*fps 1frame >      previous interrupt done time*/
 
 		clk_disable_unprepare(dispc_ctx.clk_dispc_emc);
 		sprdfb_dispc_clk_disable(&dispc_ctx,SPRDFB_DYNAMIC_CLK_FORCE);
@@ -1463,7 +1481,7 @@ static int32_t sprdfb_dispc_resume(struct sprdfb_device *dev)
 
 		dev->enable = 1;
 		if(dev->panel->is_clean_lcd){
-			sprdfb_dispc_clean_lcd(dev);
+		sprdfb_dispc_clean_lcd(dev);
 		}
 
       sprdfb_panel_start(dev);
@@ -1570,6 +1588,23 @@ ERROR_CHECK_ESD:
 }
 #endif
 
+#ifdef CONFIG_LCD_ESD_RECOVERY
+static int32_t sprdfb_dispc_esd_reset(struct sprdfb_device *dev)
+{
+	mutex_lock(&dispc_lock);
+	pr_info("%s\n", __func__);
+
+	if (!dev->enable) {
+		pr_warn("%s, dispc not enabled\n", __func__);
+		mutex_unlock(&dispc_lock);
+		return;
+	}
+	sprdfb_panel_ESD_reset(dev);
+	sprdfb_dispc_refresh(dev);
+	sprdfb_panel_start(dev);
+	mutex_unlock(&dispc_lock);
+}
+#endif
 
 #ifdef CONFIG_FB_LCD_OVERLAY_SUPPORT
 static int overlay_open(void)
@@ -1971,6 +2006,7 @@ static int32_t spdfb_dispc_wait_for_vsync(struct sprdfb_device *dev)
 				reg_val1 = dispc_read(DISPC_DPI_STS1);
 				printk(KERN_ERR "sprdfb: vsync time out!!!!!(0x%x, 0x%x)\n",
 					reg_val0, reg_val1);
+#ifdef CONFIG_TEMP_DEBUG
 				{/*for debug*/
 					int32_t i = 0;
 					for(i=0;i<256;i+=16){
@@ -1979,6 +2015,7 @@ static int32_t spdfb_dispc_wait_for_vsync(struct sprdfb_device *dev)
 					}
 					printk("**************************************\n");
 				}
+#endif
 			}
 			dispc_ctx.waitfor_vsync_waiter = 0;
 		}else{
@@ -1995,6 +2032,7 @@ static int32_t spdfb_dispc_wait_for_vsync(struct sprdfb_device *dev)
 		if (!ret) { /* time out */
 			dispc_ctx.waitfor_vsync_done = 1;
 			printk(KERN_ERR "sprdfb: vsync time out!!!!!\n");
+#ifdef CONFIG_TEMP_DEBUG
 			{/*for debug*/
 				int32_t i = 0;
 				for(i=0;i<256;i+=16){
@@ -2003,6 +2041,7 @@ static int32_t spdfb_dispc_wait_for_vsync(struct sprdfb_device *dev)
 				}
 				printk("**************************************\n");
 			}
+#endif
 		}
 		dispc_ctx.waitfor_vsync_waiter = 0;
 	}
@@ -2425,11 +2464,15 @@ struct display_ctrl sprdfb_dispc_ctrl = {
 	.uninit		= sprdfb_dispc_uninit,
 	.refresh		= sprdfb_dispc_refresh,
 	.logo_proc		= sprdfb_dispc_logo_proc,
+	.shutdown		= sprdfb_dispc_shutdown,
 	.suspend		= sprdfb_dispc_suspend,
 	.resume		= sprdfb_dispc_resume,
 	.update_clk	= dispc_update_clk_intf,
 #ifdef CONFIG_FB_ESD_SUPPORT
 	.ESD_check	= sprdfb_dispc_check_esd,
+#endif
+#ifdef CONFIG_LCD_ESD_RECOVERY
+	.ESD_reset = sprdfb_dispc_esd_reset,
 #endif
 #ifdef CONFIG_FB_LCD_OVERLAY_SUPPORT
 	.enable_overlay = sprdfb_dispc_enable_overlay,
@@ -2444,4 +2487,5 @@ struct display_ctrl sprdfb_dispc_ctrl = {
 	.is_refresh_done = sprdfb_is_refresh_done,
 
 };
+
 

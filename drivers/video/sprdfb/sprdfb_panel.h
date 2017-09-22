@@ -139,6 +139,7 @@ typedef void (*spi_read_t)(uint32_t *data);
 /* LCD operations */
 struct panel_operations {
 	int32_t (*panel_power)(struct panel_spec *self, uint8_t on);
+	int32_t (*panel_reduced_init)(struct panel_spec *self);
 	int32_t (*panel_init)(struct panel_spec *self);
 	int32_t (*panel_close)(struct panel_spec *self);
 	int32_t (*panel_reset)(struct panel_spec *self);
@@ -169,6 +170,9 @@ struct panel_operations {
 	int32_t (*panel_change_epf)(struct panel_spec *self, bool is_default);
 	int32_t (*panel_set_start)(struct panel_spec *self);
 	int32_t (*panel_pin_init)(uint32_t val);
+#if defined(CONFIG_FB_LCD_OLED_BACKLIGHT)
+	int32_t (*panel_dimming_init)(struct panel_spec *self, struct device *dev);
+#endif
 };
 
 /* MCU LCD specific properties */
@@ -332,6 +336,12 @@ struct panel_spec {
 	} info;
 	struct panel_if_ctrl *if_ctrl;
 	struct panel_operations *ops;
+#ifdef CONFIG_LCD_ESD_RECOVERY
+	struct esd_det_info *esd_info;
+#endif
+#if defined(CONFIG_FB_LCD_OLED_BACKLIGHT)
+	unsigned char *br_map;
+#endif
 };
 
 struct panel_cfg {

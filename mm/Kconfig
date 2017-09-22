@@ -330,6 +330,12 @@ config OPTIMIZE_KSM
 	help
 	  Enable Optimize KSM
 
+config ADAPTIVE_KSM
+	bool "Enable Adaptive KSM"
+	depends on KSM
+	help
+	  Enable Adaptive KSM
+
 config KSM_ASSEMBLY_MEMCMP
 	bool "Assembly function used for memcmp in KSM"
 	depends on KSM
@@ -599,6 +605,14 @@ config BALANCE_ANON_FILE_RECLAIM
 	  equally.
 	  Swapping anonymous pages out to memory can be efficient enough to justify
 	  treating anonymous and file backed pages equally.
+
+config MMAP_READAROUND_LIMIT
+	int "Limit mmap readaround upperbound"
+	default 0
+	help
+	  Inappropriate mmap readaround size can hurt device performance
+	  during the sluggish situation. Add the hard upper-limit for
+	  mmap readaround.
 
 config GENERIC_EARLY_IOREMAP
 	bool

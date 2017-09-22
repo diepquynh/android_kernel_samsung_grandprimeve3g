@@ -73,9 +73,9 @@
 ENTRY(sc8830_standby_iram)
 #if !(defined(CONFIG_ARCH_SCX35L64)||defined(CONFIG_ARCH_SCX35LT8))
 sprd_pm_mapped_va:
-	stmfd sp!, {lr}
 	/* disable uart1 for idle deep sleep */
-	ldr r0, =REG_UART1_ENABLE_PHY
+	adr r0, REG_UART1_ENABLE_PHY
+	ldr r0, [r0]
 	ldr r1, [r0]
 	bic r1, #REG_UART1_ENABLE_BIT
 	str r1, [r0]
@@ -110,11 +110,14 @@ sprd_pm_va_to_iram:
 	cmp	r0, #0x0
 	bne	5b
 #else
+#ifndef CONFIG_ARCH_SCX20
+// Pike doesn't have this register
 	ldr r0, =PUB_ACCESS_SET
 	mov r1, #0x1
 	str r1, [r0]
 	dsb
 	isb
+#endif
 	nop
 	nop
 	nop
@@ -202,11 +205,11 @@ check_pub_fsm_wake:
 	ldr r1, [r0]
 	orr r1, #JTAG_DAP_EN
 	str r1, [r0]
-	ldr r0, =REG_UART1_ENABLE_PHY
+	adr r0, REG_UART1_ENABLE_PHY
+	ldr r0, [r0]
 	ldr r1, [r0]
 	orr r1, #REG_UART1_ENABLE_BIT
 	str r1, [r0]
-	ldmfd sp!, {lr}
 #if 0
 	adr r0, REG_UART1_ENABLE_VIR
 	ldr r0, [r0]
@@ -262,8 +265,59 @@ delay_after_reset:
 
 	ldr r0, =0x20
 	bl my_delay
-#ifndef CONFIG_ARCH_SCX20
-// PUB is not ready in Pike and then we temporarily disable related register manipulation.
+#ifdef CONFIG_ARCH_SCX20
+/* pub_reinit_info */
+	ldr r0, =0x50002400
+	ldr r7, [r0, #0x4]		// ap_access_reg_addr
+	ldr r1, [r0, #0x18]		// sw_reinit_enable
+	ldr r6, [r0, #0x14]		// complete_flag
+
+/* PWR_STATUS3_DBG */
+	ldr r2, =0x402b00c8
+	ldr r3, =0x000000f0
+
+	cmp r1, #1
+	bne pub_reinit_complete		// This is hw_reinit and we directly go to pub_reinit_complete
+
+/* sw_reinit */
+1:
+	ldr r4, [r2]
+	and r4, r3
+	ldr r5, [r2]
+	and r5, r3
+	cmp	r4, r5
+	bne 1b	
+
+	cmp r4, #0
+	bne send_ipi
+	ldr r5, [r7]
+	cmp r5, r6
+	beq next
+		
+send_ipi:
+	/*send ipi irq1 to cp0*/
+	ldr r4,=0x402c0000
+	mov r5,#0x4
+	str r5,[r4]
+
+/* Polling if pub reinit completed */
+pub_reinit_complete:		
+1:
+	ldr r4, [r2]
+	and r4, r3
+	ldr r5, [r2]
+	and r5, r3
+	cmp	r4, r5
+	bne 1b	
+
+	cmp r4, #0
+	bne 1b 
+	ldr r5, [r7]
+	cmp r5, r6
+	bne	1b
+	
+next:
+#else
 #ifdef CONFIG_ARCH_SCX30G
 	mov r2, #0x3
 	ldr r0,=0x402b00c8
@@ -385,17 +439,22 @@ loopp:
 	*  need to find a more elegent way.
 	*/
 context_restore:
+	/*
 	ldr	r0, =sp_pm_collapse_exit
 	ldr	r1, =0xc0000000
 	sub	r0, r0, r1
 	ldr	r1, =(CONFIG_PHYS_OFFSET)
 	add	r0, r0, r1
+	*/
+	mov r0, #0x104 /*sp_pm_collapse_exit phy address pointer*/
+	ldr r0, [r0] /*sp_pm_collapse_exit phy address*/
+
 	mov pc, r0
 #endif
 ENDPROC(sc8830_standby_exit_iram)
 
 #ifdef CONFIG_DDR_VALIDITY_TEST
-#ifndef CONFIG_ARCH_SCX30G
+#if ((!defined(CONFIG_ARCH_SCX30G)) || defined(CONFIG_ARCH_SCX20))
 ENTRY(ddr_test)
 #if !(defined(CONFIG_ARCH_SCX35L64)||defined(CONFIG_ARCH_SCX35LT8))
 ddr_start:
@@ -487,6 +546,7 @@ ENTRY(uart1_en)
 	ldr r0, =UART1_CTR0_PHY
 	ldr r1, =0x1c
 	str r1, [r0]
+	mov pc, lr
 #endif
 ENDPROC(uart1_en)
 

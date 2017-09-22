@@ -405,6 +405,12 @@ config SPRD_CHARGER_FAN5405
 	help
 	  Say Y to include support for Fairchild FAN5405 Battery Charger.
 
+config SPRD_CHARGER_FAN54015
+	tristate "Fairchild FAN54015 Battery Charger"
+	depends on SPRD_EXT_IC_POWER
+	help
+	  Say Y to include support for Fairchild FAN5405 Battery Charger.
+
 config SPRD_NOFGUCURRENT_CHG
 	bool "Spreadtrum sp2711 SoC's pulse charging driver featrue"
 	depends on SPRD_2713_POWER

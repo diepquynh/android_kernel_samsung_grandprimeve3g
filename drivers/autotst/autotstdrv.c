@@ -17,6 +17,7 @@
 #include <linux/major.h>
 #include <linux/module.h>
 #include <linux/types.h>
+#include <soc/sprd/pinmap.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -211,6 +212,7 @@ static int i2c_ioctl( unsigned int cmd, unsigned long arg )
 static int gpio_ioctl( unsigned int cmd, unsigned long arg )
 {
     int ret = 0;
+    int pull = 0;
     struct autotst_gpio_info_t git;
 
     if( copy_from_user(&git, (const void __user *)arg, sizeof(struct autotst_gpio_info_t)) ) {
@@ -229,6 +231,8 @@ static int gpio_ioctl( unsigned int cmd, unsigned long arg )
         if( git.pdwn_enb ) {
         }
 */
+        pull = ( (git.pdwn_enb << 6) & (BIT_PIN_WPD) ) | ((git.pup_enb << 7) & (BIT_PIN_WPU)); 
+        autotst_pin_ctrl(DISPC_PIN_FUNC3, git.gpio, pull);
         gpio_request(git.gpio, name);
         if( AUTOTST_GPIO_DIR_IN == git.dir ) {
             gpio_direction_input(git.gpio);
@@ -250,6 +254,9 @@ static int gpio_ioctl( unsigned int cmd, unsigned long arg )
     case AUTOTST_IOCTL_GPIO_SET:
         gpio_set_value(git.gpio, git.val);
         break;
+    case AUTOTST_IOCTL_GPIO_CLOSE:
+	 autotst_pin_ctrl(DISPC_PIN_FUNC0, git.gpio, pull);
+	 break;
     default:
         ret = -EINVAL;
         break;
@@ -310,6 +317,7 @@ static long autotst_ioctl( struct file *filp, unsigned int cmd, unsigned long ar
     case AUTOTST_IOCTL_GPIO_INIT:
     case AUTOTST_IOCTL_GPIO_GET:
     case AUTOTST_IOCTL_GPIO_SET:
+    case AUTOTST_IOCTL_GPIO_CLOSE:
         ret = gpio_ioctl(cmd, arg);
         break;
     case AUTOTST_IOCTL_LCD_DATA:

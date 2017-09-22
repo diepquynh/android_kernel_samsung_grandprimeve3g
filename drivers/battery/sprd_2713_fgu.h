@@ -18,6 +18,7 @@ uint32_t sprdfgu_read_capacity(void);
 uint32_t sprdfgu_poweron_capacity(void);
 int sprdfgu_read_soc(void);
 int sprdfgu_read_batcurrent(void);
+int sprdfgu_read_current_avg(void);
 uint32_t sprdfgu_read_vbat_vol(void);
 uint32_t sprdfgu_read_vbat_ocv(void);
 int sprdfgu_register_notifier(struct notifier_block *nb);

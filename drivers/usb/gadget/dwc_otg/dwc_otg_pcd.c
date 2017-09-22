@@ -58,6 +58,7 @@
 
 extern int init_cfi(cfiobject_t * cfiobj);
 #endif
+extern void dwc_otg_ep_reset_ep_pid(dwc_otg_core_if_t * core_if,int dir,int num);
 
 /**
  * Choose endpoint from ep arrays using usb_ep structure.
@@ -1582,6 +1583,7 @@ int dwc_otg_pcd_ep_enable(dwc_otg_pcd_t * pcd,
 	/* Set initial data PID. */
 	if (ep->dwc_ep.type == UE_BULK) {
 		ep->dwc_ep.data_pid_start = 0;
+		dwc_otg_ep_reset_ep_pid(pcd->core_if,ep->dwc_ep.is_in,num);
 	}
 
 	/* Alloc DMA Descriptors */

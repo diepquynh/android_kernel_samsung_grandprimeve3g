@@ -47,6 +47,9 @@
 #include <asm/fiq_glue.h>
 #include <asm/fiq.h>
 #endif
+
+#include <asm/sec/sec_debug.h>
+
 #define KERNEL_ONLY_CHIP_DOG 0
 #define KERNEL_WATCHDOG_FEEDER 1
 
@@ -64,11 +67,6 @@ static unsigned long wdt_enabled;
 #define wdt_feed_all() FEED_ALL_WDG(chip_margin, ap_margin, ca7_margin, ca7_irq_margin)
 
 extern int in_calibration(void);
-
-#ifdef CONFIG_SEC_DEBUG
-#include <soc/sprd/sec_debug.h>
-#endif
-
 #ifndef CONFIG_SPRD_WATCHDOG_SYS_FIQ
 static irqreturn_t ca7_wdg_isr(int irq, void *dev_id)
 {

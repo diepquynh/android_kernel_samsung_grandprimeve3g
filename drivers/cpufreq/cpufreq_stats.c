@@ -70,6 +70,9 @@ static int cpufreq_stats_update(unsigned int cpu)
 	struct all_cpufreq_stats *all_stat;
 	unsigned long long cur_time;
 
+#if defined(CONFIG_MACH_SP9838AEA_5MOD) || defined(CONFIG_MACH_SP9838AEA_POWER_DEBUG) || defined(CONFIG_MACH_SP9838AEA_8CORE_LIGHT_SLEEP) || defined(CONFIG_MACH_SP9838AEA_FHD) || defined(CONFIG_MACH_SS_SHARKLT8) || defined(CONFIG_MACH_SS_SHARKLT8LIGHTSLEEP)
+	return 0;
+#endif
 	cur_time = get_jiffies_64();
 	spin_lock(&cpufreq_stats_lock);
 	stat = per_cpu(cpufreq_stats_table, cpu);

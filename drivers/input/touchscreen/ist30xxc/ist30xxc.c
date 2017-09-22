@@ -27,8 +27,9 @@
 #include <linux/mutex.h>
 #include <linux/input/mt.h>
 #include <linux/pm_runtime.h>
+#include <soc/sprd/i2c-sprd.h>
 
-#if CONFIG_EXTCON_S2MM001B
+#ifdef CONFIG_EXTCON_S2MM001B
 #include <linux/extcon.h>
 #endif
 
@@ -49,10 +50,17 @@
 #include "ist30xxc_cmcs.h"
 #endif
 
+#if IST30XX_CMCS_JIT_TEST
+#include "ist30xxc_cmcs_jit.h"
+#endif
+
 #include <linux/power_supply.h>
+
+#include <asm/sec/sec_debug.h>
+
 extern void (*tsp_charger_status_cb)(int);
 
-#define TOUCH_BOOSTER	1
+#define TOUCH_BOOSTER	0
 
 #if TOUCH_BOOSTER
 #include <linux/cpufreq.h>
@@ -78,6 +86,11 @@ int ist30xx_key_code[IST30XX_MAX_KEYS + 1] = { 0, KEY_RECENT, KEY_BACK };
 struct ist30xx_data *ts_data;
 
 DEFINE_MUTEX(ist30xx_mutex);
+
+#ifdef CONFIG_ARM64
+struct class *sec_class;
+EXPORT_SYMBOL(sec_class);
+#endif
 
 int ist30xx_dbg_level = IST30XX_DEBUG_LEVEL;
 void tsp_printk(int level, const char *fmt, ...)
@@ -110,17 +123,14 @@ int ist30xx_intr_wait(struct ist30xx_data *data, long ms)
 	long start_ms = get_milli_second();
 	long curr_ms = 0;
 
-	while (1) {
+	while (true) {
 		if (!data->irq_working)
 			break;
 
 		curr_ms = get_milli_second();
-		if ((curr_ms < 0) || (start_ms < 0) || (curr_ms - start_ms > ms)) {
-			tsp_info("%s() timeout(%dms)\n", __func__, ms);
+		if ((curr_ms < 0) || (start_ms < 0) || (curr_ms - start_ms > ms))
 			return -EPERM;
-		}
-
-		msleep(2);
+		usleep_range(1500, 2500);
 	}
 
 	return 0;
@@ -157,7 +167,6 @@ static void ist30xx_request_reset(struct ist30xx_data *data)
 {
 	data->irq_err_cnt++;
 	if (unlikely(data->irq_err_cnt >= data->max_irq_err_cnt)) {
-		tsp_info("%s()\n", __func__);
 		ist30xx_scheduled_reset(data);
 		data->irq_err_cnt = 0;
 	}
@@ -176,15 +185,10 @@ void ist30xx_start(struct ist30xx_data *data)
 		mod_timer(&event_timer, get_jiffies_64() + EVENT_TIMER_INTERVAL * 2);
 	}
 
+	data->ignore_delay = true;
+
 	ist30xx_write_cmd(data->client, IST30XX_HIB_CMD,
 		((eHCOM_SET_MODE_SPECIAL << 16) | (data->noise_mode & 0xFFFF)));
-/*
-	ist30xx_write_cmd(data->client, IST30XX_HIB_CMD,
-		((eHCOM_SET_LOCAL_MODEL << 16) | (TSP_LOCAL_CODE & 0xFFFF)));
-
-	tsp_info("%s(), local : %d, mode : 0x%x\n", __func__,
-		 TSP_LOCAL_CODE & 0xFFFF, data->noise_mode & 0xFFFF);
-*/
 	tsp_info("%s(), mode : 0x%x\n", __func__, data->noise_mode & 0xFFFF);
 
 	if (data->report_rate >= 0) {
@@ -203,7 +207,6 @@ void ist30xx_start(struct ist30xx_data *data)
 	if (data->jig_mode) {
 		ist30xx_write_cmd(data->client, IST30XX_HIB_CMD,
 			(eHCOM_SET_JIG_MODE << 16) | (IST30XX_JIG_TOUCH & 0xFFFF));
-		tsp_info(" jig mode start\n");
 	}
 
 	if (data->debug_mode || data->jig_mode) {
@@ -212,10 +215,11 @@ void ist30xx_start(struct ist30xx_data *data)
 #endif
 		ist30xx_write_cmd(data->client, IST30XX_HIB_CMD,
 			(eHCOM_SLEEP_MODE_EN << 16) | (IST30XX_DISABLE & 0xFFFF));
-		tsp_info(" debug mode start\n");
 	}
 
 	ist30xx_cmd_start_scan(data);
+
+	data->ignore_delay = false;
 }
 
 
@@ -298,21 +302,20 @@ int ist30xx_get_info(struct ist30xx_data *data)
 	ret = ist30xx_get_tsp_info(data);
 	if (unlikely(ret))
 		goto get_info_end;
-#endif  // IST30XX_INTERNAL_BIN
+#endif  /* IST30XX_INTERNAL_BIN */
 
 	ist30xx_print_info(data);
 
 	ret = ist30xx_read_cmd(data, eHCOM_GET_CAL_RESULT, &calib_msg);
-	if (likely(ret == 0)) {
+	if (likely(!ret)) {
 		tsp_info("calib status: 0x%08x\n", calib_msg);
 		ms = get_milli_second();
 		ist30xx_put_track_ms(ms);
 		ist30xx_put_track(&tracking_intr_value, 1);
 		ist30xx_put_track(&calib_msg, 1);
-		if ((calib_msg & CALIB_MSG_MASK) != CALIB_MSG_VALID ||
-			CALIB_TO_STATUS(calib_msg) > 0) {
+		if ((calib_msg & CALIB_MSG_MASK) != CALIB_MSG_VALID
+						|| CALIB_TO_STATUS(calib_msg) > 0)
 			ist30xx_calibrate(data, IST30XX_MAX_RETRY_CNT);
-		}
 	}
 
 #if IST30XX_CHECK_CALIB
@@ -348,7 +351,6 @@ get_info_end:
 	(n & GESTURE_MESSAGE_MASK) : -EINVAL)
 void ist30xx_gesture_cmd(struct ist30xx_data *data, int cmd)
 {
-	tsp_info("Gesture cmd: %d\n", cmd);
 
 	switch (cmd) {
 	case 0x01:
@@ -437,7 +439,7 @@ void print_tsp_event(struct ist30xx_data *data, finger_info *finger)
 	press = PRESSED_FINGER(data->t_status, finger->bit_field.id);
 
 	if (press) {
-		if (tsp_touched[idx] == false) { // touch down
+		if (tsp_touched[idx] == false) { /* touch down */
 #if TOUCH_BOOSTER
 			if(!min_handle)
 			{
@@ -467,7 +469,7 @@ void print_tsp_event(struct ist30xx_data *data, finger_info *finger)
 			tsp_noti("touch down\n");
 #endif
 			tsp_touched[idx] = true;
-		} else { // touch move
+		} else { /* touch move */
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			tsp_debug("%s%d (%d, %d)\n",
 				TOUCH_MOVE_MESSAGE, finger->bit_field.id,
@@ -477,7 +479,7 @@ void print_tsp_event(struct ist30xx_data *data, finger_info *finger)
 #endif
 		}
 	} else {
-		if (tsp_touched[idx] == true) { // touch up
+		if (tsp_touched[idx] == true) { /* touch up */
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			tsp_noti("%s%d\n", TOUCH_UP_MESSAGE, finger->bit_field.id);
 #else
@@ -488,12 +490,9 @@ void print_tsp_event(struct ist30xx_data *data, finger_info *finger)
 			fingers_cnt--;
 			if(!fingers_cnt)
 			{
-				//printk(KERN_ERR "[TOUCH_BOOSTER]%s %d\n",__func__,__LINE__);
 #ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-				if (cpu_num_limit_handle) {
-					cpu_num_min_limit_put(cpu_num_limit_handle);
-					cpu_num_limit_handle = NULL;
-				}
+				cpu_num_min_limit_put(cpu_num_limit_handle);
+				cpu_num_limit_handle = NULL;
 #endif
 				cpufreq_limit_put(min_handle);
 				min_handle = NULL;
@@ -512,12 +511,12 @@ void print_tkey_event(struct ist30xx_data *data, int id)
 	bool press = PRESSED_KEY(data->t_status, id);
 
 	if (press) {
-		if (tkey_pressed[idx] == false) { // tkey down
+		if (tkey_pressed[idx] == false) { /* tkey down */
 			tsp_noti("k %s%d\n", TOUCH_DOWN_MESSAGE, id);
 			tkey_pressed[idx] = true;
 		}
 	} else {
-		if (tkey_pressed[idx] == true) { // tkey up
+		if (tkey_pressed[idx] == true) { /* tkey up */
 			tsp_noti("k %s%d\n", TOUCH_UP_MESSAGE, id);
 			tkey_pressed[idx] = false;
 		}
@@ -530,7 +529,6 @@ static void release_finger(struct ist30xx_data *data, int id)
 	input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, false);
 
 	ist30xx_tracking(TRACK_POS_FINGER + id);
-	tsp_info("%s() %d\n", __func__, id);
 
 	tsp_touched[id - 1] = false;
 
@@ -545,7 +543,6 @@ static void release_key(struct ist30xx_data *data, int id, u8 key_status)
 	input_report_key(data->input_dev, ist30xx_key_code[id], key_status);
 
 	ist30xx_tracking(TRACK_POS_KEY + id);
-	tsp_info("%s() key%d, status: %d\n", __func__, id, key_status);
 
 	tkey_pressed[id - 1] = false;
 
@@ -671,7 +668,7 @@ static void report_input_data(struct ist30xx_data *data, int finger_counts,
 
 		print_tkey_event(data, id + 1);
 	}
-#endif  // IST30XX_USE_KEY
+#endif
 
 	data->irq_err_cnt = 0;
 	data->scan_retry = 0;
@@ -749,8 +746,6 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 	if (unlikely(ret))
 		goto irq_err;
 
-	tsp_verb("intr msg: 0x%08x\n", *msg);
-
 	// TSP IC Exception
 	if (unlikely((*msg & IST30XX_EXCEPT_MASK) == IST30XX_EXCEPT_VALUE)) {
 		tsp_err("Occured IC exception(0x%02X)\n", *msg & 0xFF);
@@ -771,7 +766,7 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 		goto irq_ic_err;
 	}
 
-	if (unlikely(*msg == 0 || *msg == 0xFFFFFFFF))  // Unknown CMD
+	if (unlikely(*msg == 0 || *msg == 0xFFFFFFFF))  /* Unknown CMD */
 		goto irq_err;
 
 	event_ms = ms;
@@ -789,6 +784,15 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 #if IST30XX_CMCS_TEST
 	if (unlikely(*msg == IST30XX_CMCS_MSG_VALID)) {
 		data->status.cmcs = 1;
+		tsp_info("cmcs status: 0x%08x\n", *msg);
+
+		goto irq_end;
+	}
+#endif
+
+#if IST30XX_CMCS_JIT_TEST
+	if (((*msg & CMCS_MSG_MASK) == CM_MSG_VALID) || ((*msg & CMCS_MSG_MASK) == CS_MSG_VALID)) {
+		data->status.cmcs = *msg;
 		tsp_info("cmcs status: 0x%08x\n", *msg);
 
 		goto irq_end;
@@ -849,11 +853,10 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 
 			data->fingers[i].full_field = msg[i + offset];
 		}
-#endif          // I2C_BURST_MODE
+#endif
 
 #if IST30XX_JIG_MODE
 		if (data->jig_mode) {
-		// z-values ram address define
 			ret = ist30xx_burst_read(data->client,
 				IST30XX_DA_ADDR(data->tags.zvalue_base),
 				data->z_values, finger_cnt, true);
@@ -889,9 +892,8 @@ static irqreturn_t ist30xx_irq_thread(int irq, void *ptr)
 		ist30xx_burst_read(data->client, IST30XX_DA_ADDR(intr_debug3_addr),
 			&msg[0], intr_debug3_size, true);
 
-		for (i = 0; i < intr_debug3_size; i++) {
+		for (i = 0; i < intr_debug3_size; i++)
 			tsp_noti("\t%08x\n", msg[i]);
-		}
 
 		tracking_intr_debug_value = TRACKING_INTR_DEBUG3_VALID;
 		ist30xx_put_track_ms(ms);
@@ -937,19 +939,12 @@ static int ist30xx_suspend(struct device *dev)
 	}
 #endif
 #if TOUCH_BOOSTER
-#ifdef CONFIG_SPRD_CPU_DYNAMIC_HOTPLUG
-	if (cpu_num_limit_handle) {
-		cpu_num_min_limit_put(cpu_num_limit_handle);
-		cpu_num_limit_handle = NULL;
-	}
-#endif
-	if(min_handle)
-	{
-		printk(KERN_ERR"[TSP] %s %d:: OOPs, Cpu was not in Normal Freq..\n", __func__, __LINE__);
+	if (min_handle) {
+		printk(KERN_ERR"[TSP] %s %d:: OOPs, Cpu was not in Normal Freq..\n",
+									__func__, __LINE__);
 
-		if (cpufreq_limit_put(min_handle) < 0) {
+		if (cpufreq_limit_put(min_handle) < 0)
 			printk(KERN_ERR "[TSP] Error in scaling down cpu frequency\n");
-		}
 
 		min_handle = NULL;
 		tsp_info("cpu freq off\n");
@@ -995,9 +990,7 @@ static void ist30xx_late_resume(struct early_suspend *h)
 
 void ist30xx_set_ta_mode(int status)
 {
-	if(ts_data->initialized) {
-		tsp_info("%s(), mode = %d\n", __func__, status);
-
+	if (ts_data->initialized) {
 		if (status == POWER_SUPPLY_TYPE_BATTERY || status == POWER_SUPPLY_TYPE_UNKNOWN)
 			status = 0;
 		else
@@ -1026,8 +1019,6 @@ EXPORT_SYMBOL(ist30xx_set_ta_mode);
 
 void ist30xx_set_call_mode(int mode)
 {
-	tsp_info("%s(), mode = %d\n", __func__, mode);
-
 	if (unlikely(mode == ((ts_data->noise_mode >> NOISE_MODE_CALL) & 1)))
 		return;
 
@@ -1050,8 +1041,6 @@ EXPORT_SYMBOL(ist30xx_set_call_mode);
 
 void ist30xx_set_cover_mode(int mode)
 {
-	tsp_info("%s(), mode = %d\n", __func__, mode);
-
 	if (unlikely(mode == ((ts_data->noise_mode >> NOISE_MODE_COVER) & 1)))
 		return;
 
@@ -1074,8 +1063,6 @@ EXPORT_SYMBOL(ist30xx_set_cover_mode);
 
 void ist30xx_set_edge_mode(int mode)
 {
-	tsp_info("%s(), mode = %d\n", __func__, mode);
-
 	if (mode)
 		ts_data->noise_mode |= (1 << NOISE_MODE_EDGE);
 	else
@@ -1094,8 +1081,6 @@ static void reset_work_func(struct work_struct *work)
 
 	if (unlikely((data == NULL) || (data->client == NULL)))
 		return;
-
-	tsp_info("Request reset function\n");
 
 	if (likely((data->initialized == 1) && (data->status.power == 1) &&
 		(data->status.update != 1) && (data->status.calib != 1))) {
@@ -1125,12 +1110,10 @@ static void fw_update_func(struct work_struct *work)
 {
 	struct delayed_work *delayed_work = to_delayed_work(work);
 	struct ist30xx_data *data = container_of(delayed_work,
-	struct ist30xx_data, work_fw_update);
+					struct ist30xx_data, work_fw_update);
 
 	if (unlikely((data == NULL) || (data->client == NULL)))
 		return;
-
-	tsp_info("FW update function\n");
 
 	if (likely(ist30xx_auto_bin_update(data)))
 		ist30xx_disable_irq(data);
@@ -1144,22 +1127,21 @@ static void fw_update_func(struct work_struct *work)
 #define SCAN_CNT_MASK		(0xFFE00000)
 #define GET_FINGER_ENABLE(n)	((n & FINGER_ENABLE_MASK) >> 20)
 #define GET_SCAN_CNT(n)		((n & SCAN_CNT_MASK) >> 21)
-u32 ist30xx_algr_addr = 0, ist30xx_algr_size = 0;
+u32 ist30xx_algr_addr;
+u32 ist30xx_algr_size;
 static void noise_work_func(struct work_struct *work)
 {
 	int ret;
-	u32 touch_status = 0;
-	u32 scan_count = 0;
+	u32 touch_status;
+	u32 scan_count;
 	struct delayed_work *delayed_work = to_delayed_work(work);
 	struct ist30xx_data *data = container_of(delayed_work,
-	struct ist30xx_data, work_noise_protect);
+				struct ist30xx_data, work_noise_protect);
 
 	ret = ist30xx_read_reg(data->client,
-		IST30XX_HIB_TOUCH_STATUS, &touch_status);
-	if (unlikely(ret)) {
-		tsp_warn("Touch status read fail!\n");
+			IST30XX_HIB_TOUCH_STATUS, &touch_status);
+	if (unlikely(ret))
 		goto retry_timer;
-	}
 
 	ist30xx_put_track_ms(timer_ms);
 	ist30xx_put_track(&touch_status, 1);
@@ -1214,9 +1196,10 @@ static void debug_work_func(struct work_struct *work)
 
 	buf32 = kzalloc(ist30xx_algr_size, GFP_KERNEL);
 	if (!buf32) {
-		dev_err(&data->client->dev, "Failed to allocate buffer\n");
-		return NULL;
+		tsp_warn("Failed to allocate buffer\n");
+		return;
 	}
+
 	for (i = 0; i < ist30xx_algr_size; i++) {
 		ret = ist30xx_read_buf(data->client,
 		ist30xx_algr_addr + IST30XX_DATA_LEN * i, &buf32[i], 1);
@@ -1245,25 +1228,25 @@ void timer_handler(unsigned long timer_data)
 	if (status->event_mode) {
 		if (likely((status->power == 1) && (status->update != 1))) {
 			timer_ms = (u32)get_milli_second();
-			if (unlikely(status->calib == 1)) { // Check calibration
+			if (unlikely(status->calib == 1)) { /* Check calibration */
 				if ((status->calib_msg & CALIB_MSG_MASK) == CALIB_MSG_VALID) {
 					tsp_info("Calibration check OK!!\n");
 					schedule_delayed_work(&data->work_reset_check, 0);
 					status->calib = 0;
-				} else if (timer_ms - event_ms >= 3000) { // 3second
+				} else if (timer_ms - event_ms >= 3000) { /* 3s */
 					tsp_info("calibration timeout over 3sec\n");
 					schedule_delayed_work(&data->work_reset_check, 0);
 					status->calib = 0;
 				}
 			} else if (likely(status->noise_mode)) {
-				if (timer_ms - event_ms > 100) // 100ms after last interrupt
+				if (timer_ms - event_ms > 100) /* 100ms after last interrupt */
 					schedule_delayed_work(&data->work_noise_protect, 0);
 			}
 
 #if IST30XX_ALGORITHM_MODE
 			if ((ist30xx_algr_addr >= IST30XX_DIRECT_ACCESS) &&
 				(ist30xx_algr_size > 0)) {
-				if (timer_ms - event_ms > 100) // 100ms after last interrupt
+				if (timer_ms - event_ms > 100) /* 100ms after last interrupt */
 					schedule_delayed_work(&data->work_debug_algorithm, 0);
 			}
 #endif
@@ -1276,7 +1259,6 @@ restart_timer:
 
 extern struct class *ist30xx_class;
 #if SEC_FACTORY_MODE
-extern struct class *sec_class;
 extern int sec_touch_sysfs(struct ist30xx_data *data);
 extern int sec_fac_cmd_init(struct ist30xx_data *data);
 #endif
@@ -1295,47 +1277,67 @@ static struct ist30xx_platform_data *ist30xx_parse_dt(struct device *dev)
 		return NULL;
 	}
 
-	if (of_property_read_u32(np, "imagis,max-x", &pdata->max_x))
+	if (of_property_read_u32(np, "imagis,max-x", &pdata->max_x)) {
+		tsp_err("failed to get max_x\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,max-y", &pdata->max_y))
+	if (of_property_read_u32(np, "imagis,max-y", &pdata->max_y)) {
+		tsp_err("failed to get max_y\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,max-w", &pdata->max_w))
+	if (of_property_read_u32(np, "imagis,max-w", &pdata->max_w)) {
+		tsp_err("failed to get max_w\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,irq-flag", &pdata->irq_flag))
+	if (of_property_read_u32(np, "imagis,avdd-volt", &pdata->avdd_volt)) {
+		tsp_err("failed to get avdd_volt\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,avdd-volt", &pdata->avdd_volt))
+	if (of_property_read_u32(np, "imagis,chip-id", &pdata->chip_id)) {
+		tsp_err("failed to get chip_id\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,chip-id", &pdata->chip_id))
+	if (of_property_read_u32(np, "imagis,max-node", &pdata->max_node)) {
+		tsp_err("failed to get max_node\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,max-node", &pdata->max_node))
+	if (of_property_read_u32(np, "imagis,chip-code", &pdata->chip_code)) {
+		tsp_err("failed to get chip code\n");
 		goto out;
+	}
 
-	if (of_property_read_u32(np, "imagis,chip-code", &pdata->chip_code))
+	if (of_property_read_u32(np, "imagis,tkey", &pdata->tkey)) {
+		tsp_err("failed to get tkey\n");
 		goto out;
+	}
 
-	if (of_property_read_string(np, "imagis,chip-name", &pdata->chip_name))
+	if (of_property_read_u32(np, "imagis,octa-hw", &pdata->octa_hw)) {
+		tsp_err("failed to get octa hw\n");
 		goto out;
+	}
 
-	if (of_property_read_string(np, "imagis,power-src", &pdata->pwr_src))
+	if (of_property_read_string(np, "imagis,chip-name", &pdata->chip_name)) {
+		tsp_err("failed to get chip name\n");
 		goto out;
+	}
 
-	tsp_info("##### Device tree #####\n");
-	tsp_info(" avdd volt: %d\n", pdata->avdd_volt);
-	tsp_info(" irq flag: 0x%X\n", pdata->irq_flag);
-	tsp_info(" chip name: %s\n", pdata->chip_name);
-	tsp_info(" chip id: 0x%X\n", pdata->chip_id);
-	tsp_info(" chip code: %d\n", pdata->chip_code);
-	tsp_info(" max x: %d\n", pdata->max_x);
-	tsp_info(" max y: %d\n", pdata->max_y);
-	tsp_info(" max w: %d\n", pdata->max_w);
-	tsp_info(" max node: %d\n", pdata->max_node);
-	tsp_info(" tsp power source: %s\n", pdata->pwr_src);
+	tsp_debug("##### Device tree #####\n");
+	tsp_debug("avdd volt: %d\n", pdata->avdd_volt);
+	tsp_debug("chip name: %s\n", pdata->chip_name);
+	tsp_debug("chip id: 0x%X\n", pdata->chip_id);
+	tsp_debug("chip code: %d\n", pdata->chip_code);
+	tsp_debug("max x: %d\n", pdata->max_x);
+	tsp_debug("max y: %d\n", pdata->max_y);
+	tsp_debug("max w: %d\n", pdata->max_w);
+	tsp_debug("max node: %d\n", pdata->max_node);
+	tsp_debug("touch key: %d\n", pdata->tkey);
+	tsp_debug("octa hw: %d\n", pdata->octa_hw);
 
 	return pdata;
 
@@ -1345,10 +1347,7 @@ out:
 	return NULL;
 }
 
-extern u32 boot_panel_id;
-
-static int ist30xx_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int ist30xx_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret;
 	int retry = 3;
@@ -1358,14 +1357,6 @@ static int ist30xx_probe(struct i2c_client *client,
 #endif
 	struct ist30xx_data *data;
 	struct input_dev *input_dev;
-
-	if (boot_panel_id == 0) {
-		tsp_err("[%s]: There is no TSP device!\n", __FUNCTION__);
-		return -ENODEV;
-	}
-
-	tsp_info("### IMAGIS probe(ver:%s, protocol:%X, addr:0x%02X) ###\n",
-		IMAGIS_DD_VERSION, IMAGIS_PROTOCOL_B, client->addr);
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		printk(KERN_INFO "i2c_check_functionality error\n");
@@ -1391,7 +1382,6 @@ static int ist30xx_probe(struct i2c_client *client,
 		goto err_alloc_dev;
 	}
 
-	tsp_info("client->irq : %d\n", client->irq);
 	data->pdata = pdata;
 	data->max_fingers = IST30XX_MAX_MT_FINGERS;
 	data->max_keys = IST30XX_MAX_KEYS;
@@ -1462,47 +1452,46 @@ static int ist30xx_probe(struct i2c_client *client,
 	}
 
 	ret = request_threaded_irq(client->irq, NULL, ist30xx_irq_thread,
-				   data->pdata->irq_flag, "ist30xx_ts", data);
+				   IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "ist30xx_ts", data);
 	if (unlikely(ret))
 		goto err_init_drv;
 
 	ist30xx_disable_irq(data);
+	sprd_i2c_ctl_chg_clk(1, 400000);	// up h/w i2c 1 400k
 
 	while (retry-- > 0) {
 		ret = ist30xx_read_cmd(data, IST30XX_REG_CHIPID, &data->chip_id);
 		data->chip_id &= 0xFFFF;
-		if (unlikely(ret == 0)) {
+		if (unlikely(!ret)) {
 			if ((data->chip_id == data->pdata->chip_id) ||
 				(data->chip_id == IST30XXC_DEFAULT_CHIP_ID) ||
 				(data->chip_id == IST3048C_DEFAULT_CHIP_ID)) {
 				break;
 			}
-		} else if (unlikely(retry == 0)) {
+		} else if (unlikely(!retry))
 			goto err_irq;
-		}
 
 		ist30xx_reset(data, false);
 	}
-	
+
 	if (pdata->chip_code < IMAGIS_IST3038C) {
 		retry = 3;
 		data->tsp_type = TSP_TYPE_UNKNOWN;
 		while (retry-- > 0) {
 			ret = ist30xx_read_cmd(data, IST30XX_REG_TSPTYPE, &data->tsp_type);
-			if (likely(ret == 0)) {
+			if (likely(!ret)) {
 				data->tsp_type = IST30XX_PARSE_TSPTYPE(data->tsp_type);
 				tsp_info("tsptype: %x\n", data->tsp_type);
 				break;
 			}
 
-			if (unlikely(retry == 0))
+			if (unlikely(!retry))
 				goto err_irq;
 		}
-
 		tsp_info("TSP IC: %x, TSP Vendor: %x\n", data->chip_id, data->tsp_type);
-	} else {
+	} else
 		tsp_info("TSP IC: %x\n", data->chip_id);
-	}
+
 	data->status.event_mode = false;
 
 #if IST30XX_INTERNAL_BIN
@@ -1513,8 +1502,8 @@ static int ist30xx_probe(struct i2c_client *client,
 	ret = ist30xx_auto_bin_update(data);
 	if (unlikely(ret != 0))
 		goto err_irq;
-#endif  // IST30XX_UPDATE_BY_WORKQUEUE
-#endif  // IST30XX_INTERNAL_BIN
+#endif
+#endif
 
 	ret = ist30xx_init_update_sysfs(data);
 	if (unlikely(ret))
@@ -1530,6 +1519,14 @@ static int ist30xx_probe(struct i2c_client *client,
 	ret = ist30xx_init_cmcs_sysfs(data);
 	if (unlikely(ret))
 		goto err_sysfs;
+#endif
+
+#if IST30XX_CMCS_JIT_TEST
+	ret = ist30xx_init_cmcs_jit_sysfs(data);
+	if (unlikely(ret)) {
+		tsp_err("%s: do not init cmcs jitter\n",__func__);
+		goto err_sysfs;
+	}
 #endif
 
 #if IST30XX_TRACKING_MODE
@@ -1548,7 +1545,6 @@ static int ist30xx_probe(struct i2c_client *client,
 		goto err_sysfs;
 #endif
 
-    // INIT VARIABLE (DEFAULT)
 #if IST30XX_GESTURE
 	data->suspend = false;
 	data->gesture = false;
@@ -1677,6 +1673,14 @@ extern unsigned int lpcharge;
 
 static int __init ist30xx_init(void)
 {
+#ifdef CONFIG_ARM64
+	sec_class = class_create(THIS_MODULE, "sec");
+	if (IS_ERR(sec_class)) {
+		pr_err("Failed to create class(sec)!\n");
+		printk("Failed create class \n");
+		return PTR_ERR(sec_class);
+	}
+#endif
 	if (!lpcharge)
 		return i2c_add_driver(&ist30xx_i2c_driver);
 	else
@@ -1692,7 +1696,7 @@ static void __exit ist30xx_exit(void)
 module_init(ist30xx_init);
 module_exit(ist30xx_exit);
 
-#if CONFIG_EXTCON_S2MM001B
+#ifdef CONFIG_EXTCON_S2MM001B
 static int extcon_notifier(struct notifier_block *nb,
 	unsigned long state, void *edev)
 {

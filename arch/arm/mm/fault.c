@@ -31,10 +31,7 @@
 #include <soc/sprd/sprd_debug.h>
 #endif
 
-#if defined(CONFIG_SEC_DEBUG)
-/* For saving Fault status */
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 #include "fault.h"
 
@@ -151,10 +148,9 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	/* For saving Fault status */
 	sprd_debug_save_pte((void *)regs, (int)current);
 #endif
-#if defined(CONFIG_SEC_DEBUG)
-        /* For saving Fault status */
+
+	/* For saving Fault status */
 	sec_debug_save_pte((void *)regs, (int)current);
-#endif
 
 	/*
 	 * No handler, we'll have to terminate things with extreme prejudice.
@@ -185,10 +181,9 @@ __do_user_fault(struct task_struct *tsk, unsigned long addr,
 	/* For saving Fault status */
 	sprd_debug_save_pte((void *)regs, (int)current);
 #endif
-#if defined(CONFIG_SEC_DEBUG)
-        /* For saving Fault status */
+
+	/* For saving Fault status */
 	sec_debug_save_pte((void *)regs, (int)current);
-#endif
 
 #ifdef CONFIG_DEBUG_USER
 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||

@@ -23,7 +23,7 @@
 #include <linux/fs.h>
 #include <linux/err.h>
 #include <linux/input.h>
-#include <linux/sensor/sensors_core.h>
+#include "sensors_core.h"
 
 struct class *sensors_class;
 struct class *sensors_event_class;

@@ -52,9 +52,7 @@
 #include <soc/sprd/sprd_debug.h>
 #endif
 
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 #include "workqueue_internal.h"
 
@@ -2214,13 +2212,9 @@ __acquires(&pool->lock)
 	#endif
 #endif
 
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	sec_debug_work_log(worker, work, worker->current_func, 1);
-#endif
 	worker->current_func(work);
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	sec_debug_work_log(worker, work, worker->current_func, 2);
-#endif
 
 	/*
 	 * While we must be careful to not use "work" after this, the trace

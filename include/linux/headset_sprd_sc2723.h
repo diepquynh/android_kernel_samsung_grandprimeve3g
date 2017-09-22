@@ -16,6 +16,8 @@
 #include <linux/switch.h>
 #include <linux/input.h>
 #include <linux/platform_device.h>
+#include <linux/timer.h> //KSND
+#include <linux/time.h>  //KSND
 
 //KSND
 #define SEC_USE_HS_SYSFS
@@ -87,6 +89,8 @@ struct sprd_headset_platform_data {
         int gpio_button;
         int irq_trigger_level_detect;
         int irq_trigger_level_button;
+        int adc_threshold_gnd_average;
+        int adc_threshold_left_average;
         int adc_threshold_3pole_detect;
         int adc_threshold_4pole_detect;
         int irq_threshold_buttont;
@@ -108,5 +112,8 @@ struct sprd_headset {
         struct workqueue_struct *detect_work_queue;
         struct work_struct work_button;
         struct workqueue_struct *button_work_queue;
+
+        struct timespec ts;             /* Get Current time for KSND */
+        struct timespec ts_after;       /* Get Current time After Event */
 };
 #endif

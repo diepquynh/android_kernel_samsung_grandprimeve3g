@@ -26,6 +26,7 @@ obj-$(CONFIG_CHARGER_MAX14577)	+= max14577_charger.o
 # For IF PMIC, sec_charger.o should be erased
 obj-$(CONFIG_CHARGER_MAX77693)	+= max77693_charger.o
 obj-$(CONFIG_CHARGER_SPRD2713)  += sprd2713_charger.o sec_charger.o
+obj-$(CONFIG_CHARGER_RT9532)	+= rt9532_charger.o
 
 obj-$(CONFIG_CHARGER_SM5701)    += sm5701_charger.o sec_dt_init.o
 obj-$(CONFIG_FUELGAUGE_SPRD4SAMSUNG27X3) += sprd27x3_fuelgauge4samsung.o sec_fuelgauge.o sprd_2713_fgu.o

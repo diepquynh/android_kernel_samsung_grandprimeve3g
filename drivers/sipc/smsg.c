@@ -34,11 +34,28 @@
 static struct smsg_ipc *smsg_ipcs[SIPC_ID_NR];
 
 static ushort debug_enable = 0;
-
+static ushort modem_shutdown = 0;
 static struct wake_lock sipc_wake_lock;
 
 module_param_named(debug_enable, debug_enable, ushort, 0644);
 
+static int __init modem_init_status(char *str)
+{
+	pr_info("cmdline modem para: %s\n", str);
+	modem_shutdown = 1;
+	return 1;
+}
+__setup("modem=", modem_init_status);
+
+void	smsg_clear_queue(struct smsg_ipc *ipc)
+{
+	if (modem_shutdown) {
+		writel(0, ipc->rxbuf_rdptr);
+		writel(0, ipc->rxbuf_wrptr);
+		writel(0, ipc->txbuf_rdptr);
+		writel(0, ipc->txbuf_wrptr);
+	}
+}
 irqreturn_t smsg_irq_handler(int irq, void *dev_id)
 {
 	struct smsg_ipc *ipc = (struct smsg_ipc *)dev_id;
@@ -138,7 +155,7 @@ int smsg_ipc_create(uint8_t dst, struct smsg_ipc *ipc)
 	spin_lock_init(&(ipc->txpinlock));
 
 	smsg_ipcs[dst] = ipc;
-
+	smsg_clear_queue(ipc);
 #ifdef CONFIG_SPRD_MAILBOX
 	/* explicitly call irq handler in case of missing irq on boot */
 	ipc->irq_handler(ipc->core_id, ipc);
@@ -292,6 +309,49 @@ int smsg_ch_close(uint8_t dst, uint8_t channel,  int timeout)
 	ipc->states[channel] = CHAN_STATE_UNUSED;
 
 	return 0;
+}
+int smsg_senddie(uint8_t dst)
+{
+    struct smsg msg;
+	struct smsg_ipc *ipc = smsg_ipcs[dst];
+	uintptr_t txpos;
+	int rval = 0;
+
+	if(!ipc) {
+	    return -ENODEV;
+	}
+
+	if (!ipc->channels[msg.channel]) {
+		printk(KERN_ERR "channel %d not inited!\n", msg.channel);
+		return -ENODEV;
+	}
+
+	msg.channel = SMSG_CH_CTRL;
+	msg.type = SMSG_TYPE_DIE;
+	msg.flag = 0;
+	msg.value = 0;
+
+	if ((int)(readl(ipc->txbuf_wrptr) -
+		readl(ipc->txbuf_rdptr)) >= ipc->txbuf_size) {
+		printk(KERN_WARNING "smsg txbuf is full!\n");
+		rval = -EBUSY;
+		goto send_failed;
+	}
+	/* calc txpos and write smsg */
+	txpos = (readl(ipc->txbuf_wrptr) & (ipc->txbuf_size - 1)) *
+		sizeof(struct smsg) + ipc->txbuf_addr;
+	memcpy((void *)txpos, &msg, sizeof(struct smsg));
+
+	pr_debug("write smsg: wrptr=%u, rdptr=%u, txpos=0x%lx\n",
+			readl(ipc->txbuf_wrptr),
+			readl(ipc->txbuf_rdptr), txpos);
+
+	/* update wrptr */
+	writel(readl(ipc->txbuf_wrptr) + 1, ipc->txbuf_wrptr);
+	ipc->txirq_trigger();
+send_failed:
+
+	return rval;
 }
 
 int smsg_send(uint8_t dst, struct smsg *msg, int timeout)

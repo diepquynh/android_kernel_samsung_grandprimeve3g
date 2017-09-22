@@ -19,11 +19,23 @@
 #include <soc/sprd/sci_glb_regs.h>
 #include <linux/io.h>
 #include <soc/sprd/adi.h>
-#include "thm.h"
-#include <linux/sprd_thm.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/err.h>
+#include<linux/string.h>
 #include <soc/sprd/arch_misc.h>
 #include <soc/sprd/hardware.h>
+#include <linux/thermal.h>
+#include <linux/sprd_thm.h>
+#include "thm.h"
 
+#ifdef CONFIG_OF
+#include <linux/slab.h>
+#include <linux/of_device.h>
+#include <linux/of_irq.h>
+#endif
+
+#define THM_SENOR_NUM 8
 #define SPRD_THM_DEBUG
 #ifdef SPRD_THM_DEBUG
 #define THM_DEBUG(format, arg...) printk( "sprd thm: " "@@@" format, ## arg)
@@ -83,6 +95,9 @@ static const short a_temp_search_low_152nm[A_LOW_TAB_SZ] =
 #define SEN_HOT2NOR_INT_BIT  (1 << 3)
 #define SEN_HIGHOFF_BIT  (1 << 2)
 #define SEN_LOWOFF_INT_BIT  (1 << 1)
+#define SEN_OVERHEAT_ALARM_EN (1 << 7)
+#define SEN0_OVERHEAT_ALARM_EN (1 << 8)
+
 
 #define RAW_TEMP_RANGE_MSK  0x3FFF
 #define RAW_READ_RANGE_MSK  0x7FFF
@@ -93,6 +108,9 @@ static const short a_temp_search_low_152nm[A_LOW_TAB_SZ] =
 #define LOCAL_SENSOR_ADDR_OFF  0x100
 #define DELAY_TEMPERATURE 3
 
+#define LOCAL_THM_ADDR_OFF  0x200
+
+
 #define SEN_DET_PRECISION  (0x50)
 
 #define TSMC_DOLPHINW4T_CHIP_ID_1  0x7715A001
@@ -100,136 +118,41 @@ static const short a_temp_search_low_152nm[A_LOW_TAB_SZ] =
 #define TSMC_DOLPHINWT4T_CHIP_ID_1 0x8815A001
 
 #define TEMP_TO_RAM_DEGREE 8
-#define TEMP_LOW         (-40)
-#define TEMP_HIGH        (120)
-#ifdef CONFIG_ARCH_SCX35LT8
+#define TEMP_LOW         (-40000)
+#define TEMP_HIGH        (120000)
+#ifdef CONFIG_ARCH_SCX20
 #define RAW_DATA_LOW         (627)
 #define RAW_DATA_HIGH        (1075)
 #else
 #define RAW_DATA_LOW         (623)
 #define RAW_DATA_HIGH        (1030)
 #endif
+#define  CRITIC_TEMP	80000
+
+#define RAW_ADC_LOW         (550)
+#define RAW_ADC_HIGH        (1200)
 
 //static const u32 temp_to_raw[TEMP_TO_RAM_DEGREE + 1] = { RAW_DATA_LOW, 676, 725, 777, 828, 878, 928, 980,RAW_DATA_HIGH };
 
-static u32 current_trip_num = 0;
-static int arm_sen_cal_offset = 0;
-static int pmic_sen_cal_offset = 0;
-
 unsigned long SPRD_THM_BASE = 0;
 unsigned int SPRD_THM_SIZE = 0;
+extern int sprd_thermal_init(struct sprd_thermal_zone *pzone);
+extern void sprd_thermal_remove(struct sprd_thermal_zone *pzone);
 
-static inline int __thm_reg_write(unsigned long reg, u16 bits, u16 clear_msk);
+static inline void __thm_reg_write(unsigned long reg, u16 bits, u16 clear_msk);
 static inline u32 __thm_reg_read(unsigned long reg);
 int sprd_thm_set_active_trip(struct sprd_thermal_zone *pzone, int trip );
 u32 sprd_thm_temp2rawdata( int temp);
 
-static inline int __thm_reg_write(unsigned long reg, u16 bits, u16 clear_msk)
+static inline void __thm_reg_write(unsigned long reg, u16 bits, u16 clear_msk)
 {
-	if (reg >= SPRD_THM_BASE && reg <= (SPRD_THM_BASE + SPRD_THM_SIZE)) {
 		__raw_writel(((__raw_readl((volatile void *)reg) & ~clear_msk) | bits), ((volatile void *)reg));
-	 }else {
-		printk(KERN_ERR "error thm reg0x:%lx \n", reg);
-	}
-	return 0;
 }
 
 static inline u32 __thm_reg_read(unsigned long reg)
 {
-	if (reg >= SPRD_THM_BASE && reg <= (SPRD_THM_BASE + SPRD_THM_SIZE)) {
 		return __raw_readl((volatile void *)reg);
-	} else {
-		printk(KERN_ERR "error thm reg0x:%lx \n", reg);
-	}
-	return 0;
 }
-
-static int sprd_thm_get_reg_base(struct sprd_thermal_zone *pzone ,struct resource *regs)
-{
-	if(SPRD_THM_BASE ==0)
-	{
-		pzone->reg_base = (void __iomem *)ioremap_nocache(regs->start,
-			resource_size(regs));
-		if (!pzone->reg_base)
-			return -ENOMEM;
-		SPRD_THM_BASE = (unsigned long) pzone->reg_base;
-		SPRD_THM_SIZE= resource_size(regs);
-	}else{
-		pzone->reg_base = (void __iomem *)SPRD_THM_BASE;
-	}
-	return 0;
-}
-
-int sprd_thm_set_active_trip(struct sprd_thermal_zone *pzone, int trip )
-{
-	u32 raw_temp = 0;
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr = 0;
-	struct sprd_thm_platform_data *trip_tab = pzone->trip_tab;
-
-	THM_DEBUG("thm sensor id:%d, trip:%d \n", pzone->sensor_id, trip);
-	if (trip < 0 || trip > (trip_tab->num_trips - 1))
-		return -1;
-	if (trip_tab->trip_points[trip].type != THERMAL_TRIP_ACTIVE)
-		return -1;
-
-	local_sen_id = pzone->sensor_id;
-	local_sensor_addr =
-		(unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
-
-	//Disable sensor int except OVERHEAT
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), 0, (0x7F & (~SEN_OVERHEAT_INT_BIT)));
-
-	//set hot int temp value
-	THM_DEBUG("thm sensor trip:%d, temperature:%ld \n", trip, trip_tab->trip_points[trip].temp);
-	raw_temp = sprd_thm_temp2rawdata(trip_tab->trip_points[trip].temp + arm_sen_cal_offset);
-	if (raw_temp < RAW_TEMP_RANGE_MSK) {
-		raw_temp++;
-	}
-	__thm_reg_write((local_sensor_addr + SENSOR_HOT_THRES),
-						raw_temp, RAW_TEMP_RANGE_MSK);
-
-	//set Hot2Normal int temp value
-	raw_temp =
-	sprd_thm_temp2rawdata(trip_tab->trip_points[trip].lowoff  + 2 + pmic_sen_cal_offset);
-	__thm_reg_write((local_sensor_addr + SENSOR_HOT2NOR_THRES),
-		raw_temp, RAW_TEMP_RANGE_MSK);
-
-	raw_temp =
-	sprd_thm_temp2rawdata( trip_tab->trip_points[trip].lowoff  + 1 + pmic_sen_cal_offset);
-	__thm_reg_write((local_sensor_addr + SENSOR_HIGHOFF_THRES),
-		raw_temp, RAW_TEMP_RANGE_MSK);
-
-	//set cold int temp value
-	raw_temp =
-	sprd_thm_temp2rawdata( trip_tab->trip_points[trip].lowoff + pmic_sen_cal_offset);
-	__thm_reg_write((local_sensor_addr + SENSOR_LOWOFF_THRES),
-		raw_temp,RAW_TEMP_RANGE_MSK);
-
-	THM_DEBUG("thm set HOT:0x%x, HOT2NOR:0x%x, LOWOFF:0x%x\n", __thm_reg_read(local_sensor_addr + SENSOR_HOT_THRES),
-	 __thm_reg_read(local_sensor_addr + SENSOR_HOT2NOR_THRES), __thm_reg_read(local_sensor_addr + SENSOR_LOWOFF_THRES));
-
-	// Restart sensor to enable new paramter
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x9, 0x9);
-
-	if (trip > 0)
-	{
-		//enable Hot int and Lowoff int
-		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL),
-			SEN_HOT_INT_BIT | SEN_LOWOFF_INT_BIT,
-			SEN_HOT_INT_BIT | SEN_LOWOFF_INT_BIT);
-	}
-	else
-	{
-		//enable Hot int and disable LOWOFF int
-		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL),
-			SEN_HOT_INT_BIT,
-			SEN_HOT_INT_BIT | SEN_LOWOFF_INT_BIT);
-	}
-
-	return 0;
-}
-
 
 u32 sprd_thm_temp2rawdata( int temp)
 {
@@ -245,12 +168,34 @@ u32 sprd_thm_temp2rawdata( int temp)
 int sprd_thm_rawdata2temp( int rawdata)
 {
 	int temp_result;
-
+	if ((rawdata < RAW_ADC_LOW) || (rawdata > RAW_ADC_HIGH))
+		return 0;
 	temp_result = TEMP_LOW +
 		(rawdata - RAW_DATA_LOW) * (TEMP_HIGH - TEMP_LOW) / (RAW_DATA_HIGH - RAW_DATA_LOW);
 
 	return temp_result;
 }
+
+static unsigned long sprd_thm_temp_read(struct sprd_thermal_zone *pzone)
+{
+	u32 rawdata = 0;
+	int cal_offset = 0;
+	u32 sensor = pzone->sensor_id, local_sen_id = 0;
+	unsigned long  local_sensor_addr;
+	unsigned long  temp;
+	if(pzone->sensor_id == SPRD_GPU_SENSOR)
+			local_sen_id = 1;
+	local_sensor_addr = pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
+	rawdata = __thm_reg_read(local_sensor_addr + SENSOR_TEMPER0_READ);
+	rawdata = rawdata & RAW_READ_RANGE_MSK;
+	cal_offset = pzone->thm_cal;
+	temp = sprd_thm_rawdata2temp( rawdata) -cal_offset;
+	printk("sensor id:%d, rawdata:0x%x, temp:%lu\n", sensor, rawdata,temp);
+	return temp;
+
+}
+
+
 #ifdef THM_TEST
 static int sprd_thm_regs_read(struct sprd_thermal_zone *pzone,unsigned int *regs)
 {
@@ -299,287 +244,438 @@ static int sprd_thm_regs_set(struct sprd_thermal_zone *pzone,unsigned int*regs)
 	__thm_reg_write((gpu_sensor_addr + SENSOR_CTRL), 0x8, 0x8);
 	return 0;
 }
-#endif
-static int sprd_thm_temp_read(struct sprd_thermal_zone *pzone)
-{
-	u32 rawdata = 0;
-	int cal_offset = 0;
-	u32 sensor = pzone->sensor_id, local_sen_id = 0;
-	unsigned long  local_sensor_addr;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
 
-	rawdata = __thm_reg_read(local_sensor_addr + SENSOR_TEMPER0_READ);
-	rawdata = rawdata & RAW_READ_RANGE_MSK;
-	cal_offset = arm_sen_cal_offset;
-
-	THM_DEBUG("D thm sensor id:%d, cal_offset:%d, rawdata:0x%x\n", sensor,
-			cal_offset, rawdata);
-	return (sprd_thm_rawdata2temp( rawdata) -cal_offset);
-}
-#ifdef  THM_TEST
 static int sprd_thm_trip_set(struct sprd_thermal_zone *pzone,int trip)
 {
 	THM_DEBUG("sprd_thm_trip_set trip=%d, temp=%ld,lowoff =%ld\n",
 		trip,pzone->trip_tab->trip_points[trip].temp,pzone->trip_tab->trip_points[trip].lowoff);
-	return sprd_thm_set_active_trip(pzone,current_trip_num);
-}
-#endif
-int sprd_thm_chip_id_check(void)
-{
-	u32 chip_id_tmp;
-
-	chip_id_tmp = sci_get_chip_id();
-
-#if !defined(CONFIG_ARCH_SCX15)
 	return 0;
-#else
-	if ((TSMC_DOLPHINW4T_CHIP_ID_1 == chip_id_tmp) || (TSMC_DOLPHINW4T_CHIP_ID_2 == chip_id_tmp) ||
-	   (TSMC_DOLPHINWT4T_CHIP_ID_1 == chip_id_tmp)) {
-		//printk("Sprd thm the chip support thermal CHIP_ID:0x%x \n",chip_id_tmp);
-		return 0;
-	} else {
-		printk("Sprd thm the chip don't support thermal CHIP_ID:0x%x \n",chip_id_tmp);
-		return -1;
-	}
-#endif
 }
+
+#endif
+
+int sprd_thm_get_trend(struct sprd_thermal_zone *pzone, int trip, enum thermal_trend *ptrend)
+{
+	*ptrend = pzone->trend_val;
+	return 0;
+}
+
+int sprd_thm_get_hyst(struct sprd_thermal_zone *pzone, int trip, unsigned long *physt)
+{
+
+	struct sprd_thm_platform_data *trip_tab = pzone->trip_tab;
+	if (trip >= trip_tab->num_trips - 2){
+	*physt = 0;
+	}else{
+	*physt = trip_tab->trip_points[trip].temp - trip_tab->trip_points[trip + 1].lowoff;
+	}
+	return 0;
+}
+
+int init_flag=0;
+
 static int sprd_thm_hw_init(struct sprd_thermal_zone *pzone)
 {
 	unsigned long  local_sensor_addr, base_addr = 0;
 	u32 local_sen_id = 0;
 	u32 raw_temp = 0;
-	int cal_offset = 0,ret = 0;
+	int ret = 0;
+	int i;
 	struct sprd_thm_platform_data *trip_tab = pzone->trip_tab;
-	ret = sci_efuse_thermal_cal_get(&arm_sen_cal_offset) ;
-
-	THM_DEBUG("arm_sen_cal_offset =%d,ret =%d\n",arm_sen_cal_offset,ret);
-	base_addr = (unsigned long) pzone->reg_base;
-	local_sen_id = pzone->sensor_id;
+	ret = sci_efuse_thermal_cal_get(&pzone->thm_cal) ;
+	THM_DEBUG("arm_sen_cal_offset =%d,ret =%d\n",pzone->thm_cal,ret);
+	if(pzone->sensor_id == SPRD_GPU_SENSOR)
+			local_sen_id = 1;
+	base_addr = (unsigned long) pzone->reg_base ;
 	local_sensor_addr = base_addr + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
 
 	printk(KERN_NOTICE "sprd_thm_hw_init 2713s_thm id:%d,base 0x%lx \n",
 		pzone->sensor_id, base_addr);
-	sci_glb_set(REG_AON_APB_APB_EB1, BIT_THM_EB);
-#ifdef CONFIG_ARCH_SCX35LT8
-	sci_glb_set(REG_AON_APB_APB_RTC_EB,
-			(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
-			BIT_GPU_THMA_RTC_AUTO_EN | BIT_CA53_LIT_THMA_RTC_EB |
-			BIT_CA53_BIG_THMA_RTC_EB |BIT_ARM_THMA_RTC_AUTO_EN ) );
-#else
-	sci_glb_set(REG_AON_APB_APB_RTC_EB,
+	if(init_flag ==0)
+		{
+			sci_glb_set(REG_AON_APB_APB_EB1, BIT_THM_EB);
+			sci_glb_set(REG_AON_APB_APB_RTC_EB,
 			(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
 			BIT_GPU_THMA_RTC_AUTO_EN | BIT_ARM_THMA_RTC_EB |BIT_ARM_THMA_RTC_AUTO_EN ) );
-#endif
-	__thm_reg_write((base_addr + THM_CTRL), 0x3, 0);
-	__thm_reg_write((base_addr + THM_INT_CTRL), 0x3, 0);
-
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), 0, ~0);	//disable all int
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
-
-		//set int
-	if (trip_tab->num_trips > 0) {
-		current_trip_num = 0;
-		sprd_thm_set_active_trip(pzone,current_trip_num);
-			//set overheat
+			sci_glb_set(REG_AON_APB_APB_RST1,BIT_THM_SOFT_RST);
+			for(i=0; i < 10000; i++);
+			sci_glb_clr(REG_AON_APB_APB_RST1,BIT_THM_SOFT_RST);
+			__thm_reg_write((base_addr + THM_CTRL), 0x3, 0);
+			__thm_reg_write((base_addr + THM_INT_CTRL), 0x1, 0);
+			init_flag =1;
+		}
+			__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), 0, ~0);	//disable all int
+			__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
+#if 0
+	if (SPRD_ARM_SENSOR== pzone->sensor_id){
 		if (trip_tab->trip_points[trip_tab->num_trips - 1].type ==
 			THERMAL_TRIP_CRITICAL) {
 			raw_temp =
-				sprd_thm_temp2rawdata( trip_tab->trip_points[trip_tab->num_trips - 1].temp - cal_offset);
-				//set overheat int temp value
-			__thm_reg_write((local_sensor_addr +
-						 SENSOR_OVERHEAT_THRES),
-						 raw_temp, RAW_TEMP_RANGE_MSK);
-			__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL),	//enable int
-						SEN_OVERHEAT_INT_BIT, 0);
-		}
+			sprd_thm_temp2rawdata( trip_tab->trip_points[trip_tab->num_trips - 1].temp - cal_offset);
+			}
+//		raw_temp = sprd_thm_temp2rawdata(CRITIC_TEMP - cal_offset);
+		__thm_reg_write((local_sensor_addr + SENSOR_OVERHEAT_THRES),raw_temp, RAW_TEMP_RANGE_MSK);//set overheat  temp value
+		__thm_reg_write((base_addr + THM_INT_CTRL), SEN0_OVERHEAT_ALARM_EN, 0);
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL),SEN_OVERHEAT_ALARM_EN, 0);
 	}
+#endif
 	printk(KERN_NOTICE "sprd_thm_hw_init addr 0x:%lx,int ctrl 0x%x\n",
 			local_sensor_addr,
 			__thm_reg_read((local_sensor_addr + SENSOR_INT_CTRL)));
 
 	__thm_reg_write((local_sensor_addr + SENSOR_DET_PERI), 0x4000, 0x4000);
-	__thm_reg_write((local_sensor_addr + SENSOR_MON_CTL), 0x21, 0X21);	
+	__thm_reg_write((local_sensor_addr + SENSOR_MON_CTL), 0x21, 0X21);
 	__thm_reg_write((local_sensor_addr + SENSOR_MON_PERI), 0x400, 0x100);
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x031, 0x131);
-
-
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x8, 0x8);	
+	if (SPRD_ARM_SENSOR== pzone->sensor_id)
+		__thm_reg_write((base_addr + SENSOR_CTRL + LOCAL_SENSOR_ADDR_OFF), 0x030, 0x030);
+	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x39, 0x030);
 	return 0;
 }
 
-static int sprd_thm_hw_disable_sensor(struct sprd_thermal_zone *pzone)
+int sprd_thm_hw_disable_sensor(struct sprd_thermal_zone *pzone)
 {
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
-	// Sensor minitor disable
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x00, 0x01);
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x8, 0x8);
-
-	return 0;
-}
-
-static int sprd_thm_hw_enable_sensor(struct sprd_thermal_zone *pzone)
-{
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr;
 	int ret = 0;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
+	/* Sensor minitor disable */
+	if (SPRD_ARM_SENSOR == pzone->sensor_id) {
+		/*__thm_reg_write((u32)(pzone->reg_base + SENSOR_CTRL), 0x00, 0x01);*/
+		__thm_reg_write((pzone->reg_base + SENSOR_CTRL), 0x8, 0x01);
+	} else if (SPRD_GPU_SENSOR == pzone->sensor_id) {
+		/*__thm_reg_write((u32)(pzone->reg_base + SENSOR_CTRL+ LOCAL_SENSOR_ADDR_OFF), 0x00, 0x01);*/
+		__thm_reg_write((pzone->reg_base + SENSOR_CTRL + LOCAL_SENSOR_ADDR_OFF), 0x8, 0x01);
+	} else {
+		THM_DEBUG("the sensor id is error \n");
+	}
+	return ret;
+}
+
+int sprd_thm_hw_enable_sensor(struct sprd_thermal_zone *pzone)
+{
+	int ret = 0;
 	// Sensor minitor enable
 	THM_DEBUG("sprd_2713S_thm enable sensor sensor_ID:0x%x \n",pzone->sensor_id);
-#ifdef CONFIG_ARCH_SCX35LT8
-	sci_glb_set(REG_AON_APB_APB_RTC_EB,
-			(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
-			BIT_GPU_THMA_RTC_AUTO_EN | BIT_CA53_LIT_THMA_RTC_EB |
-			BIT_CA53_BIG_THMA_RTC_EB |BIT_ARM_THMA_RTC_AUTO_EN ) );
-#else
-	sci_glb_set(REG_AON_APB_APB_RTC_EB,
-			(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
-			BIT_GPU_THMA_RTC_AUTO_EN | BIT_ARM_THMA_RTC_EB |BIT_ARM_THMA_RTC_AUTO_EN ) );
-#endif
-
-	__thm_reg_write((local_sensor_addr+ SENSOR_CTRL), 0x01, 0x01);
-	__thm_reg_write((local_sensor_addr+ SENSOR_CTRL), 0x8, 0x8);
+	if (SPRD_ARM_SENSOR == pzone->sensor_id) {
+		sci_glb_set(REG_AON_APB_APB_RTC_EB,
+				(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
+				BIT_GPU_THMA_RTC_AUTO_EN | BIT_ARM_THMA_RTC_EB | BIT_ARM_THMA_RTC_AUTO_EN));
+		__thm_reg_write((pzone->reg_base + SENSOR_CTRL + LOCAL_SENSOR_ADDR_OFF), 0x030, 0x0);
+		__thm_reg_write((pzone->reg_base + SENSOR_CTRL), 0x31, 0x0);
+	} else if (SPRD_GPU_SENSOR == pzone->sensor_id) {
+		/*sci_glb_set(REG_AON_APB_APB_RTC_EB,
+				(BIT_THM_RTC_EB | BIT_GPU_THMA_RTC_EB |
+				BIT_GPU_THMA_RTC_AUTO_EN | BIT_ARM_THMA_RTC_EB |BIT_ARM_THMA_RTC_AUTO_EN ) );*/
+		__thm_reg_write((pzone->reg_base + SENSOR_CTRL+LOCAL_SENSOR_ADDR_OFF), 0x31, 0x0);
+	} else {
+		THM_DEBUG("the sensor id is error \n");
+	}
 
 	return ret;
 }
 
 
 u16 int_ctrl_reg[SPRD_MAX_SENSOR];
-static int sprd_thm_hw_suspend(struct sprd_thermal_zone *pzone)
+int sprd_thm_hw_suspend(struct sprd_thermal_zone *pzone)
 {
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr;
+	unsigned long local_sensor_addr;
 	int ret = 0;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
-	int_ctrl_reg[pzone->sensor_id] = __thm_reg_read((local_sensor_addr + SENSOR_INT_CTRL));
+
+	local_sensor_addr = pzone->reg_base ;
+	/*int_ctrl_reg[pzone->sensor_id] = __thm_reg_read((local_sensor_addr + SENSOR_INT_CTRL));*/
 
 	sprd_thm_hw_disable_sensor(pzone);
+	if (SPRD_ARM_SENSOR == pzone->sensor_id) {
+		int_ctrl_reg[pzone->sensor_id] = __thm_reg_read((local_sensor_addr + SENSOR_INT_CTRL));
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), 0, ~0);	//disable all int
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
 
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), 0, ~0);	//disable all int
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
+	} else if (SPRD_GPU_SENSOR == pzone->sensor_id) {
+		int_ctrl_reg[pzone->sensor_id] =
+			__thm_reg_read((local_sensor_addr + SENSOR_INT_CTRL+LOCAL_SENSOR_ADDR_OFF));
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL+LOCAL_SENSOR_ADDR_OFF), 0, ~0);	/*disable all int*/
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL+LOCAL_SENSOR_ADDR_OFF), ~0, 0);	/*clr all int*/
 
+	} else {
+		THM_DEBUG("the sensor id is error \n");
+	}
 	return ret;
 }
-static int sprd_thm_hw_resume(struct sprd_thermal_zone *pzone)
+int sprd_thm_hw_resume(struct sprd_thermal_zone *pzone)
 {
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr;
+	unsigned long local_sensor_addr;
 	int ret = 0;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
+
+	local_sensor_addr = pzone->reg_base ;
+
 	sprd_thm_hw_enable_sensor(pzone);
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), int_ctrl_reg[pzone->sensor_id], ~0);	//enable int of saved
-	__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x9, 0);
-
+	if (SPRD_ARM_SENSOR == pzone->sensor_id) {
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), ~0, 0);	//clr all int
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL), int_ctrl_reg[pzone->sensor_id], ~0);	//enable int of saved
+		__thm_reg_write((local_sensor_addr + SENSOR_CTRL+LOCAL_SENSOR_ADDR_OFF), 0x30, 0);
+		__thm_reg_write((local_sensor_addr + SENSOR_CTRL), 0x39, 0);
+	} else if (SPRD_GPU_SENSOR == pzone->sensor_id) {
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR+LOCAL_SENSOR_ADDR_OFF), ~0, 0);	/*clr all int*/
+		__thm_reg_write((local_sensor_addr + SENSOR_INT_CTRL+LOCAL_SENSOR_ADDR_OFF), int_ctrl_reg[pzone->sensor_id], ~0);	/*enable int of saved*/
+		__thm_reg_write((local_sensor_addr + SENSOR_CTRL+LOCAL_SENSOR_ADDR_OFF), 0x39, 0);
+	} else {
+		THM_DEBUG("the sensor id is error \n");
+	}
 	return ret;
 }
 
-static int sprd_thm_hw_irq_handle(struct sprd_thermal_zone *pzone)
+struct thm_handle_ops sprd_ddie_ops =
 {
-	u32 local_sen_id = 0;
-	unsigned long  local_sensor_addr;
-	u32 int_sts;
-	int ret = 0;
-	u32 overhead_hot_tem_cur = 0;
-	struct sprd_thm_platform_data *trip_tab = pzone->trip_tab;
-	int temp;
-	if(pzone->sensor_id == SPRD_GPU_SENSOR)
-		local_sen_id = 1;
-	local_sensor_addr =
-	    (unsigned long ) pzone->reg_base + local_sen_id * LOCAL_SENSOR_ADDR_OFF;
-	int_sts = __thm_reg_read(local_sensor_addr + SENSOR_INT_STS);
-
-	__thm_reg_write((local_sensor_addr + SENSOR_INT_CLR), int_sts, ~0);	//CLR INT
-
-	printk("sprd_thm_hw_irq_handle --------@@@------id:%d, int_sts :0x%x \n",
-			pzone->sensor_id, int_sts);
-	temp = sprd_thm_temp_read(pzone);
-	printk("sprd_thm_hw_irq_handle ------$$$--------temp:%d\n", temp);
-
-	overhead_hot_tem_cur = __thm_reg_read((local_sensor_addr + SENSOR_HOT_THRES))
-											& RAW_TEMP_RANGE_MSK;
-
-	if(SPRD_ARM_SENSOR != pzone->sensor_id){
-		return ret;
-	}
-	if (int_sts & SEN_HOT_INT_BIT){
-		if ((current_trip_num) >= (trip_tab->num_trips - 2)){
-			current_trip_num = trip_tab->num_trips - 2;
-			return ret;
-		}
-		if (temp >= trip_tab->trip_points[current_trip_num].temp - INTOFFSET){
-			current_trip_num++;
-			sprd_thm_set_active_trip(pzone,current_trip_num);
-		}
-	}else if (int_sts & SEN_LOWOFF_INT_BIT){
-		if (temp < trip_tab->trip_points[current_trip_num].lowoff + INTOFFSET){
-			current_trip_num--;
-			sprd_thm_set_active_trip(pzone,current_trip_num);
-		}
-	}else{
-		THM_DEBUG("sprd_thm_hw_irq_handle NOT a HOT or LOWOFF interrupt \n");
-		return ret;
-	}
-
-	return ret;
-}
-
-struct thm_handle_ops sprd_ddie_ops[2] =
-{
-	{
 		.hw_init = sprd_thm_hw_init,
-		.get_reg_base = sprd_thm_get_reg_base,
 		.read_temp = sprd_thm_temp_read,
-		.irq_handle = sprd_thm_hw_irq_handle,
+		.get_trend = sprd_thm_get_trend,
+		.get_hyst = sprd_thm_get_hyst,
 		.suspend = sprd_thm_hw_suspend,
 		.resume = sprd_thm_hw_resume,
 		.trip_debug_set = sprd_thm_trip_set,
 		.reg_debug_get = sprd_thm_regs_read,
 		.reg_debug_set = sprd_thm_regs_set,
-	},
-	{
-		.hw_init = sprd_thm_hw_init,
-		.get_reg_base = sprd_thm_get_reg_base,
-		.read_temp = sprd_thm_temp_read,
-		.irq_handle = sprd_thm_hw_irq_handle,
-		.suspend = sprd_thm_hw_suspend,
-		.resume = sprd_thm_hw_resume,
-		.trip_debug_set = sprd_thm_trip_set,
-		.reg_debug_get = sprd_thm_regs_read,
-		.reg_debug_set = sprd_thm_regs_set,
-	}
 };
 
-static int __init sprd_ddie_thermal_init(void)
+#ifdef CONFIG_OF
+static struct sprd_thm *thermal_detect_parse_dt(
+                         struct device *dev)
 {
-	if (0 == sprd_thm_chip_id_check()) {
-		sprd_thm_add(&sprd_ddie_ops[0],"sprd_arm_thm",SPRD_ARM_SENSOR);
-		sprd_thm_add(&sprd_ddie_ops[1],"sprd_gpu_thm",SPRD_GPU_SENSOR);
+	struct sprd_thm_platform_data *pdata;
+	struct sprd_thm *thm_data;
+	struct device_node *np = dev->of_node,*sensor_child = NULL;
+	int nsensor,sensor_id;
+	int ret;
+	u32 trip_points_critical,trip_num;
+	int i = 0,j = 0,temp_interval;
+	char prop_name[32];
+	const char *tmp_str;
+	const char *thm_name;
+	u32 tmp_data,tmp_lowoff;
+	nsensor = of_get_child_count(np);
+	if (nsensor == 0) {
+		dev_err(dev, "fail to get child node \n");
+		goto fail;
+	}
+	printk("the nubutton %d\n",nsensor);
+	thm_data = kzalloc(sizeof(*thm_data), GFP_KERNEL);
+	if (!thm_data) {
+		dev_err(dev, "could not allocate memory for platform sprd_thm\n");
+		return NULL;
+	}
+	thm_data->nsensor = nsensor;
+	pdata = kzalloc(thm_data->nsensor*sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		dev_err(dev, "could not allocate memory for platform data\n");
+		goto fail;
+	}
+	thm_data->sprd_data = pdata;
+	for_each_child_of_node(np,sensor_child) {
+	ret = of_property_read_u32(sensor_child, "trip-points-critical", &trip_points_critical);
+	if(ret){
+		dev_err(dev, "fail to get trip_points_critical\n");
+		goto fail;
+	}
+	ret = of_property_read_u32(sensor_child, "trip-num", &trip_num);
+	if(ret){
+		dev_err(dev, "fail to get trip_num\n");
+		goto fail;
+	}
+	ret = of_property_read_u32(sensor_child, "id", &sensor_id);
+	if (ret) {
+		dev_err(dev, "fail to get id\n");
+		goto fail;
+	}
+	ret = of_property_read_u32(sensor_child, "temp-inteval", &temp_interval);
+	if(ret){
+		dev_err(dev, "fail to get temp-inteval\n");
+		goto fail;
+	}
+	of_property_read_string(sensor_child, "thermal-name",
+					&thm_name);
+	strcpy(pdata->thm_name, thm_name);
+	for (i = 0; i <trip_num-1; ++i) {
+		sprintf(prop_name, "trip%d-temp-active", i);
+		if (of_property_read_u32(sensor_child, prop_name, &tmp_data)){
+			dev_err(dev, "fail to get trip%d-temp-active\n",i);
+			goto fail;
+		}
+		pdata->trip_points[i].temp = tmp_data;
+        sprintf(prop_name, "trip%d-temp-lowoff", i);
+		if (of_property_read_u32(sensor_child, prop_name, &tmp_lowoff)){
+			dev_err(dev, "fail to get trip%d-temp-lowoff\n",i);
+			goto fail;
+		}
+		pdata->trip_points[i].lowoff = tmp_lowoff;
+		sprintf(prop_name, "trip%d-type", i);
+		if (of_property_read_string(sensor_child, prop_name, &tmp_str))
+			goto  fail;
+
+		if (!strcmp(tmp_str, "active"))
+			pdata->trip_points[i].type = THERMAL_TRIP_ACTIVE;
+		else if (!strcmp(tmp_str, "passive"))
+			pdata->trip_points[i].type = THERMAL_TRIP_PASSIVE;
+		else if (!strcmp(tmp_str, "hot"))
+			pdata->trip_points[i].type = THERMAL_TRIP_HOT;
+		else if (!strcmp(tmp_str, "critical"))
+			pdata->trip_points[i].type = THERMAL_TRIP_CRITICAL;
+		else
+			goto  fail;
+
+		sprintf(prop_name, "trip%d-cdev-num", i);
+		if (of_property_read_u32(sensor_child, prop_name, &tmp_data))
+			goto  fail;
+		for (j = 0; j < tmp_data; j++) {
+			sprintf(prop_name, "trip%d-cdev-name%d", i, j);
+			if (of_property_read_string(sensor_child, prop_name, &tmp_str))
+				goto  fail;
+			strcpy(pdata->trip_points[i].cdev_name[j], tmp_str);
+			dev_info(dev,"cdev name: %s \n", pdata->trip_points[i].cdev_name[j]);
+		}
+		dev_info(dev, "trip[%d] temp: %lu lowoff: %lu\n",
+					i, pdata->trip_points[i].temp, pdata->trip_points[i].lowoff);
+	}
+	pdata->trip_points[i].temp = trip_points_critical;
+	pdata->trip_points[i].type = THERMAL_TRIP_CRITICAL;
+	dev_info(dev, "trip[%d] temp: %lu \n",
+					i, pdata->trip_points[i].temp);
+	pdata->num_trips = trip_num;
+	pdata->sensor_id = sensor_id;
+	pdata->temp_interval = temp_interval;
+	printk("the trip_num=%d,sensor_id =%d\n",pdata->num_trips,pdata->sensor_id);
+	pdata++;
+	};
+	return thm_data;
+
+fail:
+	kfree(pdata);
+	kfree(thm_data);
+	return NULL;
+
+}
+#endif
+
+static int sprd_ddie_thm_probe(struct platform_device *pdev)
+{
+	struct sprd_thm_platform_data *ptrips = NULL;
+	struct sprd_thermal_zone *pzone = NULL;
+	struct resource *res;
+	struct sprd_thm *pthm = NULL;
+	unsigned long ddie_thm_base;
+	int ret,i;
+#ifdef CONFIG_OF
+	struct device_node *np = pdev->dev.of_node;
+	if (!np) {
+		dev_err(&pdev->dev, "device node not found\n");
+		return -EINVAL;
+	}
+#endif
+	printk("sprd_ddie_thm_probe start\n");
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	ddie_thm_base = (unsigned long)devm_ioremap_resource(&pdev->dev, res);
+	if (!ddie_thm_base) {
+		pr_err("thermal ioremap failed!\n");
+		return -ENOMEM;
+	}
+#ifdef CONFIG_OF
+	pthm = thermal_detect_parse_dt(&pdev->dev);
+#else
+	pthm = dev_get_platdata(&pdev->dev);
+#endif
+	if (!pthm){
+	dev_err(&pdev->dev, "not found pthm\n");
+		return -EINVAL;
+	}
+	for (i = 0; i < pthm->nsensor; i++) {
+	pzone = devm_kzalloc(&pdev->dev, sizeof(*pzone), GFP_KERNEL);
+	mutex_init(&pzone->th_lock);
+	mutex_lock(&pzone->th_lock);
+	if (!pzone)
+		return -ENOMEM;
+	pzone->reg_base= ddie_thm_base;
+	ptrips = &pthm->sprd_data[i];
+	pzone->trip_tab = ptrips;
+	pzone->temp_inteval = ptrips->temp_interval;
+	pzone->sensor_id = ptrips->sensor_id;
+	memcpy(pzone->thermal_zone_name,
+							ptrips->thm_name, strlen(ptrips->thm_name)+1);
+	printk("the thermal-name1 is %s\n",pzone->thermal_zone_name);
+	pzone->ops = &sprd_ddie_ops;
+	ret = sprd_thm_hw_init(pzone);
+	if(ret){
+		dev_err(&pdev->dev, " pzone hw init error id =%d\n",pzone->sensor_id);
+		return -ENODEV;
+	}
+    ret = sprd_thermal_init(pzone);
+	if(ret){
+		dev_err(&pdev->dev, " pzone sw init error id =%d\n",pzone->sensor_id);
+		return -ENODEV;
+	}
+	platform_set_drvdata(pdev, pzone);
+	printk("sprd_ddie_thm_probe---end\n");
+	mutex_unlock(&pzone->th_lock);
+	pzone++;
 	}
 	return 0;
 }
 
-static void __exit sprd_ddie_thermal_exit(void)
+static int sprd_ddie_thm_remove(struct platform_device *pdev)
 {
-	sprd_thm_delete(SPRD_ARM_SENSOR);
-	sprd_thm_delete(SPRD_GPU_SENSOR);
+
+	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
+	sprd_thermal_remove(pzone);
+	return 0;
 }
 
-module_init(sprd_ddie_thermal_init);
+static int sprd_ddie_thm_suspend(struct platform_device *pdev,
+				pm_message_t state)
+{
+	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
+	flush_delayed_work(&pzone->thm_read_work);
+	//flush_delayed_work(&pzone->thm_logtime_work);
+	flush_delayed_work(&pzone->resume_delay_work);
+	pzone->ops->suspend(pzone);
+	return 0;
+}
+
+static int sprd_ddie_thm_resume(struct platform_device *pdev)
+{
+
+	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
+	schedule_delayed_work(&pzone->resume_delay_work, (HZ * 1));
+	schedule_delayed_work(&pzone->thm_read_work, (HZ * 5));
+	//schedule_delayed_work(&pzone->thm_logtime_work, (HZ * 7));
+	//pzone->ops->resume(pzone);
+	return 0;
+}
+
+static const struct of_device_id thermal_of_match[] = {
+	{ .compatible = "sprd,ddie-thermal", },
+       {}
+};
+
+static struct platform_driver sprd_thermal_driver = {
+	.probe = sprd_ddie_thm_probe,
+	.suspend = sprd_ddie_thm_suspend,
+	.resume = sprd_ddie_thm_resume,
+	.remove = sprd_ddie_thm_remove,
+	.driver = {
+		   .owner = THIS_MODULE,
+		   .name = "ddie-thermal",
+		   .of_match_table = of_match_ptr(thermal_of_match),
+		   },
+};
+static int __init sprd_ddie_thermal_init(void)
+{
+	return platform_driver_register(&sprd_thermal_driver);
+}
+
+static void __exit sprd_ddie_thermal_exit(void)
+{
+	platform_driver_unregister(&sprd_thermal_driver);
+}
+
+
+device_initcall_sync(sprd_ddie_thermal_init);
 module_exit(sprd_ddie_thermal_exit);
+MODULE_AUTHOR("Freeman Liu <freeman.liu@spreadtrum.com>");
+MODULE_DESCRIPTION("sprd thermal driver");
+MODULE_LICENSE("GPL");
+

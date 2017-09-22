@@ -47,7 +47,6 @@ static int32_t isp_k_nlm_block(struct isp_io_param *param)
 	unsigned long buf_addr = 0;
 	void *vst_addr = NULL;
 	void *ivst_addr = NULL;
-	void *nlm_addr = NULL;
 
 	ret = copy_from_user((void *)&nlm_info, param->property_param, sizeof(nlm_info));
 	if (0 != ret) {

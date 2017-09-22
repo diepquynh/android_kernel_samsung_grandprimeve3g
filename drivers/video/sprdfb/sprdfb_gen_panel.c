@@ -38,11 +38,14 @@
 /*#include <mach/pinmap.h>*/
 
 static struct i2c_client *g_client;
+static int32_t sprd_panel_reduced_init(struct panel_spec *self);
 static int32_t sprd_panel_init(struct panel_spec *self);
 static int32_t sprd_panel_enter_sleep(struct panel_spec *self,
 		uint8_t is_sleep);
 int32_t sprd_panel_start(struct panel_spec *self);
+static int32_t sprd_panel_reset(struct panel_spec *self);
 static int32_t sprd_set_rst_mode(uint32_t val);
+static int32_t sprd_panel_before_resume(struct sprdfb_device *dev);
 static int32_t ili9486s1_backlight_ctrl(struct panel_spec *self, uint16_t bl_on);
 static int32_t sprd_power_set(struct panel_spec *self, uint8_t on);
 
@@ -79,11 +82,14 @@ panel_pinmap_t panel_rstpin_map[] = {
 };
 
 static struct panel_operations sprd_panel_ops = {
-   .panel_power = sprd_power_set,
+	.panel_power = sprd_power_set,
+	.panel_reduced_init = sprd_panel_reduced_init,
 	.panel_init = sprd_panel_init,
+	.panel_reset = sprd_panel_reset,
 	.panel_enter_sleep = sprd_panel_enter_sleep,
 	.panel_set_start = sprd_panel_start,
 	.panel_pin_init = sprd_set_rst_mode,
+	.panel_before_resume = sprd_panel_before_resume,
 #ifdef CONFIG_FB_BL_EVENT_CTRL
 	.panel_set_brightness = ili9486s1_backlight_ctrl,
 #endif
@@ -112,11 +118,11 @@ static int32_t sprd_set_rst_mode(uint32_t val)
 {
 	int i = 0;
 
-	if(sprd_panel_spec.rst_mode){
-		if (val){
+	if (sprd_panel_spec.rst_mode) {
+		if (val) {
 			panel_rstpin_map[0].val = sci_glb_read(CTL_PIN_BASE+REG_PIN_LCD_RSTN, 0xffffffff);
 			i = 1;
-		}else
+		} else
 			i = 0;
 
 		sci_glb_write(CTL_PIN_BASE + panel_rstpin_map[i].reg,  panel_rstpin_map[i].val, 0xffffffff);
@@ -193,7 +199,7 @@ static void gpmode_to_sprdmode(struct lcd *gplcd)
 	sprd_panel_cfg.lcd_id = gplcd->id;
 	sprd_panel_cfg.lcd_name = gplcd->panel_name;
 
-	debug_printout();
+	//debug_printout();
 }
 #if defined(CONFIG_MACH_YOUNG23GDTV) || defined(CONFIG_MACH_J13G)
 static inline int sprd_panel_dsi_tx_cmd_array(const struct lcd *lcd,
@@ -205,10 +211,6 @@ static inline int sprd_panel_dsi_tx_cmd_array(const struct lcd *lcd,
 
 	mipi_dcs_write_t mipi_dcs_write =
 		panel->info.mipi->ops->mipi_dcs_write;
-	mipi_set_cmd_mode_t mipi_set_cmd_mode =
-		panel->info.mipi->ops->mipi_set_cmd_mode;
-	mipi_eotp_set_t mipi_eotp_set =
-		panel->info.mipi->ops->mipi_eotp_set;
 
 	for (i = 0; i < count; i++) {
 		do {
@@ -235,29 +237,31 @@ static inline int sprd_panel_dsi_tx_cmd_array(const struct lcd *lcd,
 	struct gen_cmd_desc *desc = (struct gen_cmd_desc *)cmds;
 	int i, ret, retry;
 
+	if (!panel->info.mipi->ops) {
+		pr_err("[LCD] %s, panel->info.mipi->ops is NULL!\n", __func__);
+		return 0;
+	}
 	mipi_write_t mipi_write =
 		panel->info.mipi->ops->mipi_write;
-	mipi_set_cmd_mode_t mipi_set_cmd_mode =
-		panel->info.mipi->ops->mipi_set_cmd_mode;
-	mipi_eotp_set_t mipi_eotp_set =
-		panel->info.mipi->ops->mipi_eotp_set;
 
 	for (i = 0; i < count; i++) {
 		retry = 3;
 		do {
 			ret = mipi_write(desc[i].data_type,
-				desc[i].data, desc[i].length);
-	} while (retry-- && ret < 0);
-	udelay(40);
+					desc[i].data, desc[i].length);
+		} while (retry-- && ret);
+		udelay(40);
 
-	if (unlikely(ret)) {
-		pr_err("[LCD]%s, dsi write failed  ret=%d\n", __func__, ret);
-		pr_err("[LCD]%s, idx:%d, data:0x%02X, len:%d\n", __func__, i,
-			desc[i].data[0], desc[i].length);
-		return ret;
-	}
-	if (desc[i].delay)
-		msleep(desc[i].delay);
+		if (unlikely(ret)) {
+			pr_err("[LCD]%s, dsi write failed  ret=%d\n",
+					__func__, ret);
+			pr_err("[LCD]%s, idx:%d, data:0x%02X, len:%d\n",
+					__func__, i, desc[i].data[0],
+					desc[i].length);
+			return ret;
+		}
+		if (desc[i].delay)
+			msleep(desc[i].delay);
 	}
 
 	return count;
@@ -289,10 +293,29 @@ static inline int sprd_panel_i2c_tx_cmd_array(const struct lcd *lcd,
 }
 
 static inline int sprd_panel_rx_cmd_array(const struct lcd *lcd,
-		u8 *buf, const void *cmds,
-		const int count)
+                u8 *buf, const void *cmds, const int count)
 {
-	return count;
+	struct panel_spec *panel = lcd_to_panel(lcd);
+	struct gen_cmd_desc *desc = (struct gen_cmd_desc *)cmds;
+	int i, ret;
+	int read_len;
+
+	if (!panel->info.mipi->ops) {
+		pr_err("[LCD]%s, panel->info.mipi->ops is NULL!\n", __func__);
+		return 0;
+	}
+
+	mipi_force_write_t mipi_force_write =
+		panel->info.mipi->ops->mipi_force_write;
+	mipi_force_read_t mipi_force_read =
+		panel->info.mipi->ops->mipi_force_read;
+
+	for (i = 0; i < count - 1; i++)
+		mipi_force_write(desc[i].data_type,
+				desc[i].data, desc[i].length);
+	ret = mipi_force_read(desc[i].data[0], desc[0].data[0], buf);
+
+	return ret;
 }
 
 #if CONFIG_OF
@@ -396,12 +419,30 @@ static int32_t ili9486s1_backlight_ctrl(struct panel_spec *self, uint16_t bl_on)
 #endif
 static int32_t sprd_power_set(struct panel_spec *self, uint8_t on)
 {
-   struct lcd *lcd = panel_to_lcd(self);
-   pr_info("[LCD] %s \n", __func__);
+	struct lcd *lcd = panel_to_lcd(self);
+	pr_info("[LCD] %s \n", __func__);
 
-   gen_panel_set_external_pin(lcd, on);
+	gen_panel_set_external_pin(lcd, on);
 
-   return 0;
+	return 0;
+}
+
+static int32_t sprd_panel_reset(struct panel_spec *self)
+{
+	struct lcd *lcd = panel_to_lcd(self);
+
+	gen_panel_set_external_pin_1(lcd, 1);
+
+	return 0;
+}
+
+static int32_t sprd_panel_reduced_init(struct panel_spec *self)
+{
+	struct lcd *lcd = panel_to_lcd(self);
+
+	gen_panel_set_status(lcd, GEN_PANEL_ON_REDUCED);
+
+	return 0;
 }
 
 static int32_t sprd_panel_init(struct panel_spec *self)
@@ -422,6 +463,13 @@ int32_t sprd_panel_start(struct panel_spec *self)
 	return 0;
 }
 
+static int32_t sprd_panel_before_resume(struct sprdfb_device *dev)
+{
+	/* DUMMY FUNCTION for gen-panel driver */
+
+	return 0;
+}
+
 static int32_t sprd_panel_enter_sleep(struct panel_spec *self, uint8_t is_sleep)
 {
 	struct lcd *lcd = panel_to_lcd(self);
@@ -430,7 +478,7 @@ static int32_t sprd_panel_enter_sleep(struct panel_spec *self, uint8_t is_sleep)
 	return 0;
 }
 
-static int __init sprd_panel_i2c_probe(struct i2c_client *client,
+static int sprd_panel_i2c_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	pr_info("[LCD]%s\n", __func__);
@@ -537,7 +585,6 @@ static int sprd_panel_probe(struct platform_device *pdev)
 	sprd_panel_spec.plat_data = lcd;
 	sprdfb_panel_register(&sprd_panel_cfg);
 
-	gen_panel_set_status(lcd, GEN_PANEL_ON_REDUCED);
 	pr_info("[LCD] %s success\n", __func__);
 	return ret;
 

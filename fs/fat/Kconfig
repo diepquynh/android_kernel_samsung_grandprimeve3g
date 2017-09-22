@@ -101,7 +101,7 @@ config FAT_DEFAULT_IOCHARSET
 
 config FAT_VIRTUAL_XATTR
 	bool "Virtual xattr support for FAT filesystem"
-	default n
+	default y
 	depends on FAT_FS
 	help
 	  Modification of FAT filesystem for virtual xattr

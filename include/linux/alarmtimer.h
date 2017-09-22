@@ -10,6 +10,7 @@ enum alarmtimer_type {
 	ALARM_REALTIME,
 	ALARM_BOOTTIME,
 	ALARM_POWEROFF,
+	ALARM_POWERON,
 	ALARM_POWEROFF_ALARM,
 
 	ALARM_NUMTYPE,
@@ -23,7 +24,7 @@ enum alarmtimer_restart {
 
 #define ALARMTIMER_STATE_INACTIVE	0x00
 #define ALARMTIMER_STATE_ENQUEUED	0x01
-
+#define TASK_NAME_LEN			16
 /**
  * struct alarm - Alarm timer structure
  * @node:	timerqueue node for adding to the event list this value
@@ -41,6 +42,7 @@ struct alarm {
 	enum alarmtimer_type	type;
 	int			state;
 	void			*data;
+	char			alrm_comm[TASK_NAME_LEN];
 };
 
 void alarm_init(struct alarm *alarm, enum alarmtimer_type type,

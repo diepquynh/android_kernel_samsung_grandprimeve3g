@@ -8,7 +8,7 @@
  */
 
 /* This version must match the gator daemon version */
-#define PROTOCOL_VERSION 21
+#define PROTOCOL_VERSION 22
 static unsigned long gator_protocol_version = PROTOCOL_VERSION;
 
 #include <linux/slab.h>
@@ -28,6 +28,7 @@ static unsigned long gator_protocol_version = PROTOCOL_VERSION;
 #include <linux/uaccess.h>
 
 #include "gator.h"
+#include "gator_src_md5.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
 #error kernels prior to 2.6.32 are not supported
@@ -179,7 +180,6 @@ static DEFINE_PER_CPU(bool, in_scheduler_context);
 /******************************************************************************
  * Prototypes
  ******************************************************************************/
-static u64 gator_get_time(void);
 static void gator_emit_perf_time(u64 time);
 static void gator_op_create_files(struct super_block *sb, struct dentry *root);
 
@@ -262,6 +262,9 @@ GATOR_EVENTS_LIST
 /******************************************************************************
  * Misc
  ******************************************************************************/
+
+MODULE_PARM_DESC(gator_src_md5, "Gator driver source code md5sum");
+module_param_named(src_md5, gator_src_md5, charp, 0444);
 
 static const struct gator_cpu gator_cpus[] = {
 	{
@@ -374,21 +377,21 @@ static const struct gator_cpu gator_cpus[] = {
 	{
 		.cpuid = CORTEX_A53,
 		.core_name = "Cortex-A53",
-		.pmnc_name = "ARM_Cortex-A53",
+		.pmnc_name = "ARMv8_Cortex_A53",
 		.dt_name = "arm,cortex-a53",
 		.pmnc_counters = 6,
 	},
 	{
 		.cpuid = CORTEX_A57,
 		.core_name = "Cortex-A57",
-		.pmnc_name = "ARM_Cortex-A57",
+		.pmnc_name = "ARMv8_Cortex_A57",
 		.dt_name = "arm,cortex-a57",
 		.pmnc_counters = 6,
 	},
 	{
 		.cpuid = CORTEX_A72,
 		.core_name = "Cortex-A72",
-		.pmnc_name = "ARM_Cortex-A72",
+		.pmnc_name = "ARMv8_Cortex_A72",
 		.dt_name = "arm,cortex-a72",
 		.pmnc_counters = 6,
 	},
@@ -547,6 +550,8 @@ static void gator_timer_offline(void *migrate)
 		list_for_each_entry(gi, &gator_events, list) {
 			if (gi->offline) {
 				len = gi->offline(&buffer, migrate);
+				if (len < 0)
+					pr_err("gator: offline failed for %s\n", gi->name);
 				marshal_event(len, buffer);
 			}
 		}
@@ -635,6 +640,8 @@ static void gator_timer_online(void *migrate)
 		list_for_each_entry(gi, &gator_events, list) {
 			if (gi->online) {
 				len = gi->online(&buffer, migrate);
+				if (len < 0)
+					pr_err("gator: online failed for %s\n", gi->name);
 				marshal_event(len, buffer);
 			}
 		}
@@ -695,7 +702,7 @@ static int gator_timer_start(unsigned long sample_rate)
 	return 0;
 }
 
-static u64 gator_get_time(void)
+u64 gator_get_time(void)
 {
 	struct timespec ts;
 	u64 timestamp;
@@ -1362,6 +1369,7 @@ static void gator_op_create_files(struct super_block *sb, struct dentry *root)
 	struct dentry *dir;
 	struct gator_interface *gi;
 	int cpu;
+	int err;
 
 	/* reinitialize default values */
 	gator_cpu_cores = 0;
@@ -1389,8 +1397,12 @@ static void gator_op_create_files(struct super_block *sb, struct dentry *root)
 	/* Linux Events */
 	dir = gatorfs_mkdir(sb, root, "events");
 	list_for_each_entry(gi, &gator_events, list)
-		if (gi->create_files)
-			gi->create_files(sb, dir);
+		if (gi->create_files) {
+			err = gi->create_files(sb, dir);
+			if (err != 0) {
+				pr_err("gator: create_files failed for %s\n", gi->name);
+			}
+		}
 
 	/* Sched Events */
 	sched_trace_create_files(sb, dir);
@@ -1469,7 +1481,7 @@ static int __init gator_module_init(void)
 		return -1;
 	}
 
-	setup_timer(&gator_buffer_wake_up_timer, gator_buffer_wake_up, 0);
+	setup_deferrable_timer_on_stack(&gator_buffer_wake_up_timer, gator_buffer_wake_up, 0);
 
 	/* Initialize the list of cpuids */
 	memset(gator_cpuids, -1, sizeof(gator_cpuids));

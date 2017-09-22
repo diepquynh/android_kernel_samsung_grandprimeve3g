@@ -34,6 +34,9 @@ extern struct panel_if_ctrl sprdfb_rgb_ctrl;
 extern struct panel_if_ctrl sprdfb_mipi_ctrl;
 #endif
 extern void sprdfb_panel_remove(struct sprdfb_device *dev);
+#ifdef CONFIG_GEN_PANEL_OCTA
+extern void dispc_stop(struct sprdfb_device *dev);
+#endif
 
 static int __init lcd_id_get(char *str)
 {
@@ -57,19 +60,31 @@ __setup("lcd_base=", lcd_base_get);
 static int32_t panel_reset_dispc(struct panel_spec *self)
 {
 	uint16_t timing1, timing2, timing3;
+	if (unlikely(!self)) {
+		printk(KERN_ERR "sprdfb: [%s]: Invalid param\n", __FUNCTION__);
+		return -EINVAL;
+	}
+	pr_info("[LCD] %s, enter\n",__func__);
 
-	if((NULL != self) && (0 != self->reset_timing.time1) &&
-	    (0 != self->reset_timing.time2) && (0 != self->reset_timing.time3)) {
+	if((self->reset_timing.time1) &&
+			(self->reset_timing.time2) &&
+			(self->reset_timing.time3)) {
 	    timing1 = self->reset_timing.time1;
 	    timing2 = self->reset_timing.time2;
 	    timing3 = self->reset_timing.time3;
 	}else {
 	    timing1 = 20;
 	    timing2 = 20;
-	    timing3 = 120;
+#ifdef CONFIG_GEN_PANEL_OCTA
+		timing3 = 10;
+#else
+		timing3 = 120;
+#endif
 	}
 
 	if (self->rst_gpio_en){
+		gpio_set_value(self->rst_gpio, 0);
+		usleep_range(timing2*1000, timing2*1000+500);
 		gpio_set_value(self->rst_gpio, 1);
 		usleep_range(timing3*1000, timing3*1000+500);
 	}else{
@@ -97,21 +112,23 @@ static int32_t panel_set_resetpin_dispc( uint32_t status)
 
 static int panel_reset(struct sprdfb_device *dev)
 {
-	if((NULL == dev) || (NULL == dev->panel)){
+	if (unlikely(!dev || !dev->panel)) {
 		printk(KERN_ERR "sprdfb: [%s]: Invalid param\n", __FUNCTION__);
 		return -1;
 	}
 
-	pr_debug("[LCD] %s, enter\n",__func__);
+	pr_info("[LCD] %s, enter\n",__func__);
 
 	/* clk/data lane enter LP */
-	if(NULL != dev->panel->if_ctrl->panel_if_before_panel_reset){
+	if (dev->panel->if_ctrl &&
+			dev->panel->if_ctrl->panel_if_before_panel_reset)
 		dev->panel->if_ctrl->panel_if_before_panel_reset(dev);
-	}
 	usleep_range(5000, 5500);
 
 	//reset panel
-	dev->panel->ops->panel_reset(dev->panel);
+	if (dev->panel->ops &&
+			dev->panel->ops->panel_reset)
+		dev->panel->ops->panel_reset(dev->panel);
 
 	return 0;
 }
@@ -126,16 +143,16 @@ static int panel_sleep(struct sprdfb_device *dev)
 	pr_debug("sprdfb: [%s], enter\n",__FUNCTION__);
 
 	//send sleep cmd to lcd
-	if (dev->panel->ops->panel_enter_sleep != NULL) {
+	if (dev->panel->ops->panel_enter_sleep != NULL)
 		dev->panel->ops->panel_enter_sleep(dev->panel,1);
-	}
-	msleep(100);
+
 	//clk/data lane enter LP
 	if((NULL != dev->panel->if_ctrl->panel_if_before_panel_reset)
 		&&(SPRDFB_PANEL_TYPE_MIPI == dev->panel->type))
-	{
 		dev->panel->if_ctrl->panel_if_before_panel_reset(dev);
-	}
+
+	/* 3 frame delay before reset for stablity of ldi side */
+	msleep(50);
 	return 0;
 }
 
@@ -214,7 +231,9 @@ static int panel_mount(struct sprdfb_device *dev, struct panel_spec *panel)
 	}
 
 	panel->if_ctrl->panel_if_mount(dev);
-
+#ifdef CONFIG_LCD_ESD_RECOVERY
+	dev->panel->esd_info = panel->esd_info;
+#endif
 	return 0;
 }
 
@@ -538,14 +557,45 @@ uint32_t sprdfb_panel_ESD_check(struct sprdfb_device *dev)
 }
 #endif
 
+void sprdfb_panel_shutdown(struct sprdfb_device *dev)
+{
+	dispc_write(0, DISPC_RSTN);
+	mdelay(120);
+}
+
+#ifdef CONFIG_LCD_ESD_RECOVERY
+void sprdfb_panel_ESD_reset(struct sprdfb_device *dev)
+{
+	if(NULL != dev->panel->if_ctrl->panel_if_suspend)
+		dev->panel->if_ctrl->panel_if_suspend(dev);
+
+	mdelay(10);
+
+	/* 0. power on */
+	if (dev->panel->ops->panel_power)
+        	dev->panel->ops->panel_power(dev->panel, 1);
+	/* 1. turn on mipi */
+	panel_init(dev);
+	/* 2. reset pin to high */
+	if (dev->panel->ops->panel_before_resume)
+		dev->panel->ops->panel_before_resume(dev->panel);
+	else
+		panel_before_resume(dev);
+
+	panel_reset(dev);
+	dev->panel->ops->panel_init(dev->panel);
+	panel_ready(dev);
+}
+#endif
+
 void sprdfb_panel_suspend(struct sprdfb_device *dev)
 {
-	printk("[LCD] %s, dev_id = %d\n",__FUNCTION__, dev->dev_id);
-
-	if(!dev || !dev->panel){
-      pr_err("[LCD] %s, no dev\n", __func__);
+	if(unlikely(!dev || !dev->panel)) {
+		pr_err("sprdfb: [%s], no dev\n", __func__);
 		return;
 	}
+
+	pr_info("sprdfb: [%s], dev_id = %d\n", __func__, dev->dev_id);
 
 	/* 1 send lcd sleep cmd or reset panel directly */
 	if(dev->panel->suspend_mode == SEND_SLEEP_CMD){
@@ -553,7 +603,9 @@ void sprdfb_panel_suspend(struct sprdfb_device *dev)
 	}else if (!dev->panel->ops->panel_pin_init){
 		panel_reset(dev);
 	}
-
+#ifdef CONFIG_GEN_PANEL_OCTA
+	dispc_stop(dev);
+#endif
 	/* 2. clk/data lane enter ulps */
 	if (dev->panel->if_ctrl->panel_if_enter_ulps)
 		dev->panel->if_ctrl->panel_if_enter_ulps(dev);
@@ -567,6 +619,10 @@ void sprdfb_panel_suspend(struct sprdfb_device *dev)
 		dev->panel->ops->panel_after_suspend(dev->panel);
 	else
 		panel_after_suspend(dev);
+
+#ifdef CONFIG_GEN_PANEL_OCTA
+	usleep_range(10000, 11000);
+#endif
 
 	if (dev->panel->ops->panel_power)
 		dev->panel->ops->panel_power(dev->panel, 0);
@@ -594,15 +650,14 @@ void sprdfb_panel_resume(struct sprdfb_device *dev, bool from_deep_sleep)
 		return;
 	}
 
-	printk("<#1>[LCD] %s, + enable:%d, from_deep_sleep:%d\n",
+	printk("[LCD] %s, + enable:%d, from_deep_sleep:%d\n",
 			__func__, dev->enable, from_deep_sleep);
 
 	if (from_deep_sleep) {
 		/* 0. power on */
-		if (dev->panel->ops->panel_power){
+		if (dev->panel->ops->panel_power)
 			dev->panel->ops->panel_power(dev->panel, 1);
-         pr_info("<#2> set LCD_LDO_EN high\n");
-		}
+
 		/* 1. turn on mipi */
 		panel_init(dev);
 
@@ -612,14 +667,23 @@ void sprdfb_panel_resume(struct sprdfb_device *dev, bool from_deep_sleep)
 		else
 			panel_before_resume(dev);
 
-		/* 3. step3 reset panel */
+		/* reset panel */
 		panel_reset(dev);
 
-		/* 4. panel init */
-		dev->panel->ops->panel_init(dev->panel);
-
-		/* 5. clk/data lane enter HS */
+#ifdef CONFIG_GEN_PANEL_OCTA
+		/* clk/data lane enter HS */
 		panel_ready(dev);
+		usleep_range(5000, 6000);
+		/* panel init */
+		if (dev->panel->ops->panel_init)
+			dev->panel->ops->panel_init(dev->panel);
+#else
+		/* panel init */
+		if (dev->panel->ops->panel_init)
+			dev->panel->ops->panel_init(dev->panel);
+		/* clk/data lane enter HS */
+		panel_ready(dev);
+#endif
 	} else {
 		/* 1. turn on mipi */
 		/*Jessica TODO: resume i2c, spi, mipi*/
@@ -683,4 +747,4 @@ int sprdfb_panel_register(struct panel_cfg *cfg)
 	return 0;
 }
 
- 
+

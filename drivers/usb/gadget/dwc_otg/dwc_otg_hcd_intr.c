@@ -602,7 +602,7 @@ static int update_urb_state_xfer_comp(dwc_hc_t * hc,
 	    && (urb->actual_length == urb->length)
 	    && !(urb->length % hc->max_packet)) {
 		xfer_done = 0;
-	} else if (short_read || urb->actual_length == urb->length) {
+	} else if (short_read || urb->actual_length >= urb->length) {
 		xfer_done = 1;
 		urb->status = 0;
 	}
@@ -1299,7 +1299,11 @@ static int32_t handle_hc_nak_intr(dwc_otg_hcd_t * hcd,
 			 * transfers in DMA mode for the sole purpose of
 			 * resetting the error count after a transaction error
 			 * occurs. The core will continue transferring data.
+			 * Disable other interrupts unmasked for the same
+			 * reason.
 			 */
+			disable_hc_int(hc_regs, datatglerr);
+			disable_hc_int(hc_regs, ack);
 			qtd->error_count = 0;
 			goto handle_nak_done;
 		}
@@ -1411,6 +1415,15 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * hcd,
 			halt_channel(hcd, hc, qtd, DWC_OTG_HC_XFER_ACK);
 		}
 	} else {
+		/*
+		 * An unmasked ACK on a non-split DMA transaction is
+		 * for the sole purpose of resetting error counts. Disable other
+		 * interrupts unmasked for the same reason.
+		 */
+		if(hcd->core_if->dma_enable) {
+			disable_hc_int(hc_regs, datatglerr);
+			disable_hc_int(hc_regs, nak);
+		}
 		qtd->error_count = 0;
 
 		if (hc->qh->ping_state) {
@@ -1764,6 +1777,14 @@ static int32_t handle_hc_datatglerr_intr(dwc_otg_hcd_t * hcd,
 		    "Data Toggle Error--\n", hc->hc_num);
 
 	if (hc->ep_is_in) {
+		/* An unmasked data toggle error on a non-split DMA transaction is
+		 * for the sole purpose of resetting error counts. Disable other
+		 * interrupts unmasked for the same reason.
+		 */
+		if(hcd->core_if->dma_enable) {
+			disable_hc_int(hc_regs, ack);
+			disable_hc_int(hc_regs, nak);
+		}
 		qtd->error_count = 0;
 	} else {
 		DWC_ERROR("Data Toggle Error on OUT transfer,"
@@ -1959,8 +1980,7 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * hcd,
 				    ("%s: Halt channel %d (assume incomplete periodic transfer)\n",
 				     __func__, hc->hc_num);
 #endif
-				halt_channel(hcd, hc, qtd,
-					     DWC_OTG_HC_XFER_PERIODIC_INCOMPLETE);
+				goto err;
 			} else {
 				DWC_ERROR
 				    ("%s: Channel %d, DMA Mode -- ChHltd set, but reason "
@@ -1969,13 +1989,25 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * hcd,
 				     DWC_READ_REG32(&hcd->
 						    core_if->core_global_regs->
 						    gintsts));
+				goto err;
 			}
 
 		}
 	} else {
 		DWC_PRINTF("NYET/NAK/ACK/other in non-error case, 0x%08x\n",
 			   hcint.d32);
+		goto err;
 	}
+	return;
+err:
+	/*
+	* Even if the reason for landing here is unknown, handle
+	* it like previously. Someone that understands how the
+	* driver works should probably explain why this works
+	* or add a real fix
+	*/
+	clear_hc_int(hc_regs, chhltd);
+	halt_channel(hcd, hc, qtd, DWC_OTG_HC_XFER_PERIODIC_INCOMPLETE);
 }
 
 /**
@@ -2025,6 +2057,13 @@ int32_t dwc_otg_hcd_handle_hc_n_intr(dwc_otg_hcd_t * dwc_otg_hcd, uint32_t num)
 
 	hc = dwc_otg_hcd->hc_ptr_array[num];
 	hc_regs = dwc_otg_hcd->core_if->host_if->hc_regs[num];
+	if(hc->halt_status == DWC_OTG_HC_XFER_URB_DEQUEUE) {
+		/* We are responding to a channel disable. Driver
+		 * state is cleared - our qtd has gone away.
+		 */
+		release_channel(dwc_otg_hcd, hc, NULL, hc->halt_status);
+		return 1;
+	}
 	qtd = DWC_CIRCLEQ_FIRST(&hc->qh->qtd_list);
 
 	hcint.d32 = DWC_READ_REG32(&hc_regs->hcint);
@@ -2063,7 +2102,8 @@ int32_t dwc_otg_hcd_handle_hc_n_intr(dwc_otg_hcd_t * dwc_otg_hcd, uint32_t num)
 		retval |= handle_hc_nak_intr(dwc_otg_hcd, hc, hc_regs, qtd);
 	}
 	if (hcint.b.ack) {
-		retval |= handle_hc_ack_intr(dwc_otg_hcd, hc, hc_regs, qtd);
+		if (!hcint.b.chhltd)
+			retval |= handle_hc_ack_intr(dwc_otg_hcd, hc, hc_regs, qtd);
 	}
 	if (hcint.b.nyet) {
 		retval |= handle_hc_nyet_intr(dwc_otg_hcd, hc, hc_regs, qtd);

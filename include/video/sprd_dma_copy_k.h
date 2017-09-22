@@ -37,8 +37,10 @@ typedef struct _dma_copy_rect_tag {
 } DMA_COPY_RECT_T;
 
 typedef struct _dma_copy_addr_tag {
-	uint32_t y_addr;
-	uint32_t uv_addr;
+	uintptr_t y_addr;
+
+	uintptr_t uv_addr;
+
 } DMA_COPY_ADDR_T;
 
 typedef struct _dma_copy_cfg_tag {

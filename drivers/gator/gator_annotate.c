@@ -287,3 +287,4 @@ static void gator_annotate_stop(void)
 	wake_up(&gator_annotate_wait);
 	spin_unlock(&annotate_lock);
 }
+

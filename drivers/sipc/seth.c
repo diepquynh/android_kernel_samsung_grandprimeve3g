@@ -88,7 +88,6 @@
 #ifdef SETH_NAPI
 #define SETH_NAPI_WEIGHT 64
 #define SETH_TX_WEIGHT 16
-#endif /* end of SETH_NAPI*/
 
 /* struct of data transfer statistics */
 struct seth_dtrans_stats {
@@ -106,6 +105,8 @@ struct seth_dtrans_stats {
 	uint32_t tx_ack_cnt;
 };
 
+#endif /* end of SETH_NAPI*/
+
 /*
  * Device instance data.
  */
@@ -118,26 +119,30 @@ typedef struct SEth {
 
 #ifdef SETH_NAPI
 	atomic_t rx_busy;
-	struct napi_struct napi; /* napi instance */
 	struct timer_list rx_timer;
-#endif /* SETH_NAPI */
 
-#ifdef CONFIG_SETH_OPT
 	atomic_t txpending;	/* seth tx resend count*/
 	struct timer_list tx_timer;
-#endif
+	struct napi_struct napi; /* napi instance */
 	struct seth_dtrans_stats dt_stats; /* record data_transfer statistics*/
+#endif /* SETH_NAPI */
 } SEth;
+
+#ifdef CONFIG_SETH_GRO_DISABLE
+uint32_t seth_gro_enable = 0;
+#else
+uint32_t seth_gro_enable = 1;
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 struct dentry *root = NULL;
 uint32_t seth_print_seq = 0;
+uint32_t seth_print_ipid;
 static int seth_debugfs_mknod(void *root, void * data);
 #endif
 
 #ifdef SETH_NAPI
 static void seth_rx_timer_handler(unsigned long data);
-#endif
 
 static inline void seth_dt_stats_init(struct seth_dtrans_stats * stats)
 {
@@ -277,7 +282,6 @@ static inline void pkt_seq_print(void *data)
 	}
 }
 
-#ifdef SETH_NAPI
 static int seth_rx_poll_handler(struct napi_struct * napi, int budget)
 {
 	struct SEth *seth = container_of(napi, struct SEth, napi);
@@ -366,8 +370,10 @@ static int seth_rx_poll_handler(struct napi_struct * napi, int budget)
 		seth->stats.rx_bytes += skb->len;
 		seth->stats.rx_packets++;
 
-        //napi_gro_receive(napi, skb);
-		netif_receive_skb(skb);
+		if (likely(seth_gro_enable))
+			napi_gro_receive(napi, skb);
+		else
+			netif_receive_skb(skb);
 		/* update skb counter*/
 		skb_cnt++;
 	}
@@ -381,6 +387,7 @@ static int seth_rx_poll_handler(struct napi_struct * napi, int budget)
 	if (skb_cnt >= 0 && budget > skb_cnt) {
 		napi_complete(napi);
 		atomic_dec(&seth->rx_busy);
+
 		/* to guarantee that any arrived sblock(s) can be processed even if there are no events issued by CP */
 		if (sblock_get_arrived_count(pdata->dst, pdata->channel)) {
 			/* start a timer with 2 jiffies expries (20 ms) */
@@ -603,9 +610,7 @@ seth_handler (int event, void* data)
 			break;
 		case SBLOCK_NOTIFY_RECV:
 			SETH_DEBUG ("SBLOCK_NOTIFY_RECV is received\n");
-#ifdef SETH_NAPI
 			del_timer(&seth->rx_timer);
-#endif
 			seth_rx_handler(seth);
 			break;
 		case SBLOCK_NOTIFY_STATUS:
@@ -677,7 +682,6 @@ seth_tx_pkt(void* data, struct sk_buff* skb)
 	return SETH_TX_SUCCESS;
 }
 
-#ifdef CONFIG_SETH_OPT
 static void seth_tx_flush(unsigned long data)
 {
 	int ret;
@@ -694,7 +698,6 @@ static void seth_tx_flush(unsigned long data)
 		atomic_set(&seth->txpending, 0);
 	}
 }
-#endif
 
 /*
  * Transmit interface
@@ -730,10 +733,8 @@ seth_start_xmit (struct sk_buff* skb, struct net_device* dev)
 		/* if there are no available sblks, enter flow control */
 		seth->txstate = DEV_OFF;
 		netif_stop_queue(dev);
-#ifdef CONFIG_SETH_OPT
 		/* anyway, flush the stored sblks */
 		seth_tx_flush((unsigned long)dev);
-#endif
 		return NETDEV_TX_BUSY;
 	} else if (SETH_TX_INVALID_BLK == ret) {
 		return NETDEV_TX_OK;
@@ -958,13 +959,12 @@ static int seth_probe(struct platform_device *pdev)
 
 #ifdef SETH_NAPI
 	atomic_set(&seth->rx_busy, 0);
-	init_timer(&seth->rx_timer);
-#endif
-#ifdef CONFIG_SETH_OPT
 	atomic_set(&seth->txpending, 0);
+
+	init_timer(&seth->rx_timer);
 	init_timer(&seth->tx_timer);
-#endif
 	seth_dt_stats_init(&seth->dt_stats);
+#endif
 
 	netdev->netdev_ops = &seth_ops;
 	netdev->watchdog_timeo = 1*HZ;
@@ -1034,9 +1034,8 @@ static int seth_remove (struct platform_device *pdev)
 
 #ifdef SETH_NAPI
 	netif_napi_del(&seth->napi);
+
 	del_timer_sync(&seth->rx_timer);
-#endif
-#ifdef CONFIG_SETH_OPT
 	del_timer_sync(&seth->tx_timer);
 #endif
 
@@ -1098,11 +1097,7 @@ static int seth_debug_show(struct seq_file *m, void *v)
 	seq_printf(m, "\nRX statistics:\n");
 	seq_printf(m, "rx_pkt_max=%u, rx_pkt_min=%u, rx_sum=%u, rx_cnt=%u\n",
 			stats->rx_pkt_max, stats->rx_pkt_min, stats->rx_sum, stats->rx_cnt);
-#ifdef SETH_NAPI
 	seq_printf(m, "rx_alloc_fails=%u, rx_busy=%d\n", stats->rx_alloc_fails, atomic_read(&seth->rx_busy));
-#else
-	seq_printf(m, "rx_alloc_fails=%u, rx_busy=%d\n", stats->rx_alloc_fails, 0);
-#endif
 
 	seq_printf(m, "\nTX statistics:\n");
 	seq_printf(m, "tx_pkt_max=%u, tx_pkt_min=%u, tx_sum=%u, tx_cnt=%u\n",
@@ -1151,6 +1146,10 @@ static int __init seth_debugfs_init(void)
 	}
 
 	debugfs_create_u32("print_seq", S_IRUGO, root, &seth_print_seq);
+	debugfs_create_u32("print_ipid", S_IRUGO,
+		root, &seth_print_ipid);
+	debugfs_create_u32("gro_enable", S_IRUGO,
+		root, &seth_gro_enable);
 
 	return 0;
 }

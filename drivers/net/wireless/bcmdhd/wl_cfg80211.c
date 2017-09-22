@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfg80211.c 561889 2015-06-08 08:01:22Z $
+ * $Id: wl_cfg80211.c 557839 2015-05-20 05:49:43Z $
  */
 /* */
 #include <typedefs.h>
@@ -1149,12 +1149,6 @@ wl_validate_wps_ie(char *wps_ie, s32 wps_ie_len, bool *pbc)
 		subelt_len = HTON16(val);
 
 		len -= 4;			/* for the attr id, attr len fields */
-
-		if (len < subelt_len) {
-			WL_ERR(("not enough data, len %d, subelt_len %d\n", len,
-				subelt_len));
-			break;
-		}
 		len -= subelt_len;	/* for the remaining fields in this attribute */
 		WL_DBG((" subel=%p, subelt_id=0x%x subelt_len=%u\n",
 			subel, subelt_id, subelt_len));
@@ -1169,9 +1163,8 @@ wl_validate_wps_ie(char *wps_ie, s32 wps_ie_len, bool *pbc)
 			WL_DBG(("  attr WPS_ID_CONFIG_METHODS: %x\n", HTON16(val)));
 		} else if (subelt_id == WPS_ID_DEVICE_NAME) {
 			char devname[100];
-			size_t namelen = MIN(subelt_len, sizeof(devname) - 1);
-			memcpy(devname, subel, namelen);
-			devname[namelen] = '\0';
+			memcpy(devname, subel, subelt_len);
+			devname[subelt_len] = '\0';
 			WL_DBG(("  attr WPS_ID_DEVICE_NAME: %s (len %u)\n",
 				devname, subelt_len));
 		} else if (subelt_id == WPS_ID_DEVICE_PWD_ID) {
@@ -4060,15 +4053,6 @@ wl_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *dev,
 	RETURN_EIO_IF_NOT_UP(cfg);
 	act = *(bool *) wl_read_prof(cfg, dev, WL_PROF_ACT);
 	curbssid = wl_read_prof(cfg, dev, WL_PROF_BSSID);
-
-#ifdef CUSTOMER_HW4
-	if ((wl_get_drv_status(cfg, CONNECTING, dev) ||
-		wl_get_drv_status(cfg, CONNECTED, dev)) && act) {
-		WL_ERR(("Wait for complete of connecting \n"));
-		OSL_SLEEP(200);
-	}
-#endif /* CUSTOMER_HW4 */
-
 	if (act) {
 		/*
 		* Cancel ongoing scan to sync up with sme state machine of cfg80211.
@@ -7667,7 +7651,7 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 		| BIT(NL80211_IFTYPE_ADHOC)
 #if !defined(WL_ENABLE_P2P_IF) && !defined(WL_CFG80211_P2P_DEV_IF)
 		| BIT(NL80211_IFTYPE_MONITOR)
-#endif /* !WL_ENABLE_P2P_IF && !WL_CFG80211_P2P_DEV_IF */
+#endif /* !WL_ENABLE_P2P_IF */
 #if defined(WL_IFACE_COMB_NUM_CHANNELS) || defined(WL_CFG80211_P2P_DEV_IF)
 		| BIT(NL80211_IFTYPE_P2P_CLIENT)
 		| BIT(NL80211_IFTYPE_P2P_GO)
@@ -9621,13 +9605,8 @@ wl_notify_sched_scan_results(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 
 	WL_DBG(("Enter\n"));
 
-	if ((e->event_type == WLC_E_PFN_NET_LOST) || !data) {
-		WL_PNO(("Do Nothing %d\n", e->event_type));
-		return 0;
-	}
-	if (pfn_result->version != PFN_SCANRESULT_VERSION) {
-		WL_ERR(("Incorrect version %d, expected %d\n", pfn_result->version,
-		       PFN_SCANRESULT_VERSION));
+	if (e->event_type == WLC_E_PFN_NET_LOST) {
+		WL_PNO(("PFN NET LOST event. Do Nothing \n"));
 		return 0;
 	}
 	WL_PNO((">>> PFN NET FOUND event. count:%d \n", n_pfn_results));
@@ -9670,10 +9649,9 @@ wl_notify_sched_scan_results(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 			 * scan request in the form of cfg80211_scan_request. For timebeing, create
 			 * cfg80211_scan_request one out of the received PNO event.
 			 */
-			ssid[i].ssid_len = MIN(DOT11_MAX_SSID_LEN,
-				netinfo->pfnsubnet.SSID_len);
 			memcpy(ssid[i].ssid, netinfo->pfnsubnet.SSID,
-				ssid[i].ssid_len);
+				netinfo->pfnsubnet.SSID_len);
+			ssid[i].ssid_len = netinfo->pfnsubnet.SSID_len;
 			request->n_ssids++;
 
 			channel_req = netinfo->pfnsubnet.channel;
@@ -10041,12 +10019,11 @@ static void wl_del_roam_timeout(struct bcm_cfg80211 *cfg)
 static void wl_roam_timeout(unsigned long data)
 {
 	struct bcm_cfg80211 *cfg = (struct bcm_cfg80211 *)data;
-	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
 
 	WL_ERR(("roam timer expired\n"));
 
 	/* restore prec_map to ALLPRIO */
-	dhdp->dequeue_prec_map = ALLPRIO;
+	wl_del_roam_timeout(cfg);
 }
 
 #endif /* DHD_LOSSLESS_ROAMING */

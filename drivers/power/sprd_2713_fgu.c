@@ -335,12 +335,14 @@ static int sprdfgu_cal_from_chip(void)
 	printk("sprdfgu: sprdfgu_cal_from_chip\n");
 
 	fgu_nv_4200mv = fgu_data[0];
-#if defined(CONFIG_ADIE_SC2723)	//2723 use one point to cal fgu adc
+#if defined(CONFIG_ADIE_SC2723S) || defined(CONFIG_ADIE_SC2723)	//2723 use one point to cal fgu adc
 	fgu_nv_3600mv = 0;
 	fgu_0_cur_adc = 0;
+	printk("sprdfgu: one point\n");
 #else
 	fgu_nv_3600mv = fgu_data[1];
 	fgu_0_cur_adc = fgu_data[2];
+	printk("sprdfgu: three point\n");
 #endif
 	fgu_cal.cal_type = SPRDBAT_FGUADC_CAL_CHIP;
 
@@ -905,7 +907,7 @@ static void sprdfgu_hw_init(void)
 	FGU_DEBUG("REG_FGU_USER_AREA_STATUS- = 0x%x\n",
 		  sci_adi_read(REG_FGU_USER_AREA_STATUS));
 	if ((FIRST_POWERTON == sprdfgu_poweron_type_read())
-	    || (sprdfgu_rtc_reg_read() == 0xFFF)) {
+	    || (sprdfgu_rtc_reg_read() == 0xFFF) || (sprdfgu_rtc_reg_read() == 0)) {
 		FGU_DEBUG("FIRST_POWERTON- = 0x%x\n",
 			  sprdfgu_poweron_type_read());
 #ifdef CONFIG_SPRD_EXT_IC_POWER
@@ -967,7 +969,7 @@ static void sprdfgu_hw_init(void)
 	sprdfgu_data.init_clbcnt = poweron_clbcnt =
 	    sprdfgu_clbcnt_init(sprdfgu_data.init_cap);
 	sprdfgu_clbcnt_set(poweron_clbcnt);
-#if 0   //workaround chip bug
+#if  !defined(CONFIG_ADIE_SC2723S) && !defined(CONFIG_ADIE_SC2723)
 	if (!in_calibration()) {
 		sci_adi_write(REG_FGU_CURT_OFFSET, fgu_cal.cur_offset, ~0);
 	}

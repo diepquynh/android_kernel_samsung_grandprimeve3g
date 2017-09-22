@@ -54,6 +54,7 @@ struct autotst_gpio_info_t {
 #define AUTOTST_IOCTL_GPIO_INIT    _IOWR(AUTOTST_IOCTL_MAGIC, 0x10, struct autotst_gpio_info_t)
 #define AUTOTST_IOCTL_GPIO_GET     _IOWR(AUTOTST_IOCTL_MAGIC, 0x11, struct autotst_gpio_info_t)
 #define AUTOTST_IOCTL_GPIO_SET     _IOW (AUTOTST_IOCTL_MAGIC, 0x12, struct autotst_gpio_info_t)
+#define AUTOTST_IOCTL_GPIO_CLOSE _IOW (AUTOTST_IOCTL_MAGIC, 0x13, struct autotst_gpio_info_t)
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------

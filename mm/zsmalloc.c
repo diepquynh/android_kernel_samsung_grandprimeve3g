@@ -2262,13 +2262,16 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 	 * identify the last page.
 	 */
 	error = -ENOMEM;
+	spin_lock(&class->lock);
 	for (i = 0; i < class->pages_per_zspage; i++) {
 		struct page *page;
 
+		spin_unlock(&class->lock);
 		page = alloc_page(flags);
 		if (!page)
 			goto cleanup;
 
+		spin_lock(&class->lock);
 		INIT_LIST_HEAD(&page->lru);
 		if (i == 0) {	/* first page */
 			SetPagePrivate(page);
@@ -2292,6 +2295,7 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 	first_page->freelist = obj_location_to_handle(first_page, 0);
 	/* Maximum number of objects we can store in this zspage */
 	first_page->objects = class->pages_per_zspage * PAGE_SIZE / class->size;
+	spin_unlock(&class->lock);
 
 	error = 0; /* Success */
 
@@ -2365,7 +2369,9 @@ static int reclaim_zspage(struct zs_pool *pool, struct page *first_page)
 				spin_unlock(&class->lock);
 				return ret;
 			}
+			spin_lock(&class->lock);
 			obj_free(handle, page, offset);
+			spin_unlock(&class->lock);
 		}
 
 		page = get_next_page(page);

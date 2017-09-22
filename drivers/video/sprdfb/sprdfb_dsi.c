@@ -512,11 +512,8 @@ int32_t sprdfb_dsih_init(struct sprdfb_device *dev)
 			printk("sprdfb: [%s] warning: busy waiting!\n", __FUNCTION__);
 		}
 	}
-
 	if(wait_count >= 100000){
-
 		printk("sprdfb: [%s] Errior: dsi phy can't be locked!!!\n", __FUNCTION__);
-
 	}
 	if(wait_count >= 100000){
 		printk("sprdfb: [%s] Errior: dsi phy can't be locked!!!\n", __FUNCTION__);
@@ -991,7 +988,7 @@ static int32_t sprd_dsi_force_read(uint8_t command, uint8_t bytes_to_read, uint8
 		return -1;
 	}
 
-	return 0;
+	return iRtn;
 }
 
 static int32_t sprd_dsi_eotp_set(uint8_t rx_en, uint8_t tx_en)

@@ -674,10 +674,15 @@ config KEYBOARD_SPRD_EIC
           To compile this driver as a module, choose M here: the
           module will be called sprd_eic_keys.
 
-config SUPPORT_TWOKEY_RESET
-	tristate "Keypad Support for Two Key Reset."
+config KEYBOARD_TC350K
+	tristate "Coreriver TC350K touchkey"
+	depends on I2C
+	help
+	 Say Y if you want use Coreriver TC350K chip as touchkey.
+
+config SUPPORT_SMART_RESET
+	tristate "Keypad Support for smart reset"
 	depends on INPUT
 	help
-	  Keypad Support for Two Key Reset. Volume Down + power Key, Which is connected to PMIC.
-
+	  Keypad Support for Smart Reset. Volume Down + power Key, which is connected to PMIC.
 endif

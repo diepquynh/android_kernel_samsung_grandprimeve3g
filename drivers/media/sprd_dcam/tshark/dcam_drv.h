@@ -146,10 +146,6 @@ enum dcam_irq_id {
 	DCAM_RAW_SLICE_DONE,
 	DCAM_PATH1_SOF,
 	DCAM_PATH2_SOF,
-	DCAM_PATH0_END,
-	DCAM_PATH1_END,
-	DCAM_PATH2_END,
-	DCAM_PATH0_SOF,
 	DCAM_IRQ_NUMBER
 };
 
@@ -340,7 +336,7 @@ struct dcam_addr {
 	uint32_t               yaddr_vir;
 	uint32_t               uaddr_vir;
 	uint32_t               vaddr_vir;
-
+	uint32_t               zsl_private;
 };
 
 struct dcam_sc_tap {
@@ -370,6 +366,7 @@ struct dcam_frame {
 	uint32_t               vaddr_vir;
 	struct dcam_frame      *prev;
 	struct dcam_frame      *next;
+	uint32_t               zsl_private;
 };
 
 struct dcam_get_path_id {
@@ -378,10 +375,10 @@ struct dcam_get_path_id {
 	uint32_t               need_isp_tool;
 	uint32_t               need_isp;
 	uint32_t               need_shrink;
-	uint32_t               camera_id;
 	struct dcam_size       input_size;
 	struct dcam_rect       input_trim;
 	struct dcam_size       output_size;
+	uint32_t               camera_id;
 };
 
 struct dcam_path_info {
@@ -449,5 +446,6 @@ int32_t    dcam_rotation_end(void);
 int32_t    dcam_get_path_id(struct dcam_get_path_id *path_id, uint32_t *channel_id);
 int32_t    dcam_stop_sc_coeff(void);
 int32_t    dcam_get_path_capability(struct dcam_path_capability *capacity);
+void       dcam_set_highclk_flag(uint32_t flag);
 
 #endif //_DCAM_DRV_8830_H_

@@ -698,6 +698,16 @@ config INPUT_LIS3DH_I2C
 
 	  To compile this driver as a module, choose M here.
 
+config INPUT_LIS3DH_I2C_INTERRUPT
+	tristate "ST lid3dh 3-Axid accelerometer device with I2C bus  for interrupt mode"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have a lis3dh device on the board and use I2C
+	  communication, else say N.
+
+	  To compile this driver as a module, choose M here.
+
 config INPUT_LIS3DH_ZT_I2C
 	tristate "ST lid3dh_zt 3-Axid accelerometer device with I2C bus"
 	depends on I2C
@@ -736,4 +746,11 @@ config INPUT_EPL259X_I2C
 	  communication, else say N.
 
 	  To compile this driver as a module, choose M here.
+
+config INPUT_SEC_JACK
+     tristate "3.5MM ear jack KSND driver for Samsung custom devices"
+     default n
+     help
+       Say Y here to enable headset & hook switch support.
+
 endif

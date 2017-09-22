@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_android.c 561435 2015-06-04 13:56:04Z $
+ * $Id: wl_android.c 555969 2015-05-12 01:58:42Z $
  */
 
 #include <linux/module.h>
@@ -184,11 +184,6 @@
 #define CMD_GETOKCMODE "GETOKCMODE"
 #define CMD_SETOKCMODE "SETOKCMODE"
 
-#ifdef FCC_PWR_LIMIT_2G
-#define CMD_GET_FCC_PWR_LIMIT_2G "GET_FCC_CHANNEL"
-#define CMD_SET_FCC_PWR_LIMIT_2G "SET_FCC_CHANNEL"
-#endif /* FCC_PWR_LIMIT_2G */
-
 #define ANDROID_WIFI_MAX_ROAM_SCAN_CHANNELS 100
 
 typedef struct android_wifi_reassoc_params {
@@ -226,11 +221,6 @@ typedef struct android_wifi_af_params {
 
 #define CMD_SET_SCSCAN		"SETSINGLEANT"
 #define CMD_GET_SCSCAN		"GETSINGLEANT"
-
-/* FCC_PWR_LIMIT_2G */
-#define CUSTOMER_HW4_ENABLE		0
-#define CUSTOMER_HW4_DISABLE	-1
-#define CUSTOMER_HW4_EN_CONVERT(i)	(i += 1)
 
 #endif /* CUSTOMER_HW4 */
 
@@ -1276,51 +1266,6 @@ int wl_android_set_okc_mode(struct net_device *dev, char *command, int total_len
 	return error;
 }
 #endif /* WES_SUPPORT */
-#ifdef FCC_PWR_LIMIT_2G
-int
-wl_android_set_fcc_pwr_limit_2g(struct net_device *dev, char *command, int total_len)
-{
-	int error = 0;
-	int enable = 0;
-
-	sscanf(command+sizeof("SET_FCC_CHANNEL"), "%d", &enable);
-
-	if ((enable != CUSTOMER_HW4_ENABLE) && (enable != CUSTOMER_HW4_DISABLE)) {
-		DHD_ERROR(("%s: Invalid data\n", __FUNCTION__));
-		return BCME_ERROR;
-	}
-
-	CUSTOMER_HW4_EN_CONVERT(enable);
-
-	DHD_ERROR(("%s: fccpwrlimit2g set (%d)\n", __FUNCTION__, enable));
-	error = wldev_iovar_setint(dev, "fccpwrlimit2g", enable);
-	if (error) {
-		DHD_ERROR(("%s: fccpwrlimit2g set error (%d)\n", __FUNCTION__, error));
-		return BCME_ERROR;
-	}
-
-	return error;
-}
-
-int
-wl_android_get_fcc_pwr_limit_2g(struct net_device *dev, char *command, int total_len)
-{
-	int error = 0;
-	int enable = 0;
-	int bytes_written = 0;
-
-	error = wldev_iovar_getint(dev, "fccpwrlimit2g", &enable);
-	if (error) {
-		DHD_ERROR(("%s: fccpwrlimit2g get error (%d)\n", __FUNCTION__, error));
-		return BCME_ERROR;
-	}
-	DHD_ERROR(("%s: fccpwrlimit2g get (%d)\n", __FUNCTION__, enable));
-
-	bytes_written = snprintf(command, total_len, "%s %d", CMD_GET_FCC_PWR_LIMIT_2G, enable);
-
-	return bytes_written;
-}
-#endif /* FCC_PWR_LIMIT_2G */
 #endif /* CUSTOMER_HW4 */
 
 #ifdef PNO_SUPPORT
@@ -3504,16 +3449,6 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	else if (strnicmp(command, CMD_COUNTRY, strlen(CMD_COUNTRY)) == 0) {
 		char *country_code = command + strlen(CMD_COUNTRY) + 1;
 		bytes_written = wldev_set_country(net, country_code, true, true);
-#ifdef FCC_PWR_LIMIT_2G
-		{
-			DHD_ERROR(("%s: fccpwrlimit2g is deactivated\n", __FUNCTION__));
-			bytes_written = wldev_iovar_setint(net, "fccpwrlimit2g", FALSE);
-			if (bytes_written) {
-				DHD_ERROR(("%s: fccpwrlimit2g deactivate set error (%d)\n",
-					__FUNCTION__, bytes_written));
-			}
-		}
-#endif /* FCC_PWR_LIMIT_2G */
 	}
 #endif /* CUSTOMER_SET_COUNTRY */
 #endif /* WL_CFG80211 */
@@ -3556,16 +3491,6 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		strlen(CMD_COUNTRYREV_SET)) == 0) {
 		bytes_written = wl_android_set_country_rev(net, command,
 		priv_cmd.total_len);
-#ifdef FCC_PWR_LIMIT_2G
-		{
-			DHD_ERROR(("%s: fccpwrlimit2g is deactivated\n", __FUNCTION__));
-			bytes_written = wldev_iovar_setint(net, "fccpwrlimit2g", FALSE);
-			if (bytes_written) {
-				DHD_ERROR(("%s: fccpwrlimit2g deactivate set error (%d)\n",
-					__FUNCTION__, bytes_written));
-			}
-		}
-#endif /* FCC_PWR_LIMIT_2G */
 	} else if (strnicmp(command, CMD_COUNTRYREV_GET,
 		strlen(CMD_COUNTRYREV_GET)) == 0) {
 		bytes_written = wl_android_get_country_rev(net, command,
@@ -3882,16 +3807,6 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 			priv_cmd.total_len);
 	}
 #endif
-#ifdef FCC_PWR_LIMIT_2G
-	else if (strnicmp(command, CMD_GET_FCC_PWR_LIMIT_2G,
-		strlen(CMD_GET_FCC_PWR_LIMIT_2G)) == 0) {
-		bytes_written = wl_android_get_fcc_pwr_limit_2g(net, command, priv_cmd.total_len);
-	}
-	else if (strnicmp(command, CMD_SET_FCC_PWR_LIMIT_2G,
-		strlen(CMD_SET_FCC_PWR_LIMIT_2G)) == 0) {
-		bytes_written = wl_android_set_fcc_pwr_limit_2g(net, command, priv_cmd.total_len);
-	}
-#endif /* FCC_PWR_LIMIT_2G */
 	else {
 		DHD_ERROR(("Unknown PRIVATE command %s - ignored\n", command));
 		snprintf(command, 3, "OK");

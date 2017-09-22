@@ -1194,8 +1194,15 @@ static void clk_change_rate(struct clk *clk)
 	if (clk->notifier_count && old_rate != clk->rate)
 		__clk_notify(clk, POST_RATE_CHANGE, old_rate, clk->rate);
 
-	hlist_for_each_entry(child, &clk->children, child_node)
+	hlist_for_each_entry(child, &clk->children, child_node){
+#ifdef CONFIG_CPLL_1024M
+		if (child->parent != NULL && child->parent->parent != NULL)
+			if (!strcmp(__clk_get_name(child->parent->parent), "clk_cpll"))
+				if(!strcmp(__clk_get_name(child),"clk_dcam") || !strcmp(__clk_get_name(child), "clk_gpu") || !strcmp(__clk_get_name(child), "clk_isp"))
+					return;
+#endif
 		clk_change_rate(child);
+	}
 }
 
 /**

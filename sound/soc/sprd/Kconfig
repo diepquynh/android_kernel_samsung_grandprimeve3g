@@ -49,6 +49,12 @@ config SND_SOC_SPRD_AUDIO_DEBUG
 	    print debug information for detail.
 	    Or, maybe could reduce the code size.
 
+config SPRD_INTERNAL_HEADSET_SUPPORT
+	bool "Use sprd internal headset"
+	default n
+	help
+	  Say N to use external heaset.
+
 source "sound/soc/sprd/dai/Kconfig"
 source "sound/soc/sprd/dai/vbc/Kconfig"
 source "sound/soc/sprd/dai/vaudio/Kconfig"

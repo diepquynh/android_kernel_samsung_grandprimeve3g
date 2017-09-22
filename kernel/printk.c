@@ -48,10 +48,8 @@
 
 #include <asm/uaccess.h>
 
-#if defined(CONFIG_SEC_DEBUG)
-#include <soc/sprd/sec_debug.h>
+#include <asm/sec/sec_debug.h>
 #include <linux/vmalloc.h>
-#endif
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
@@ -322,7 +320,7 @@ static bool printk_process = 0;
 #endif
 module_param_named(process, printk_process, bool, S_IRUGO | S_IWUSR);
 
-#if defined(CONFIG_SEC_DEBUG)
+#ifdef CONFIG_SEC_DEBUG
 void disable_printk_process(void)
 {
 	printk_process = 0;

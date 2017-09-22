@@ -1112,7 +1112,9 @@ static int __init arch_hw_breakpoint_init(void)
 	pm_init();
 	return 0;
 }
+#ifndef CONFIG_SC_FPGA
 arch_initcall(arch_hw_breakpoint_init);
+#endif
 
 void hw_breakpoint_pmu_read(struct perf_event *bp)
 {

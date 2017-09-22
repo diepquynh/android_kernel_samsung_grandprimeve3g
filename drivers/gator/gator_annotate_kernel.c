@@ -47,7 +47,6 @@ static void kannotate_write_counter(const char *ptr, unsigned int size)
 	}
 }
 
-
 static void marshal_u16(char *buf, u16 val)
 {
 	buf[0] = val & 0xff;
@@ -71,6 +70,7 @@ void gator_annotate_channel(int channel, const char *str)
 	header[1] = STRING_ANNOTATION;
 	marshal_u32(header + 2, channel);
 	marshal_u16(header + 6, str_size);
+
 	kannotate_write(header, sizeof(header));
 	kannotate_write(str, str_size);
 }
@@ -94,7 +94,7 @@ void gator_annotate_channel_color(int channel, int color, const char *str)
 	marshal_u32(header + 8, color);
 
 // atrace_gator
-        if((channel >= 4000) && (channel < 4010))
+        if((channel >= 4000) && (channel < 4020))
         {
 	        kannotate_write_counter(header, sizeof(header));
 	        kannotate_write_counter(str, str_size - 4);

@@ -1249,3 +1249,9 @@ config VEXPRESS_SPC
 	depends on VEXPRESS_CONFIG
 	help
 	  Serial Power Controller driver for ARM Ltd. test chips.
+
+config MFD_SMUIC
+	bool "enable adapter to detect TA/USB"
+	default n
+	help
+	 Say Y to enable CONFIG_MFD_SMUIC

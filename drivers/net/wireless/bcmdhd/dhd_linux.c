@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux.c 561632 2015-06-05 13:09:58Z $
+ * $Id: dhd_linux.c 557250 2015-05-18 08:52:07Z $
  */
 
 #include <typedefs.h>
@@ -707,7 +707,7 @@ static int dhd_toe_set(dhd_info_t *dhd, int idx, uint32 toe_ol);
 #endif /* TOE */
 
 static int dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata,
-                             size_t pktlen, wl_event_msg_t *event_ptr, void **data_ptr);
+                             wl_event_msg_t *event_ptr, void **data_ptr);
 #if defined(SUPPORT_P2P_GO_PS)
 #ifdef PROP_TXSTATUS
 static int dhd_wakelock_waive(dhd_info_t *dhdinfo);
@@ -1991,6 +1991,13 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 	}
 #endif
 
+#ifdef CONFIG_ARCH_SCX35
+    if(skb->prev != NULL) {
+      skb->prev = NULL;
+	  printk("BRCM_DEBUG: Packet is wrong prev change to NULL, length=%d\n",PKTLEN(dhd->pub.osh, pktbuf));
+    }
+#endif
+
 	ret = dhd_sendpkt(&dhd->pub, ifidx, pktbuf);
 
 done:
@@ -2260,7 +2267,6 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 #else
 			skb->mac.raw,
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22) */
-			len > ETHER_TYPE_LEN ? len - ETHER_TYPE_LEN : 0,
 			&event,
 			&data);
 
@@ -2341,7 +2347,7 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 }
 
 void
-dhd_event(struct dhd_info *dhd, char *evpkt, uint evlen, int ifidx)
+dhd_event(struct dhd_info *dhd, char *evpkt, int evlen, int ifidx)
 {
 	/* Linux version has nothing to do */
 	return;
@@ -4773,11 +4779,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #ifdef AMPDU_VO_ENABLE
 	struct ampdu_tid_control tid;
 #endif
-#if defined(PROP_TXSTATUS)
-#if defined(CUSTOMER_HW4) && defined(USE_WFA_CERT_CONF)
-	uint32 proptx = 0;
-#endif /* CUSTOMER_HW4 && PROP_TXSTATUS */
-#endif /* PROP_TXSTATUS */
 #ifdef USE_WL_FRAMEBURST
 	uint32 frameburst = 1;
 #endif /* USE_WL_FRAMEBURST */
@@ -4981,9 +4982,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 #if defined(ROAM_ENABLE) || defined(DISABLE_BUILTIN_ROAM)
 #if defined(CUSTOMER_HW4) && defined(USE_WFA_CERT_CONF)
-	if (sec_get_param_wfa_cert(dhd, SET_PARAM_ROAMOFF, &roamvar) == BCME_OK) {
-		DHD_ERROR(("%s: read roam_off param =%d\n", __FUNCTION__, roamvar));
-	}
+	roamvar = sec_get_param(dhd, SET_PARAM_ROAMOFF);
 #endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF */
 	/* Disable built-in roaming to allowed ext supplicant to take care of roaming */
 	bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
@@ -5072,9 +5071,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif
 
 #if defined(CUSTOMER_HW4) && defined(USE_WFA_CERT_CONF)
-	if (sec_get_param_wfa_cert(dhd, SET_PARAM_BUS_TXGLOM_MODE, &glom) == BCME_OK) {
-		DHD_ERROR(("%s, read txglom param =%d\n", __FUNCTION__, glom));
-	}
+	glom = sec_get_param(dhd, SET_PARAM_BUS_TXGLOM_MODE);
 #endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF */
 	if (glom != DEFAULT_GLOM_VALUE) {
 		DHD_INFO(("%s set glom=0x%X\n", __FUNCTION__, glom));
@@ -5136,9 +5133,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* USE_WL_TXBF */
 #ifdef USE_WL_FRAMEBURST
 #if defined(CUSTOMER_HW4) && defined(USE_WFA_CERT_CONF)
-	 if (sec_get_param_wfa_cert(dhd, SET_PARAM_FRAMEBURST, &frameburst) == BCME_OK) {
-		DHD_ERROR(("%s, read frameburst param=%d\n", __FUNCTION__, frameburst));
-	 }
+	frameburst = sec_get_param(dhd, SET_PARAM_FRAMEBURST);
 #endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF */
 #ifdef DISABLE_WL_FRAMEBURST_SOFTAP
 	/* Disable Framebursting for SofAP */
@@ -5488,15 +5483,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 		FALSE) {
 		wlfc_enable = FALSE;
 	}
-
-#if defined(PROP_TXSTATUS)
-#if defined(CUSTOMER_HW4) && defined(USE_WFA_CERT_CONF)
-	if (sec_get_param_wfa_cert(dhd, SET_PARAM_PROPTX, &proptx) == BCME_OK) {
-		DHD_ERROR(("%s , read proptx param=%d\n", __FUNCTION__, proptx));
-		wlfc_enable = proptx;
-	}
-#endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF && PROP_TXSTATUS */
-#endif /* PROP_TXSTATUS */
 
 #ifndef DISABLE_11N
 	bcm_mkiovar("ampdu_hostreorder", (char *)&hostreorder, 4, iovbuf, sizeof(iovbuf));
@@ -6585,13 +6571,13 @@ dhd_get_wireless_stats(struct net_device *dev)
 #endif /* defined(WL_WIRELESS_EXT) */
 
 static int
-dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata, size_t pktlen,
+dhd_wl_host_event(dhd_info_t *dhd, int *ifidx, void *pktdata,
 	wl_event_msg_t *event, void **data)
 {
 	int bcmerror = 0;
 	ASSERT(dhd != NULL);
 
-	bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, pktlen, event, data);
+	bcmerror = wl_host_event(&dhd->pub, ifidx, pktdata, event, data);
 	if (bcmerror != BCME_OK)
 		return (bcmerror);
 

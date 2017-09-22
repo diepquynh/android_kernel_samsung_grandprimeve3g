@@ -20,13 +20,9 @@
 #include <linux/fs.h>
 #include <linux/workqueue.h>
 #include <linux/mfd/sm5701_core.h>
-#include <linux/of_gpio.h> // For handling GPIO
+
 // #include <linux/platform_data/leds-sm5701.h>
 
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G) || defined(CONFIG_MACH_COREPRIMEVE3G)
-#define FLASH_ENABLE_GPIO 232
-#define FLASH_SET_GPIO 233
-#endif
 
 enum sm5701_oper_mode {
         SUSPEND_MODE = 0,
@@ -243,6 +239,23 @@ void sm5701_set_ifled(int ifled_ma)
 }
 EXPORT_SYMBOL(sm5701_set_ifled);
 
+void sm5701_get_ifled(int *ifled_ma)
+{
+    struct i2c_client * client;
+    u8 data = 0;
+
+    client = leds_sm5701_client;
+
+    if( !client) return;
+
+    SM5701_reg_read(client, SM5701_FLEDCNTL3, &data);
+
+    pr_info("%s data = 0x%x\n",__func__,data);
+
+    *ifled_ma = (data & 0x1f);
+}
+EXPORT_SYMBOL(sm5701_get_ifled);
+
 #define IMLED_MAX   0x1F
 #define IMLED_MIN   0x0
 void sm5701_set_imled(int imled_ma)
@@ -271,6 +284,22 @@ void sm5701_set_imled(int imled_ma)
     
 }
 EXPORT_SYMBOL(sm5701_set_imled);
+
+void sm5701_get_imled(int *imled_ma)
+{
+    struct i2c_client * client;
+    u8 data = 0;
+
+    client = leds_sm5701_client;
+
+    if( !client) return;
+
+    SM5701_reg_read(client, SM5701_FLEDCNTL4, &data);
+    pr_info("%s data = 0x%x\n",__func__,data);
+
+    *imled_ma = (data & 0x1f);
+}
+EXPORT_SYMBOL(sm5701_get_imled);
 
 #define ENLOWBATT_SHIFT  7
 void sm5701_set_enlowbatt(int enlowbatt_enable)
@@ -529,22 +558,10 @@ static int sm5701_chip_init(struct SM5701_leds_data *chip)
 {
         int ret = 0;
 
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
         chip->br_movie = 0x13; //200mA
-#elif defined(CONFIG_MACH_COREPRIMEVE3G)
-        chip->br_movie = 0x0B; //120mA
-#else
-        chip->br_movie = 0x9; //100mA
-#endif
-        sm5701_set_imled(chip->br_movie);
+	sm5701_set_imled(chip->br_movie);
 
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
         chip->br_flash = 0x15; //1000mA
-#elif defined(CONFIG_MACH_COREPRIMEVE3G)
-        chip->br_flash = 0x15; //1000mA
-#else
-        chip->br_flash = 0x0C; //600mA
-#endif
         sm5701_set_ifled(chip->br_flash);
 
         //sm5701_dump_register();
@@ -622,26 +639,6 @@ static int leds_sm5701_probe(struct platform_device *pdev)
         err = sm5701_chip_init(chip);
         if (err < 0)
                 goto err_out;
-
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G) || defined(CONFIG_MACH_COREPRIMEVE3G)
-	// Below code purpose is DVS test. (GPIO IORA test)
-	// Before kernel_init() which checks GPIO init values, flash driver sets flash GPIO output from input(Default) by calling "gpio_direction_output()" function.
-	if (!gpio_is_valid(FLASH_ENABLE_GPIO)) // Flash EN
-	{
-		printk("FLASH_ENABLE_GPIO gpio pin error\n");
-		return 1;
-	}
-	gpio_request(FLASH_ENABLE_GPIO, "gpioFlashhigh");
-	gpio_direction_output(FLASH_ENABLE_GPIO, 0); // Set Flash Enable GPIO as Output
-
-	if (!gpio_is_valid(FLASH_SET_GPIO)) // Flash Set
-	{
-		printk("FLASH_SET_GPIO gpio pin error");
-		return 1;
-	}
-	gpio_request(FLASH_SET_GPIO, "gpioFlashlow");
-	gpio_direction_output(FLASH_SET_GPIO, 0); // Set Flash torch GPIO as Output
-#endif
 
 	// sm5701_dump_register();
 

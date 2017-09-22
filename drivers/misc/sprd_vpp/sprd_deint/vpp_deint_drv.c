@@ -86,7 +86,7 @@ static atomic_t deint_instance_cnt = ATOMIC_INIT(0);
 
 static unsigned long SPRD_VPP_PHYS = 0;
 static unsigned long SPRD_VPP_BASE = 0;
-static unsigned long sprd_vpp_range_size = 0;
+
 struct clock_name_map_t {
     unsigned long freq;
     char *name;
@@ -542,18 +542,14 @@ static int deint_release (struct inode *inode, struct file *filp)
 static int deint_map_to_register(struct file *fp, struct vm_area_struct *vm)
 {
     unsigned long pfn;
-    unsigned long map_size = 0;
+
     printk("@deint[%s] \n", __FUNCTION__);
 
     vm->vm_flags |= VM_IO | VM_RESERVED;
     vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
     pfn = SPRD_VPP_PHYS >> PAGE_SHIFT;
-    if((vm->vm_end-vm->vm_start) > sprd_vpp_range_size )
-		return -EAGAIN;
-	else
-		map_size = (vm->vm_end-vm->vm_start);
 
-    return remap_pfn_range(vm, vm->vm_start, pfn, map_size, vm->vm_page_prot) ? -EAGAIN : 0;
+    return remap_pfn_range(vm, vm->vm_start, pfn, vm->vm_end-vm->vm_start, vm->vm_page_prot) ? -EAGAIN : 0;
 }
 
 static int deint_map_to_physical_memory(struct file *fp, struct vm_area_struct *vm)
@@ -679,7 +675,7 @@ static int deint_parse_dt(struct device *dev)
     SPRD_VPP_BASE = (unsigned long)ioremap_nocache(res.start, resource_size(&res));
     if(!SPRD_VPP_BASE)
         BUG();
-    sprd_vpp_range_size = resource_size(&res);
+
     deint_hw_dev.irq = irq_of_parse_and_map(np, 0);
     deint_hw_dev.dev_np = np;
 

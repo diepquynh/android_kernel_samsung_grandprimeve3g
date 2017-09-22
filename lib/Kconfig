@@ -423,4 +423,13 @@ config OID_REGISTRY
 config UCS2_STRING
         tristate
 
+#
+# Enhanced show meminfo support is select'ed if needed
+#
+config E_SHOW_MEM
+	boolean "enhanced show mem"
+	default y
+	help
+	  Enable mem info show for ION, Mali, Zram, page_recorder and so on.
+
 endmenu

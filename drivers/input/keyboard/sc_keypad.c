@@ -34,6 +34,7 @@
 #include <linux/of_device.h>
 #include <linux/of_address.h>
 #include <linux/of_gpio.h>
+#include <linux/wakelock.h>
 
 #include <soc/sprd/globalregs.h>
 #include <soc/sprd/hardware.h>
@@ -45,6 +46,8 @@
 #include <soc/sprd/sci_glb_regs.h>
 
 #include <linux/input-hook.h>
+
+#include <asm/sec/sec_debug.h>
 
 #define DEBUG_KEYPAD	0
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
@@ -127,7 +130,7 @@ static unsigned long KPD_REG_BASE;
 #else
 static int PB_INT;
 #endif
-#if defined(CONFIG_SUPPORT_TWOKEY_RESET)
+#if defined(CONFIG_SUPPORT_SMART_RESET)
 #define EXT_RSTN_VOLUME_DOWN
 #ifdef EXT_RSTN_VOLUME_DOWN
 #ifndef CONFIG_OF
@@ -137,6 +140,9 @@ static int VOLUME_DOWN_INT; //EIC_KEY_RST_EXT_RSTN_ACTIVE, EIC+10
 #endif
 #endif
 #endif
+
+struct wake_lock keypad_wake_lock;
+
 #if defined(CONFIG_ARCH_SC8825)
 static __devinit void __keypad_enable(void)
 {
@@ -188,7 +194,6 @@ struct sci_keypad_t {
 };
 
 /* sys fs  */
-extern struct class *sec_class;
 struct device *key_dev,*powerkey_dev;
 EXPORT_SYMBOL(key_dev);
 EXPORT_SYMBOL(powerkey_dev);
@@ -343,6 +348,9 @@ static irqreturn_t sci_keypad_isr(int irq, void *dev_id)
 		col = KPD_INT0_COL(key_status);
 		row = KPD_INT0_ROW(key_status);
 		key = keycodes[MATRIX_SCAN_CODE(row, col, row_shift)];
+		if (key == KEY_HOMEPAGE)
+			/*When press homekey, don't make to enter ap sleep to handle key*/
+			wake_lock_timeout(&keypad_wake_lock, HZ * 1);
 
 #if PRINT_KEY_LOG
 		printk("%03dD\n", key);
@@ -366,6 +374,9 @@ static irqreturn_t sci_keypad_isr(int irq, void *dev_id)
 		col = KPD_INT1_COL(key_status);
 		row = KPD_INT1_ROW(key_status);
 		key = keycodes[MATRIX_SCAN_CODE(row, col, row_shift)];
+		if (key == KEY_HOMEPAGE)
+			/*When press homekey, don't make to enter ap sleep to handle key*/
+			wake_lock_timeout(&keypad_wake_lock, HZ * 1);
 
 #if PRINT_KEY_LOG
 		printk("%03dD\n", key);
@@ -389,6 +400,9 @@ static irqreturn_t sci_keypad_isr(int irq, void *dev_id)
 		col = KPD_INT2_COL(key_status);
 		row = KPD_INT2_ROW(key_status);
 		key = keycodes[MATRIX_SCAN_CODE(row, col, row_shift)];
+		if (key == KEY_HOMEPAGE)
+			/*When press homekey, don't make to enter ap sleep to handle key*/
+			wake_lock_timeout(&keypad_wake_lock, HZ * 1);
 
 #if PRINT_KEY_LOG
 		printk("%03d\n", key);
@@ -412,6 +426,9 @@ static irqreturn_t sci_keypad_isr(int irq, void *dev_id)
 		col = KPD_INT3_COL(key_status);
 		row = KPD_INT3_ROW(key_status);
 		key = keycodes[MATRIX_SCAN_CODE(row, col, row_shift)];
+		if (key == KEY_HOMEPAGE)
+			/*When press homekey, don't make to enter ap sleep to handle key*/
+			wake_lock_timeout(&keypad_wake_lock, HZ * 1);
 
 #if PRINT_KEY_LOG
 		printk("%03d\n", key);
@@ -463,6 +480,9 @@ static irqreturn_t sci_powerkey_isr(int irq, void *dev_id)
 		irq_set_irq_type(irq, IRQF_TRIGGER_HIGH);
 	} else {
 		/* Press : high level */
+		/*When press powerkey, don't make to enter ap sleep to handle key*/
+		wake_lock_timeout(&keypad_wake_lock, HZ * 1);
+
 #if PRINT_KEY_LOG
 		printk("Powerkey:%dD\n", key);
 #endif
@@ -872,6 +892,9 @@ static int sci_keypad_probe(struct platform_device *pdev)
 		goto out3;
 	}
 #endif
+
+	wake_lock_init(&keypad_wake_lock, WAKE_LOCK_SUSPEND,"sc-keypad-wakelock");
+
 	/* sys fs */
 	key_dev = device_create(sec_class, NULL, 0, "%s", "sec_key");
 	if(device_create_file(key_dev, &dev_attr_sec_key_pressed) < 0)
@@ -930,6 +953,9 @@ static int sci_keypad_remove(struct
 		kfree(pdata->keymap_data);
 		kfree(pdata);
 	}
+	
+	wake_lock_destroy(&keypad_wake_lock);
+
 	return 0;
 }
 

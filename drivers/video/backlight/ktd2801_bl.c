@@ -64,6 +64,7 @@ struct ktd2801_backlight_info {
 	int current_brightness;
 	int prev_tune_level;
 	int gpio_bl_ctrl;
+	int on_delay;
 };
 
 #define EW_DELAY (150)
@@ -201,7 +202,8 @@ static int ktd2801_backlight_update_status(struct backlight_device *bd)
 		bd->props.fb_blank != FB_BLANK_UNBLANK ||
 		!bl_info->enable)
 		brightness = 0;
-
+	if( brightness  && bl_info->on_delay>0)
+		mdelay(bl_info->on_delay);
 	ktd2801_backlight_set_brightness(bl_info, brightness);
 
 	return 0;
@@ -355,6 +357,10 @@ static int ktd2801_backlight_probe(struct platform_device *pdev)
 			bl_info->range[i].brightness = arr[i * 2];
 			bl_info->range[i].tune_level = arr[i * 2 + 1];
 		}
+		ret = of_property_read_u32(np,
+				"backlight-on-delay",&bl_info->on_delay);
+		if( ret <0 )
+			pr_info("%s - no backlight-on-delay\n",__func__);
 
 		pr_info("backlight device : %s\n", bl_info->name);
 		pr_info("[BRT_VALUE_OFF] brightness(%d), tune_level(%d)\n",
@@ -511,7 +517,7 @@ const struct dev_pm_ops ktd2801_backlight_pm_ops = {
 		ktd2801_backlight_runtime_resume, NULL)
 };
 
-static struct platform_driver ktd2801_backlight_driver = {
+static const struct platform_driver ktd2801_backlight_driver = {
 	.driver		= {
 		.name	= KTD2801_BL_NAME,
 		.owner	= THIS_MODULE,
@@ -525,7 +531,7 @@ static struct platform_driver ktd2801_backlight_driver = {
 	.shutdown       = ktd2801_backlight_shutdown,
 };
 
-static int __init ktd2801_backlight_init(void)
+static int ktd2801_backlight_init(void)
 {
 	return platform_driver_register(&ktd2801_backlight_driver);
 }

@@ -244,7 +244,7 @@ config MUIC_CABLE_DETECT
 
 config SPRD_SYSDUMP
         bool "Enable SPRD sysdump handler"
-        depends on ARM64
+        depends on ARCH_SC || ARM64
         help
           This option enables Spreadtrum sysdump which prepare debug info
 	  for u-boot to write into mmc storage after kernel panics.

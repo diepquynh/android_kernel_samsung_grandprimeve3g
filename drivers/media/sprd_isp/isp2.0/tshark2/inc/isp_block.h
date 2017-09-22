@@ -40,7 +40,7 @@ int32_t isp_k_cfg_pre_cdn_rgb(struct isp_io_param *param);
 int32_t isp_k_cfg_yuv_precdn(struct isp_io_param *param);
 int32_t isp_k_cfg_posterize(struct isp_io_param *param);
 int32_t isp_k_cfg_csc(struct isp_io_param *param);
-int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param);
+int32_t isp_k_cfg_yiq_aem(struct isp_io_param *param, struct isp_k_private *isp_private);
 int32_t isp_k_cfg_anti_flicker(struct isp_io_param *param, struct isp_k_private *isp_private);
 int32_t isp_k_cfg_yiq_afm(struct isp_io_param *param);
 int32_t isp_k_cfg_prefilter(struct isp_io_param *param);

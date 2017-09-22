@@ -22,7 +22,7 @@
 #define BLK_UID_LOW                     ( 1 )
 #define BLK_ADC_DETA                    ( 7 )
 #define BLK_CCCV_DETA                   ( 9 )
-
+#define BLK_TEMP_ADC_DETA		(9)
 #define BLK_FGU_DETA_ABC                ( 8 )
 #define BLK_FGU_DETA_D                  ( 9 )
 
@@ -70,11 +70,75 @@ int  sci_efuse_thermal_cal_get(int *cal)
 }
 EXPORT_SYMBOL_GPL(sci_efuse_thermal_cal_get);
 
+#ifdef CONFIG_ARCH_SCX20
+#define BLK_BINNING_DETA	13
+#define BINNING_CAL_BIT			(15)
+
+int sci_efuse_binning_result_get(u32 *p_binning_data)
+{
+	u32 data=__ddie_efuse_read(BLK_BINNING_DETA);
+	u32 data1 = data >> BINNING_CAL_BIT;
+	u32 binning = (data >> BINNING_CAL_BIT) & 0xF;
+	u32 binning1 = (data1 & 0xF);
+	if (binning ==0) {
+		*p_binning_data  = 0;
+		return -1;
+	}
+	*p_binning_data = binning ;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(sci_efuse_binning_result_get);
+#endif
+
+
+
+#define BASE_TEMP_ADC_P0				819	//1.0V
+#define BASE_TEMP_ADC_P1				82	//0.1V
+#define VOL_TEMP_P0					1000
+#define VOL_TEMP_P1					100
+#define ADC_DATA_OFFSET			128
+int sci_temp_efuse_calibration_get(unsigned int *p_cal_data)
+{
+#if defined(CONFIG_ADIE_SC2723) || defined(CONFIG_ADIE_SC2723S)
+	unsigned int deta = 0;
+	unsigned short adc_temp = 0;
+
+	/* verify the otp data of ememory written or not */
+	adc_temp = (__adie_efuse_read(0) & BIT(7));
+	if (adc_temp)
+		return 0;
+
+	deta = __adie_efuse_read_bits(BLK_TEMP_ADC_DETA * BLK_WIDTH_OTP_EMEMORY, 16);
+	pr_info("%s() get efuse block %u, deta: 0x%08x\n", __func__, BLK_TEMP_ADC_DETA, deta);
+
+	deta &= 0xFFFFFF; /* get BIT0 ~ BIT23) in block 7 */
+
+	if ((!deta) || (p_cal_data == NULL)) {
+		return 0;
+	}
+	//adc 0.1V
+	adc_temp = ((deta & 0x00FF) + BASE_TEMP_ADC_P1 - ADC_DATA_OFFSET) * 4;
+	pr_info("0.1V adc_temp =%d/0x%x\n",adc_temp,adc_temp);
+	p_cal_data[1] = (VOL_TEMP_P1) | (adc_temp << 16);
+
+	//adc 1.0V
+	adc_temp =(( (deta >> 8) & 0x00FF) + BASE_TEMP_ADC_P0 - ADC_DATA_OFFSET ) * 4;
+	pr_info("1.0V adc_temp =%d/0x%x\n",adc_temp,adc_temp);
+	p_cal_data[0] = (VOL_TEMP_P0) | (adc_temp << 16);
+
+	return 1;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL_GPL(sci_temp_efuse_calibration_get);
+
 #define BASE_ADC_P0				711	//3.6V
 #define BASE_ADC_P1				830	//4.2V
 #define VOL_P0					3600
 #define VOL_P1					4200
-#define ADC_DATA_OFFSET			128
+//#define ADC_DATA_OFFSET			128
 int sci_efuse_calibration_get(unsigned int *p_cal_data)
 {
 	unsigned int deta = 0;

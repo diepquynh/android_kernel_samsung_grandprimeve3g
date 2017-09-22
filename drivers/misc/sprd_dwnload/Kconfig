@@ -8,3 +8,9 @@ config SPRD_DOWNLOAD_POWER_CTL
 	default n
 	help
 	  If you say yes here you can use the marlin chip.
+config GNSS_DBG
+	tristate "GNSS_DBG"
+	default n
+	help
+	  DEBUG SYSTEM FOR MARLIN.
+	  If unsure, say N.

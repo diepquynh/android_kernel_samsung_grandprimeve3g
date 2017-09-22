@@ -20,10 +20,13 @@
 #include <linux/log2.h>
 #include <linux/pm_runtime.h>
 
-#ifdef CONFIG_BLOCK_SUPPORT_STLOG
 #include <linux/stlog.h>
-#else
-#define ST_LOG(fmt,...)
+
+#ifndef CONFIG_BLOCK_SUPPORT_STLOG
+#ifdef ST_LOG
+#undef ST_LOG
+#define ST_LOG(fmt,...) do { } while (0)
+#endif
 #endif
 
 #include "blk.h"

@@ -44,6 +44,8 @@ ifeq ($(CONFIG_KSM_ASSEMBLY_MEMCMP),y)
    lib-y	+= memcmpksm.o
 endif
 
+lib-$(CONFIG_ADAPTIVE_KSM) += pagecmp_ksm.o pagesum_ksm.o
+
 lib-$(CONFIG_ARCH_RPC)		+= ecard.o io-acorn.o floppydma.o
 lib-$(CONFIG_ARCH_SHARK)	+= io-shark.o
 

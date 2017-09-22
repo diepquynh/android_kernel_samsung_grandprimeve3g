@@ -78,18 +78,21 @@
 #define MASK_EIC_DBNC_CNT	(0xFFF)
 #define BITS_EIC_DBNC_CNT(_x_)	((_x) & 0xFFF)
 
-struct sci_gpio_chip {
+static struct sci_gpio_chip {
 	struct gpio_chip chip;
 
 	unsigned long base_addr;
 	uint32_t group_offset;
 	struct irq_domain *irq_domain;
 	int is_adi_gpio;
+	spinlock_t  gpio_lock;
 
 	uint32_t(*read_reg) (unsigned long addr);
 	void (*write_reg) (uint32_t value, unsigned long addr);
-	void (*set_bits) (uint32_t bits, unsigned long addr);
-	void (*clr_bits) (uint32_t bits, unsigned long addr);
+	void (*set_bits) (struct gpio_chip *chip, uint32_t bits,
+			  unsigned long addr);
+	void (*clr_bits) (struct gpio_chip *chip, uint32_t bits,
+			  unsigned long addr);
 };
 
 #define	to_sci_gpio(c)		container_of(c, struct sci_gpio_chip, chip)
@@ -105,14 +108,28 @@ static void d_write_reg(uint32_t value, unsigned long addr)
 	__raw_writel(value, (volatile void *)addr);
 }
 
-static void d_set_bits(uint32_t bits, unsigned long addr)
+static void d_set_bits(struct gpio_chip *chip, uint32_t bits,
+		       unsigned long addr)
 {
-	__raw_writel(__raw_readl((const volatile void *)addr) | bits, (volatile void *)addr);
+	unsigned long flags;
+	struct sci_gpio_chip *sci_gpio = to_sci_gpio(chip);
+
+	spin_lock_irqsave(&sci_gpio->gpio_lock, flags);
+	__raw_writel(__raw_readl((const volatile void *)addr) | bits,
+		     (volatile void *)addr);
+	spin_unlock_irqrestore(&sci_gpio->gpio_lock, flags);
 }
 
-static void d_clr_bits(uint32_t bits, unsigned long addr)
+static void d_clr_bits(struct gpio_chip *chip, uint32_t bits,
+		       unsigned long addr)
 {
-	__raw_writel(__raw_readl((const volatile void *)addr) & ~bits, (volatile void *)addr);
+	unsigned long flags;
+	struct sci_gpio_chip *sci_gpio = to_sci_gpio(chip);
+
+	spin_lock_irqsave(&sci_gpio->gpio_lock, flags);
+	__raw_writel(__raw_readl((const volatile void *)addr) & ~bits,
+		     (volatile void *)addr);
+	spin_unlock_irqrestore(&sci_gpio->gpio_lock, flags);
 }
 
 /* A-Die regs ops */
@@ -126,12 +143,14 @@ static void a_write_reg(uint32_t value, unsigned long addr)
 	sci_adi_raw_write(addr, value);
 }
 
-static void a_set_bits(uint32_t bits, unsigned long addr)
+static void a_set_bits(struct gpio_chip *chip, uint32_t bits,
+		       unsigned long addr)
 {
 	sci_adi_set(addr, bits);
 }
 
-static void a_clr_bits(uint32_t bits, unsigned long addr)
+static void a_clr_bits(struct gpio_chip *chip, uint32_t bits,
+		       unsigned long addr)
 {
 	sci_adi_clr(addr, bits);
 }
@@ -141,7 +160,8 @@ static int sci_gpio_read(struct gpio_chip *chip, uint32_t offset, uint32_t reg)
 	struct sci_gpio_chip *sci_gpio = to_sci_gpio(chip);
 	int group = offset / GPIO_GROUP_NR;
 	int bitof = offset & (GPIO_GROUP_NR - 1);
-	unsigned long addr = sci_gpio->base_addr + sci_gpio->group_offset * group + reg;
+	unsigned long addr = sci_gpio->base_addr +
+		sci_gpio->group_offset * group + reg;
 	int value = sci_gpio->read_reg(addr) & GPIO_GROUP_MASK;
 
 	return (value >> bitof) & 0x1;
@@ -153,12 +173,13 @@ static void sci_gpio_write(struct gpio_chip *chip, uint32_t offset,
 	struct sci_gpio_chip *sci_gpio = to_sci_gpio(chip);
 	int group = offset / GPIO_GROUP_NR;
 	int bitof = offset & (GPIO_GROUP_NR - 1);
-	unsigned long addr = sci_gpio->base_addr + sci_gpio->group_offset * group + reg;
+	unsigned long addr = sci_gpio->base_addr +
+		sci_gpio->group_offset * group + reg;
 
 	if (value) {
-		sci_gpio->set_bits(1 << bitof, addr);
+		sci_gpio->set_bits(chip, 1 << bitof, addr);
 	} else {
-		sci_gpio->clr_bits(1 << bitof, addr);
+		sci_gpio->clr_bits(chip, 1 << bitof, addr);
 	}
 }
 
@@ -672,6 +693,7 @@ static int eic_gpio_probe(struct platform_device *pdev)
 	ic = match_data->irq_chip;
 	ia = match_data->irqaction;
 
+	spin_lock_init(&sgc->gpio_lock);
 	if(match_data==&a_eic_match)
 		sgc->base_addr = ANA_EIC_BASE;
 	else

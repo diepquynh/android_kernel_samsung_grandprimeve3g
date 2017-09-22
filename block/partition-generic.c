@@ -17,11 +17,13 @@
 #include <linux/ctype.h>
 #include <linux/genhd.h>
 #include <linux/blktrace_api.h>
-
-#ifdef CONFIG_BLOCK_SUPPORT_STLOG
 #include <linux/stlog.h>
-#else
-#define ST_LOG(fmt,...)
+
+#ifndef CONFIG_BLOCK_SUPPORT_STLOG
+#ifdef ST_LOG
+#undef ST_LOG
+#define ST_LOG(fmt,...) do { } while (0)
+#endif
 #endif
 
 #include "partitions/check.h"

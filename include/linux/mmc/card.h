@@ -246,7 +246,7 @@ struct mmc_part {
 
 #ifdef MMC_CARD_ERROR_LOGGING
 struct mmc_card_error_log {
-	char	type[4];	// sbc, cmd, data, stop
+	char	type[4];	// sbc, cmd, data, stop, busy
 	int	err_type;
 	u32	status;
 	u64	first_issue_time;
@@ -320,12 +320,16 @@ struct mmc_card {
 
 	unsigned int		sd_bus_speed;	/* Bus Speed Mode set for the card */
 
+	struct device_attribute	bkops_attr;	/* for enable/disable bkops mode */
+	u8	bkops_enable;	/* bkops mode on/off */
+	spinlock_t	bkops_lock;	/* lock for bkops_enable field */
+
 	struct dentry		*debugfs_root;
 	struct mmc_part	part[MMC_NUM_PHY_PARTITION]; /* physical partitions */
 	unsigned int    nr_parts;
 #ifdef MMC_CARD_ERROR_LOGGING
 	struct device_attribute	error_count;
-	struct mmc_card_error_log err_log[8];
+	struct mmc_card_error_log err_log[10];
 #endif
 };
 

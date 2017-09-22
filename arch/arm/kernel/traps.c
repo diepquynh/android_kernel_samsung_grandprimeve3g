@@ -36,6 +36,8 @@
 #include <asm/system_misc.h>
 #include <asm/opcodes.h>
 
+#include <asm/sec/sec_debug.h>
+
 static const char *handler[]= {
 	"prefetch abort",
 	"data abort",
@@ -231,10 +233,6 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 #define S_ISA " ARM"
 #endif
 
-#ifdef CONFIG_SEC_DEBUG
-extern void sec_debug_backup_ctx(struct pt_regs*);
-extern unsigned int sec_debug_callstack_workaround;
-#endif
 static int __die(const char *str, int err, struct pt_regs *regs)
 {
 	struct task_struct *tsk = current;
@@ -251,10 +249,10 @@ static int __die(const char *str, int err, struct pt_regs *regs)
 
 	print_modules();
 	__show_regs(regs);
-#ifdef CONFIG_SEC_DEBUG
+
 	sec_debug_backup_ctx(regs);
-	sec_debug_callstack_workaround=0x12345678;
-#endif
+	sec_debug_callstack_workaround();
+
 	printk(KERN_EMERG "Process %.*s (pid: %d, stack limit = 0x%p)\n",
 		TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), end_of_stack(tsk));
 
@@ -826,12 +824,10 @@ void abort(void)
 }
 EXPORT_SYMBOL(abort);
 
-#if defined(CONFIG_SEC_DEBUG)
 void cp_abort(void *debug_info)
 {
 	panic("CP Crash : %s", debug_info);
 }
-#endif
 
 void __init trap_init(void)
 {

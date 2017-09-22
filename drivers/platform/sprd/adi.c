@@ -150,11 +150,13 @@ EXPORT_SYMBOL(sci_is_adi_vaddr);
 
 int sci_adi_p2v(unsigned long paddr, unsigned long *vaddr)
 {
+#ifndef CONFIG_SC_FPGA
 	if(paddr < ANA_PHYS_BASE || paddr > (ANA_PHYS_BASE + ANA_ADDR_SIZE)) {
 		return -1;
 	} else {
 		*vaddr = paddr - ANA_PHYS_BASE + ANA_VIRT_BASE;
 	}
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(sci_adi_p2v);
@@ -215,6 +217,7 @@ re_try:
 int sci_adi_read(unsigned long reg)
 {
 	int val = 0;
+#ifndef CONFIG_SC_FPGA
 	if (!__adi_addr_check(reg)) {
 		unsigned long flags;
 		int ret = 0;
@@ -227,6 +230,7 @@ int sci_adi_read(unsigned long reg)
 			BUG_ON(1);
 		}
 	}
+#endif
 	return val;
 }
 EXPORT_SYMBOL(sci_adi_read);
@@ -273,18 +277,21 @@ static inline int __adi_write(unsigned long reg, u16 val, u32 sync)
 
 int sci_adi_write_fast(unsigned long reg, u16 val, u32 sync)
 {
+#ifndef CONFIG_SC_FPGA
 	if (!__adi_addr_check(reg)) {
 		unsigned long flags;
 		__arch_default_lock(HWLOCK_ADI, &flags);
 		__adi_write(reg, val, sync);
 		__arch_default_unlock(HWLOCK_ADI, &flags);
 	}
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(sci_adi_write_fast);
 
 int sci_adi_write(unsigned long reg, u16 or_val, u16 clear_msk)
 {
+#ifndef CONFIG_SC_FPGA
 	if (!__adi_addr_check(reg)) {
 		unsigned long flags;
 		int ret = 0, val = 0;
@@ -296,6 +303,7 @@ int sci_adi_write(unsigned long reg, u16 or_val, u16 clear_msk)
 		if (ret)
 			BUG_ON(1);
 	}
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(sci_adi_write);
@@ -344,6 +352,7 @@ static void __init __adi_init(void)
 
 int __init sci_adi_init(void)
 {
+#ifndef CONFIG_SC_FPGA
 	struct resource res;
 	struct device_node *np;
 
@@ -374,7 +383,7 @@ int __init sci_adi_init(void)
 	sci_glb_set((unsigned long )REG_AON_APB_APB_EB0, BIT_ADI_EB);
 #endif
 	__adi_init();
-
+#endif
 	return 0;
 }
 

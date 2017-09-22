@@ -103,6 +103,7 @@ static uint32_t                    g_isp_irq = 0x12345678;/*for share irq handle
 struct isp_node {
 	uint32_t	isp_irq_val;
 	uint32_t	dcam_irq_val;
+	uint64_t	system_time;
 };
 
 struct isp_queue {
@@ -126,7 +127,7 @@ struct isp_device_t
 	uint32_t buf_len;
 	struct isp_queue queue;
 	struct semaphore sem_isr;/*for interrupts*/
-	struct semaphore sem_isp;/*for the isp device, protect the isp hardware; protect  only  one caller use the oi*/ 
+	struct semaphore sem_isp;/*for the isp device, protect the isp hardware; protect  only  one caller use the oi*/
 				/*controll/read/write functions*/
 	struct clk* s_isp_clk_mm_i;
 	struct clk              *s_isp_clk;
@@ -243,6 +244,16 @@ static struct platform_driver isp_driver = {
 	},
 };
 
+static int32_t _isp_get_systemtime(struct timeval *tv)
+{
+	struct timespec ts;
+
+	ktime_get_ts(&ts);
+	tv->tv_sec = ts.tv_sec;
+	tv->tv_usec = ts.tv_nsec / NSEC_PER_USEC;
+	return 0;
+}
+
 static int32_t _isp_module_eb(void)
 {
 	int32_t ret = 0;
@@ -290,7 +301,7 @@ static int32_t _isp_module_rst(void)
 		ISP_OWR(ISP_AXI_MASTER_STOP, BIT_0);
 
 		reg_value=ISP_READL(ISP_AXI_MASTER);
-		while((0x00==(reg_value&0x08)) && (time_out_cnt < ISP_TIME_OUT_MAX))
+		while((0x00==(reg_value&0x08)) && (time_out_cnt < (ISP_TIME_OUT_MAX * 2)))
 		{
 			time_out_cnt++;
 			udelay(50);
@@ -316,7 +327,7 @@ static int32_t _isp_module_rst(void)
 
 	ISP_PRINT("_isp_module_rst: exit\n");
 
-	return ret;
+	return 0;
 }
 
 void* _isp_cap_eof(struct dcam_frame* frame, void* u_data)
@@ -555,7 +566,7 @@ static int32_t _isp_set_clk(enum isp_clk_sel clk_sel)
 	ISP_CHECK_ZERO(g_isp_dev_ptr);
 
 #ifdef CONFIG_SC_FPGA
-	return 0; 
+	return 0;
 #endif
 
 	switch (clk_sel) {
@@ -831,6 +842,13 @@ static int32_t _isp_kernel_open (struct inode *node, struct file *pf)
 	g_isp_dev_ptr->reg_base_addr = (unsigned long)ISP_BASE_ADDR;
 	g_isp_dev_ptr->size = ISP_REG_MAX_SIZE;
 
+	ret = _isp_queue_init(&(g_isp_dev_ptr->queue));
+	if (unlikely(0 != ret)) {
+		ISP_PRINT("isp_k: queue init error\n");
+		ret = -EIO;
+		goto ISP_K_OPEN_ERROR_EXIT;
+	}
+
 	ret = _isp_module_eb();
 	if (unlikely(0 != ret)) {
 		ISP_PRINT("isp_k: enable isp module error\n");
@@ -842,6 +860,7 @@ static int32_t _isp_kernel_open (struct inode *node, struct file *pf)
 	if (unlikely(0 != ret)) {
 		ISP_PRINT("isp_k: reset isp module error \n");
 		ret = -EIO;
+		_isp_module_dis();
 		goto ISP_K_OPEN_ERROR_EXIT;
 	}
 
@@ -850,13 +869,18 @@ static int32_t _isp_kernel_open (struct inode *node, struct file *pf)
 	if (unlikely(0 != ret)) {
 		ISP_PRINT("isp_k: create isp_kernel_thread fail \n");
 		ret = -EIO;
+		_isp_module_dis();
 		goto ISP_K_OPEN_ERROR_EXIT;
 	}
-	ret = _isp_registerirq();
-	ISP_PRINT ("isp_k: base addr = 0x%ld, size = %d \n", g_isp_dev_ptr->reg_base_addr,
-			g_isp_dev_ptr->size);
 
-	ret = _isp_queue_init(&(g_isp_dev_ptr->queue));
+	ret = _isp_registerirq();
+	if (unlikely(0 != ret)) {
+		ISP_PRINT("isp_k: reg irq fail \n");
+		ret = -EIO;
+		_isp_stop_kernel_thread(g_isp_dev_ptr);
+		_isp_module_dis();
+		goto ISP_K_OPEN_ERROR_EXIT;
+	}
 
 	ISP_PRINT ("isp_k: open end \n");
 	return ret;
@@ -867,7 +891,8 @@ ISP_K_OPEN_ERROR_EXIT:
 		ISP_PRINT ("isp_k: get control error \n");
 		ret = -EFAULT;
 	}
-	return ret;
+	ISP_PRINT ("isp_k: open error \n");
+	return -EIO;
 }
 
 static irqreturn_t _isp_irq_root(int irq, void *dev_id)
@@ -879,6 +904,7 @@ static irqreturn_t _isp_irq_root(int irq, void *dev_id)
 	unsigned long flag = 0;
 	int32_t     i = 0;
 	struct isp_node    node = { 0 };
+	struct timeval system_time;
 
 	status = ISP_REG_RD(ISP_INT_STATUS);
 	irq_line = status&ISP_IRQ_HW_MASK;
@@ -906,8 +932,11 @@ static irqreturn_t _isp_irq_root(int irq, void *dev_id)
 		break;
 	}
 
-	node.isp_irq_val = irq_status;
 	ISP_WRITEL(ISP_INT_CLEAR, irq_status);
+	node.isp_irq_val = irq_status;
+	_isp_get_systemtime(&system_time);
+	system_time.tv_sec = system_time.tv_sec * 1000000;
+	node.system_time = (uint64_t)(system_time.tv_sec+system_time.tv_usec);
 	ret = _isp_queue_write((struct isp_queue *)&g_isp_dev_ptr->queue, (struct isp_node*)&node);
 	spin_unlock_irqrestore(&isp_spin_lock, flag);
 	up(&g_isp_dev_ptr->sem_isr);
@@ -920,6 +949,7 @@ void _dcam_isp_root(void)
 	int32_t	ret = 0;
 	unsigned long flag = 0;
 	struct isp_node node = { 0 };
+	struct timeval system_time;
 
 	//ISP_PRINT ("ISP_RAW: isp_k: _dcam_isp_root %d \n", s_dcam_int_eb);
 
@@ -933,6 +963,9 @@ void _dcam_isp_root(void)
 		#endif
 
 		//ISP_PRINT("isp_k: dcam sof irq :0x%x\n", node.dcam_irq_val);
+		_isp_get_systemtime(&system_time);
+		system_time.tv_sec = system_time.tv_sec * 1000000;
+		node.system_time = (uint64_t)(system_time.tv_sec+system_time.tv_usec);
 		ret = _isp_queue_write((struct isp_queue *)&g_isp_dev_ptr->queue, (struct isp_node*)&node);
 		spin_unlock_irqrestore(&isp_spin_lock, flag);
 		up(&g_isp_dev_ptr->sem_isr);
@@ -1056,6 +1089,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 		isp_irq = isp_node.isp_irq_val;
 		dcam_irq = isp_node.dcam_irq_val;
 		irq_param.irq_val = dcam_irq|isp_irq;
+		irq_param.system_time = isp_node.system_time;
 		ret = copy_to_user ((void*) param, (void*)&irq_param, sizeof(struct isp_irq_param));
 		if ( 0 != ret) {
 
@@ -1166,10 +1200,10 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 			unsigned long flag = 0;
 			struct isp_node node = { 0 };
 			ret = _isp_en_irq(0);//dis-enable the interrupt
-			ISP_PRINT("isp_k: ioctl  stop start !\n");
 			spin_lock_irqsave(&isp_spin_lock,flag);
 			node.dcam_irq_val = ISP_INT_STOP;
 			ret = _isp_queue_write((struct isp_queue *)&g_isp_dev_ptr->queue, (struct isp_node*)&node);
+			ISP_PRINT("isp_k: ioctl stop:%d\n", ret);
 			spin_unlock_irqrestore(&isp_spin_lock, flag);
 			up(&g_isp_dev_ptr->sem_isr);
 			}

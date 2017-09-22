@@ -220,5 +220,10 @@ config THERMAL_BOARD_SENSOR
 	depends on THERMAL
 	help
 	  the board thermal system
+config THERMAL_ALONE_DDIE
+       bool "thermal alone ddie"
+	depends on THERMAL
+	help
+	  the thermal system
 
 endif

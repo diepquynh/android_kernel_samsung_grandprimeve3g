@@ -28,9 +28,17 @@ config GEN_PANEL_MDNIE
 
 config GEN_PANEL_TUNING
 	bool "generic panel tuning support"
+	depends on !SAMSUNG_PRODUCT_SHIP
 	default n
 	help
 		generic panel tuning in runtime support
+
+config GEN_PANEL_DYNAMIC_AID
+	bool "generic panel dynamic aid support"
+	depends on GEN_PANEL_OCTA
+	default n
+	help
+		generic panel dynamic aid support
 
 config GEN_PANEL_SMART_MTP
 	bool "generic panel smart mtp support"

@@ -1029,7 +1029,7 @@ static int saudio_snd_notify_modem_clear(struct snd_saudio *saudio)
 	struct saudio_dev_ctrl *dev_ctrl = NULL;
 	int result = 0;
 	dev_ctrl = &saudio->dev_ctrl[0];
-	printk(KERN_INFO "saudio.c:saudio_snd_notify_mdem_clear in");
+	printk(KERN_INFO "saudio.c:saudio_snd_notify_mdem_clear in\n");
 	result =
 	    saudio_send_common_cmd(dev_ctrl->dst, dev_ctrl->monitor_channel,
 				   SAUDIO_CMD_RESET, 0, -1);
@@ -1045,7 +1045,7 @@ static int saudio_snd_notify_modem_clear(struct snd_saudio *saudio)
 		    printk(KERN_ERR "saudio_wait_monitor_cmd error %d\n", result);
 	    }
 	}
-	printk(KERN_INFO "saudio.c:saudio_snd_notify_mdem_clear out");
+	printk(KERN_INFO "saudio.c:saudio_snd_notify_mdem_clear out\n");
 	return result;
 }
 
@@ -1353,7 +1353,7 @@ static int snd_saudio_probe(struct platform_device *devptr)
 		}
 		return -1;
 	}
-	printk("saudio:workqueue create ok");
+	printk("saudio:workqueue create ok\n");
 	INIT_WORK(&saudio->card_free_work, saudio_work_card_free_handler);
 
 	platform_set_drvdata(devptr, saudio);

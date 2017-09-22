@@ -252,6 +252,13 @@ config BT_BCM4343
 
 	  Say Y here to compile support for Broadcomm's BCM4343 LPM driver
 	  into the kernel or say M to compile it as module.
+
+config BT_LPM_ENABLE
+	bool "Enable BCM4330 LPM feature"
+	depends on BT_BCM4343
+	help
+	  Say Y here to compile support for Broadcomm's BCM4343 LPM feature
+
 config SPRD_2331
 	tristate "SPRD 2331 LPM driver"
 	help

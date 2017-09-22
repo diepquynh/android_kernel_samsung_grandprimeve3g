@@ -304,6 +304,7 @@ static struct wake_lock headset_button_wakelock;
 static struct semaphore headset_sem;
 
 
+static int detect_err_count  = 0;
 static struct sprd_headset headset = {
         .sdev = {
                 .name = "h2w",
@@ -355,7 +356,8 @@ static int sprd_headset_power_init(struct device *dev)
 		sprd_hts_power.vbo = 0;
 		goto __err2;
 	}
-	regulator_enable(sprd_hts_power.vbo);
+	if (sprd_hts_power.vbo != NULL)
+		regulator_enable(sprd_hts_power.vbo);
 	goto __ok;
 __err2:
 	regulator_put(sprd_hts_power.vcom_buf);
@@ -958,9 +960,8 @@ no_mic_retry:
                 PRINT_INFO("software debance (ana_sts0_confirm)!!!(headset_type_detect)\n");
                 return HEADSET_TYPE_ERR;
         }
-
         head_insert_2 = headset_reg_get_bit(HEADMIC_DETECT_REG(ANA_STS0), AUDIO_HEAD_INSERT_2);
-        if((0 != head_insert_2) && (adc_mic_average < pdata->adc_threshold_3pole_detect)) {
+        if((adc_mic_average < pdata->adc_threshold_3pole_detect)) {
                 if(0 != no_mic_retry_count) {
                         PRINT_INFO("no_mic_retry\n");
                         no_mic_retry_count--;
@@ -1138,7 +1139,8 @@ static void headset_detect_work_func(struct work_struct *work)
                 headset_adc_en(0);
                 switch (headset_type) {
                 case HEADSET_TYPE_ERR:
-                        PRINT_INFO("headset_type = %d (HEADSET_TYPE_ERR)\n", headset_type);
+                        detect_err_count ++;
+                        PRINT_INFO("headset_type = %d detect_err_count %d (HEADSET_TYPE_ERR)\n", headset_type,detect_err_count);
                         goto out;
                 case HEADSET_NORTH_AMERICA:
                         PRINT_INFO("headset_type = %d (HEADSET_NORTH_AMERICA)\n", headset_type);
@@ -1163,7 +1165,7 @@ static void headset_detect_work_func(struct work_struct *work)
                         PRINT_INFO("headset_type = %d (HEADSET_UNKNOWN)\n", headset_type);
                         break;
                 }
-
+                detect_err_count = 0;
                 if(headset_type == HEADSET_NO_MIC)
                         ht->headphone = 1;
                 else
@@ -1282,8 +1284,9 @@ out:
 			headmicbias_power_on(&ht->this_pdev, 0);
                 }
         }
-
-        headset_irq_detect_enable(1, ht->irq_detect);
+        if(detect_err_count < 500) {
+            headset_irq_detect_enable(1, ht->irq_detect);
+        }
         //wake_unlock(&headset_detect_wakelock);
         up(&headset_sem);
         return;

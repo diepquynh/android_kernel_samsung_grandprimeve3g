@@ -21,6 +21,15 @@
 
 struct mdnie_lite;
 
+enum MDNIE_MODE {
+	MDNIE_DYNAMIC,	/*AMOLED cinema*/
+	MDNIE_STANDARD,	/*AMOLED photo*/
+	MDNIE_NATURAL,	/*Basic*/
+	MDNIE_MOVIE,
+	MDNIE_AUTO,		/*Adaptive display*/
+	MDNIE_MODE_MAX,
+};
+
 enum MDNIE_SCENARIO {
 	MDNIE_UI_MODE		= 0,
 	MDNIE_VIDEO_MODE	= 1,
@@ -33,15 +42,18 @@ enum MDNIE_SCENARIO {
 	MDNIE_BROWSER_MODE	= 8,
 	MDNIE_EBOOK_MODE	= 9,
 	MDNIE_EMAIL_MODE	= 10,
-	MDNIE_OUTDOOR_MODE	= 11,
 	MDNIE_SCENARIO_MAX,
 };
 
 enum ACCESSIBILITY {
-	ACCESSIBILITY_OFF,
-	NEGATIVE,
-	COLOR_BLIND,
-	ACCESSIBILITY_MAX
+	ACCESSIBILITY_OFF	= 0,
+	NEGATIVE		= 1,
+	COLOR_BLIND		= 2,
+	SCREEN_CURTAIN		= 3,
+	GRAY_SCALE		= 4,
+	GRAY_SCALE_NEGATIVE	= 5,
+	OUTDOOR			= 6,
+	ACCESSIBILITY_MAX,
 };
 
 static const char * const cabc_modes[] = {
@@ -61,6 +73,7 @@ struct mdnie_config {
 	bool tuning;
 	bool negative;
 	int accessibility;
+	int mode;
 	int scenario;
 	int auto_brightness;
 	int cabc;
@@ -73,6 +86,21 @@ struct mdnie_ops {
 	int (*set_cabc)(struct mdnie_config *);
 };
 
+struct linear_equation {
+	int num;
+	int den;
+	int con;
+} __packed;
+
+struct mdnie_cal {
+	unsigned char reg;
+	unsigned char offset[3];
+	unsigned char tune[9][3];
+	unsigned int *modes;
+	unsigned int nr_mode;
+	struct linear_equation line[4];
+};
+
 struct mdnie_lite {
 	struct device *dev;
 	struct class *class;
@@ -82,7 +110,9 @@ struct mdnie_lite {
 	struct mutex ops_lock;
 	const struct mdnie_ops *ops;
 	unsigned int scr[NUMBER_OF_SCR_DATA];
+	struct mdnie_cal cal;
 };
+
 #ifdef CONFIG_GEN_PANEL_MDNIE
 extern int gen_panel_attach_mdnie(struct mdnie_lite *,
 		const struct mdnie_ops *);

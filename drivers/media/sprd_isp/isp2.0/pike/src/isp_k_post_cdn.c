@@ -83,8 +83,7 @@ static int32_t isp_k_post_cdn_block(struct isp_io_param *param)
 		REG_WR(ISP_POSTCDN_R_DISTW0 + i * 4, val);
 	}
 
-//pike has no this register 
-	//REG_WR(ISP_POSTCDN_START_ROW_MOD4, post_cdn_info.start_row_mod4 & 0x3);
+	REG_WR(ISP_POSTCDN_START_ROW_MOD4, post_cdn_info.start_row_mod4 & 0x3);
 
 	if (post_cdn_info.downsample_bypass) {
 		REG_OWR(ISP_POSTCDN_COMMON_CTRL, BIT_1);

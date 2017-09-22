@@ -30,8 +30,8 @@ enum {
 
 enum {
 	BRT_VALUE_OFF = 0,
-	BRT_VALUE_DIM,
 	BRT_VALUE_MIN,
+	BRT_VALUE_DIM,
 	BRT_VALUE_DEF,
 	BRT_VALUE_MAX,
 	BRT_VALUE_HBM,
@@ -44,18 +44,19 @@ struct brt_value {
 };
 
 struct gen_panel_backlight_ops {
-	int (*set_brightness)(void *prvinfo, int level);
-	int (*get_brightness)(void *prvinfo);
+	int (*set_brightness)(void *, int level);
+	int (*get_brightness)(void *);
 };
 
 struct gen_panel_backlight_info {
-	void *prvinfo;  /* backlight specific data */
 	const char *name;
 	bool enable;
+	void *bd_data;
 	struct mutex ops_lock;
 	const struct gen_panel_backlight_ops *ops;
 	struct brt_value range[MAX_BRT_VALUE_IDX];
-	struct brt_value outdoor_value;
+	unsigned int *maptbl;
+	unsigned int nr_maptbl;
 	unsigned int auto_brightness;
 	int current_brightness;
 	int prev_tune_level;
@@ -109,9 +110,8 @@ static inline int
 gen_panel_backlight_is_on(struct backlight_device *bd)
 {
 #ifdef CONFIG_PM_RUNTIME
-	if (bd && bd->dev.parent){
+	if (bd && bd->dev.parent)
 		return atomic_read(&bd->dev.parent->power.usage_count);
-	}
 #endif
 	return 0;
 }
@@ -120,6 +120,7 @@ static inline int
 gen_panel_backlight_onoff(struct backlight_device *bd, int on)
 {
 	int ret;
+
 	if (on)
 		ret = gen_panel_backlight_enable(bd);
 	else
@@ -132,17 +133,22 @@ gen_panel_backlight_onoff(struct backlight_device *bd, int on)
 	return ret;
 }
 
+#ifdef CONFIG_GEN_PANEL_BACKLIGHT
+extern int gen_panel_backlight_device_register(struct backlight_device *,
+		void *, const struct gen_panel_backlight_ops *);
+extern void gen_panel_backlight_device_unregister(struct backlight_device *);
 extern bool gen_panel_match_backlight(struct backlight_device *, const char *);
-extern struct backlight_device *gen_panel_backlight_device_register(
-		struct platform_device *pdev, void *prvinfo,
-		const struct gen_panel_backlight_ops *ops,
-		int *def_lev);
-extern void gen_panel_backlight_device_unregister(struct backlight_device *bd);
-extern int gen_panel_backlight_remove(struct platform_device *pdev);
-extern void gen_panel_backlight_shutdown(struct platform_device *pdev);
-#if defined(CONFIG_PM_RUNTIME) || defined(CONFIG_PM_SLEEP)
-extern int gen_panel_backlight_runtime_suspend(struct device *dev);
-extern int gen_panel_backlight_runtime_resume(struct device *dev);
-
+#else
+static inline int gen_panel_backlight_device_register(struct backlight_device *bd,
+		void *bd_data, const struct gen_panel_backlight_ops *ops)
+{
+	return 0;
+}
+static inline void gen_panel_backlight_device_unregister(struct backlight_device *bd) {}
+static inline bool gen_panel_match_backlight(struct backlight_device *bd,
+		const char *match)
+{
+	return false;
+}
 #endif
 #endif	/* _GEN_PANEL_BACKLIGHT_H */

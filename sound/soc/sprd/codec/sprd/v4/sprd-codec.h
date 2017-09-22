@@ -130,6 +130,10 @@
 #define HEADMICBIAS_EN		(7)
 #define HEADMIC_SLEEP_EN	(6)
 
+#ifdef CONFIG_SPRD_INTERNAL_HEADSET_SUPPORT
+#define GND_PLGPD_EN        (4)
+#endif
+
 /* ANA_PMU1 */
 #define BG_EN			(15)
 #define BG_IBIAS_EN		(14)
@@ -249,6 +253,8 @@
 #define EAR_EN			    (5)
 #define AOL_EN			    (4)
 #define AOR_EN			    (3)
+#define CLASS_D_SPD_MASK	(0x3)
+#define CLASS_D_SPD			(10)
 
 /* ANA_CDC3 */
 #define CG_REF_EN       (15)

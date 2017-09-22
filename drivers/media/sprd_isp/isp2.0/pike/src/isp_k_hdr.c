@@ -19,7 +19,7 @@
 static int32_t isp_k_hdr_block(struct isp_io_param *param)
 {
 	int32_t ret = 0;
-	uint32_t i = 0, index = 0, addr = 0, val = 0;
+	uint32_t val = 0;
 	struct isp_dev_hdr_info hdr_info;
 
 	ret = copy_from_user((void *)&hdr_info, param->property_param, sizeof(hdr_info));

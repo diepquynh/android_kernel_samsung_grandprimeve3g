@@ -22,9 +22,7 @@
 #include <soc/sprd/sprd_debug.h>
 #endif
 
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 #include "internals.h"
 
@@ -149,18 +147,15 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 #ifdef CONFIG_SPRD_DEBUG
 		sprd_debug_irq_log(irq, (void *)action->handler, 1);
 #endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 		sec_debug_irq_log(irq, (void *)action->handler, 1);
-#endif
+
 		trace_irq_handler_entry(irq, action);
 		res = action->handler(irq, action->dev_id);
 		trace_irq_handler_exit(irq, action, res);
 #ifdef CONFIG_SPRD_DEBUG
 		sprd_debug_irq_log(irq, (void *)action->handler, 2);
 #endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 		sec_debug_irq_log(irq, (void *)action->handler, 2);
-#endif
 
 		if (WARN_ONCE(!irqs_disabled(),"irq %u handler %pF enabled interrupts\n",
 			      irq, action->handler))

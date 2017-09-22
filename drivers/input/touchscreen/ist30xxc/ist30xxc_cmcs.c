@@ -28,11 +28,7 @@
 #include "ist30xxc_cmcs.h"
 
 #if IST30XX_INTERNAL_CMCS_BIN
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-#include "ist30xxc_cmcs_bin_coreprimeve3g.h"
-#else
 #include "ist30xxc_cmcs_bin.h"
-#endif
 #endif
 
 #define TSP_CH_UNUSED			(0)
@@ -363,6 +359,8 @@ int ist30xx_apply_cmcs_slope(struct ist30xx_data *data, CMCS_BUF *cmcs_buf)
 	s16 *pspec_max = (s16 *)cmcs_buf->spec_max;
 	s16 *pslope0 = (s16 *)cmcs_buf->slope0;
 	s16 *pslope1 = (s16 *)cmcs_buf->slope1;
+	s16 slope_x = 0;
+	s16 slope_y = 0;
 
 	memset(cmcs_buf->slope0, 0, tsp->node->len * sizeof(s16));
 	memset(cmcs_buf->slope1, 0, tsp->node->len * sizeof(s16));
@@ -435,38 +433,73 @@ int ist30xx_apply_cmcs_slope(struct ist30xx_data *data, CMCS_BUF *cmcs_buf)
 		printk("\n");
 	}
 #endif
-
-	tsp_verb("# Apply slope0_x\n");
-	for (i = 0; i < height; i++) {
-		for (j = 0; j < width - 1; j++) {
-			idx1 = (i * tsp->ch_num.rx) + j;
+	if (data->pdata->octa_hw) {
+		tsp_verb("# Apply slope\n");
+		for (i = 0; i < height; i++) {
+			for (j = 0; j < width; j++) {
+				idx1 = (i * tsp->ch_num.rx) + j;
 			idx2 = idx1 + 1;
-
-			pslope0[idx1] = (presult[idx2] - presult[idx1]);
-			pslope0[idx1] +=
-				(((pspec_min[idx1] + pspec_max[idx1]) / 2) -
-				((pspec_min[idx2] + pspec_max[idx2]) / 2));
-		}
-	}
-
-	tsp_verb("# Apply slope1_y\n");
-	for (i = 0; i < height - 1; i++) {
-		for (j = 0; j < width; j++) {
-			idx1 = (i * tsp->ch_num.rx) + j;
+			if (j == (width - 1)) {
+				slope_x = 0;
+			} else {
+				slope_x = 100 - ((presult[idx1] * 100) / presult[idx2]);
+				if (slope_x < 0)
+					slope_x *= -1;
+			}
 			idx2 = idx1 + tsp->ch_num.rx;
-
-			pslope1[idx1] = (presult[idx2] - presult[idx1]);
-			pslope1[idx1] +=
-				(((pspec_min[idx1] + pspec_max[idx1]) / 2) -
-				((pspec_min[idx2] + pspec_max[idx2]) / 2));
+			if (i == (height - 1)) {
+				slope_y = 0;
+			}else {
+				slope_y = 100 - ((presult[idx1] * 100) / presult[idx2]);
+				if (slope_y < 0)
+					slope_y *= -1;
+			}
+			if (slope_x > slope_y) {
+				pslope0[idx1] = (s16)slope_x;
+				pslope1[idx1] = (s16)slope_x;
+			}else {
+				pslope0[idx1] = (s16)slope_y;
+				pslope1[idx1] = (s16)slope_y;
+			}
+			}
+		}
+		tsp_verb("# Apply slope_gtx\n");
+		for (i = 0; i < tsp->gtx.num; i++) {
+			if (tsp->gtx.ch_num[i] > height) {
+				for (j = 0; j < width; j++) {
+					idx1 = (tsp->gtx.ch_num[i] * tsp->ch_num.rx) + j;
+				idx2 = idx1 + 1;
+				if (j == (width - 1)) {
+					slope_x = 0;
+				} else {
+					slope_x = 100 - ((presult[idx1] * 100) / presult[idx2]);
+					if (slope_x < 0)
+						slope_x *= -1;
+				}
+				idx2 = idx1 + tsp->ch_num.rx;
+				if (i == (tsp->gtx.num - 1)) {
+					slope_y = 0;
+				} else {
+					slope_y = 100 - ((presult[idx1] * 100) / presult[idx2]);
+					if (slope_y < 0)
+						slope_y *= -1;
+				}
+				if (slope_x > slope_y) {
+					pslope0[idx1] = (s16)slope_x;
+					pslope1[idx1] = (s16)slope_x;
+				} else {
+					pslope0[idx1] = (s16)slope_y;
+					pslope1[idx1] = (s16)slope_y;
+				}
+				}
+			}
 		}
 	}
-
-	tsp_verb("# Apply slope0_gtx_x\n");
-	for (i = 0; i < tsp->gtx.num; i++) {
-		if (tsp->gtx.ch_num[i] > height) {
+	else {
+		tsp_verb("# Apply slope0_x\n");
+		for (i = 0; i < height; i++) {
 			for (j = 0; j < width - 1; j++) {
-				idx1 = (tsp->gtx.ch_num[i] * tsp->ch_num.rx) + j;
+				idx1 = (i * tsp->ch_num.rx) + j;
 				idx2 = idx1 + 1;
 
 				pslope0[idx1] = (presult[idx2] - presult[idx1]);
@@ -475,13 +508,11 @@ int ist30xx_apply_cmcs_slope(struct ist30xx_data *data, CMCS_BUF *cmcs_buf)
 					((pspec_min[idx2] + pspec_max[idx2]) / 2));
 			}
 		}
-	}
 
-	tsp_verb("# Apply slope1_gtx_y\n");
-	for (i = 0; i < (tsp->gtx.num - 1); i++) {
-		if (tsp->gtx.ch_num[i] > height) {
+		tsp_verb("# Apply slope1_y\n");
+		for (i = 0; i < height - 1; i++) {
 			for (j = 0; j < width; j++) {
-				idx1 = (tsp->gtx.ch_num[i] * tsp->ch_num.rx) + j;
+				idx1 = (i * tsp->ch_num.rx) + j;
 				idx2 = idx1 + tsp->ch_num.rx;
 
 				pslope1[idx1] = (presult[idx2] - presult[idx1]);
@@ -490,8 +521,37 @@ int ist30xx_apply_cmcs_slope(struct ist30xx_data *data, CMCS_BUF *cmcs_buf)
 					((pspec_min[idx2] + pspec_max[idx2]) / 2));
 			}
 		}
-	}
 
+		tsp_verb("# Apply slope0_gtx_x\n");
+		for (i = 0; i < tsp->gtx.num; i++) {
+			if (tsp->gtx.ch_num[i] > height) {
+				for (j = 0; j < width - 1; j++) {
+					idx1 = (tsp->gtx.ch_num[i] * tsp->ch_num.rx) + j;
+					idx2 = idx1 + 1;
+
+					pslope0[idx1] = (presult[idx2] - presult[idx1]);
+					pslope0[idx1] +=
+						(((pspec_min[idx1] + pspec_max[idx1]) / 2) -
+						((pspec_min[idx2] + pspec_max[idx2]) / 2));
+				}
+			}
+		}
+
+		tsp_verb("# Apply slope1_gtx_y\n");
+		for (i = 0; i < (tsp->gtx.num - 1); i++) {
+			if (tsp->gtx.ch_num[i] > height) {
+				for (j = 0; j < width; j++) {
+					idx1 = (tsp->gtx.ch_num[i] * tsp->ch_num.rx) + j;
+					idx2 = idx1 + tsp->ch_num.rx;
+
+					pslope1[idx1] = (presult[idx2] - presult[idx1]);
+					pslope1[idx1] +=
+						(((pspec_min[idx1] + pspec_max[idx1]) / 2) -
+						((pspec_min[idx2] + pspec_max[idx2]) / 2));
+				}
+			}
+		}
+	}
 #if CMCS_PARSING_DEBUG
 	tsp_info("# slope0_x\n");
 	for (i = 0; i < height; i++) {
@@ -599,6 +659,11 @@ int ist30xx_cmcs_test(struct ist30xx_data *data, const u8 *buf, int size)
 	u32 chksum = 0;
 	u32 *buf32;
 	TSP_INFO *tsp = &data->tsp_info;
+
+	if (buf == NULL) {
+		tsp_err("%s: buf is null\n", __func__);
+		return -1;
+	}
 
 	tsp_info("*** CM/CS test ***\n");
 

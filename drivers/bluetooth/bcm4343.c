@@ -34,10 +34,8 @@
 #include <linux/of_gpio.h>
 #include <linux/of.h>
 
-#define BT_LPM_ENABLE
-
 static struct rfkill *bt_rfkill;
-#ifdef BT_LPM_ENABLE
+#ifdef CONFIG_BT_LPM_ENABLE
 static int bt_wake_state = -1;
 #endif
 
@@ -75,7 +73,7 @@ static int bcm4343_bt_rfkill_set_power(void *data, bool blocked)
 	if (!blocked) {
 		pr_info("[BT] Bluetooth Power On.\n");
 
-#ifndef BT_LPM_ENABLE
+#ifndef CONFIG_BT_LPM_ENABLE
 		gpio_set_value(bt_gpio.bt_wake, 1);
 #endif
 		gpio_set_value(bt_gpio.bt_en, 1);
@@ -95,7 +93,7 @@ static const struct rfkill_ops bcm4343_bt_rfkill_ops = {
 	.set_block = bcm4343_bt_rfkill_set_power,
 };
 
-#ifdef BT_LPM_ENABLE
+#ifdef CONFIG_BT_LPM_ENABLE
 static void set_wake_locked(int wake)
 {
 	if (wake)
@@ -207,7 +205,7 @@ static int bcm_bt_lpm_init(struct platform_device *pdev)
 static int bcm4343_bluetooth_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-#ifdef BT_LPM_ENABLE
+#ifdef CONFIG_BT_LPM_ENABLE
 	int ret;
 #endif
 	pr_info("[BT] bcm4343_bluetooth_probe.\n");
@@ -288,7 +286,7 @@ static int bcm4343_bluetooth_probe(struct platform_device *pdev)
 
 	rfkill_set_sw_state(bt_rfkill, true);
 
-#ifdef BT_LPM_ENABLE
+#ifdef CONFIG_BT_LPM_ENABLE
 	ret = bcm_bt_lpm_init(pdev);
 	if (ret) {
 		rfkill_unregister(bt_rfkill);

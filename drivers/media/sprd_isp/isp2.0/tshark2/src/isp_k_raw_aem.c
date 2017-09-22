@@ -39,11 +39,7 @@ static int32_t isp_k_raw_aem_block(struct isp_io_param *param)
 	}
 	REG_MWR(ISP_AEM_BLK_SIZE, 0x7C0000, 0);
 
-	val = (aem_info.mode & 0x01) << 1;
-	if(0 != val) {
-		printk("isp_k_raw_aem_block: mode error, 0x%x\n", val);
-	}
-	REG_MWR(ISP_AEM_PARAM, BIT_1, 0);
+	REG_MWR(ISP_AEM_PARAM, BIT_1, aem_info.mode << 1);
 
 	return ret;
 }
@@ -60,6 +56,22 @@ static int32_t isp_k_raw_aem_bypass(struct isp_io_param *param)
 	}
 
 	REG_MWR(ISP_AEM_PARAM, BIT_0, bypass);
+
+	return ret;
+}
+
+static int32_t isp_k_raw_aem_mode(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t mode = 0;
+
+	ret = copy_from_user((void *)&mode, param->property_param, sizeof(mode));
+	if (0 != ret) {
+		printk("isp_k_raw_aem_mode: copy error, ret=0x%x\n", (uint32_t)ret);
+		return -1;
+	}
+
+	REG_MWR(ISP_AEM_PARAM, BIT_1, mode << 1);
 
 	return ret;
 }
@@ -212,6 +224,9 @@ int32_t isp_k_cfg_raw_aem(struct isp_io_param *param,
 		break;
 	case ISP_PRO_RAW_AEM_BYPASS:
 		ret = isp_k_raw_aem_bypass(param);
+		break;
+	case ISP_PRO_RAW_AEM_MODE:
+		ret = isp_k_raw_aem_mode(param);
 		break;
 	case ISP_PRO_RAW_AEM_STATISTICS:
 		ret = isp_k_raw_aem_statistics(param, isp_private);

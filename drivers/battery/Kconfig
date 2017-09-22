@@ -366,6 +366,15 @@ config CHARGER_SM5414
 	 This driver source code implemented
 	 all functions for SMB5414 charger.
 
+config CHARGER_RT9532
+	tristate "RT9532 charger driver"
+	default n
+	help
+	 Say Y to include support
+	 for RT9532 charger driver.
+	 This driver source code implemented
+	 all functions for RT9532 charger.
+
 # IF PMIC
 
 config CHARGER_MAX77693

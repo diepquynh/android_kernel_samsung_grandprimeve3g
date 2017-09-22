@@ -37,7 +37,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-
+#include <soc/sprd/sci_glb_regs.h>
 #define IRQ_WAKEUP 	0
 
 #define UART_NR_MAX			CONFIG_SERIAL_SPRD_UART_NR
@@ -345,7 +345,12 @@ static irqreturn_t serial_sprd_interrupt_chars(int irq, void *dev_id)
 
 	int_status = serial_in(port, ARM_UART_STS2);
 
-	serial_out(port, ARM_UART_ICLR, 0xffffffff);
+	if(int_status & UART_STS_TIMEOUT) {
+           serial_out(port, ARM_UART_ICLR, UART_STS_TIMEOUT);
+    }
+    else {
+           serial_out(port, ARM_UART_ICLR, 0xffffdfff);
+    }
 
 	if (int_status &
 	    (UART_STS_RX_FIFO_FULL | UART_STS_BREAK_DETECT |
@@ -402,35 +407,8 @@ static int serial_sprd_startup(struct uart_port *port)
 {
 	int ret = 0;
 	unsigned int ien, ctrl1;
-	int rx_count = 130;
-	int tx_count = 130;
-
-	/* FIXME: don't know who change u0cts pin in 88 */
-	serial_sprd_pin_config();
-
-	/* set fifo water mark,tx_int_mark=8,rx_int_mark=1 */
-#if 0				/* ? */
-	serial_out(port, ARM_UART_CTL2, 0x801);
-#endif
 
 	serial_out(port, ARM_UART_CTL2, ((SP_TX_FIFO << 8) | SP_RX_FIFO));
-	/* clear rx fifo */
-	while (serial_in(port, ARM_UART_STS1) & 0x00ff) {
-		serial_in(port, ARM_UART_RXD);
-		if(!(rx_count)){
-			printk("serial_sprd_startup rx\n");
-			return -EIO;
-		}
-		rx_count --;
-	}
-	/* clear tx fifo */
-	while (serial_in(port, ARM_UART_STS1) & 0xff00){
-		if(!(tx_count)){
-			printk("serial_sprd_startup tx\n");
-			return -EIO;
-		}
-		tx_count --;
-	}
 	/* clear interrupt */
 	serial_out(port, ARM_UART_IEN, 0x00);
 	serial_out(port, ARM_UART_ICLR, 0xffffffff);
@@ -473,10 +451,21 @@ static int serial_sprd_startup(struct uart_port *port)
 	return 0;
 }
 
+static void serial_sprd_reset(struct uart_port *port)
+{
+	unsigned long value = 0;
+
+	writel_relaxed((BIT_UART0_SOFT_RST<<(port->line)), REG_AP_APB_APB_RST);
+
+	value = readl_relaxed( REG_AP_APB_APB_RST);
+	value &= ~(BIT_UART0_SOFT_RST<<(port->line));
+	writel_relaxed(value, REG_AP_APB_APB_RST);
+}
+
+
 static void serial_sprd_shutdown(struct uart_port *port)
 {
-	serial_out(port, ARM_UART_IEN, 0x0);
-	serial_out(port, ARM_UART_ICLR, 0xffffffff);
+	serial_sprd_reset(port);
 	free_irq(port->irq, port);
 }
 
@@ -491,9 +480,9 @@ static void serial_sprd_set_termios(struct uart_port *port,
 	baud = uart_get_baud_rate(port, termios, old, 1200, 3000000);
 
 #ifdef CONFIG_SPRD_2331
-	//printk("marlin sprd_dt serial_sprd_set_termios baud %d\n", baud);
-	if(baud == 3000000)
-		baud = 3250000; // add this case, becaulse UART support 325000 baud rate
+        printk("marlin sprd_dt serial_sprd_set_termios baud %d\n", baud);
+        if(baud == 3000000)
+            baud = 3250000; // add this case, becaulse UART support 325000 baud rate
 #endif
 
 	quot = (unsigned int)((port->uartclk + baud / 2) / baud);
@@ -654,12 +643,14 @@ static ssize_t serial_sprd_config_reg_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_BT_LPM_ENABLE
 extern void bcm_bt_lpm_exit_lpm_locked(struct uart_port *uport);
 static void serial_sprd_wake_peer(struct uart_port *port)
 {
 	if (port->line == BT_UART_PORT)
 		bcm_bt_lpm_exit_lpm_locked(port);
 }
+#endif
 
 static DEVICE_ATTR(uart_conf, S_IRWXU | S_IRWXG, serial_sprd_config_reg_show,
 	serial_sprd_config_reg_store);
@@ -681,7 +672,9 @@ static struct uart_ops serial_sprd_ops = {
 	.request_port = serial_sprd_request_port,
 	.config_port = serial_sprd_config_port,
 	.verify_port = serial_sprd_verify_port,
+#ifdef CONFIG_BT_LPM_ENABLE
 	.wake_peer	= serial_sprd_wake_peer,
+#endif
 };
 static struct uart_port *serial_sprd_ports[UART_NR_MAX] = { 0 };
 
@@ -697,13 +690,14 @@ static struct {
 
 static int clk_startup(struct platform_device *pdev)
 {
-#ifndef CONFIG_64BIT
 	struct clk *clk;
 	struct clk *clk_parent;
 	char clk_name[10];
 	int ret;
 	int clksrc;
+	#ifndef CONFIG_64BIT
 	struct serial_data plat_local_data;
+	#endif
 
 	sprintf(clk_name, "clk_uart%d", pdev->id);
 	clk = clk_get(NULL, clk_name);
@@ -713,8 +707,12 @@ static int clk_startup(struct platform_device *pdev)
 		return -1;
 	}
 
+	#ifndef CONFIG_64BIT
 	plat_local_data = *(struct serial_data *)(pdev->dev.platform_data);
 	clksrc = plat_local_data.clk;
+	#else
+	clksrc = serial_sprd_ports[pdev->id]->uartclk;
+	#endif
 
 	if (clksrc == 48000000) {
 		clk_parent = clk_get(NULL, "clk_48m");
@@ -735,17 +733,18 @@ static int clk_startup(struct platform_device *pdev)
 	if (ret) {
 		printk("clock[%s]: clk_enable() failed!\n", clk_name);
 	}
-#endif
+
 	return 0;
 }
 
 static int serial_sprd_setup_port(struct platform_device *pdev,
 				  struct resource *mem, struct resource *irq)
 {
+	int ret;
 #ifndef CONFIG_64BIT
 	struct serial_data plat_local_data;
-	struct device_node *np = pdev->dev.of_node;
 #endif
+	struct device_node *np = pdev->dev.of_node;
 	struct uart_port *up;
 	struct uart_sprd_debug * private_data ;
 	up = kzalloc(sizeof(*up), GFP_KERNEL);
@@ -764,8 +763,13 @@ static int serial_sprd_setup_port(struct platform_device *pdev,
 	plat_local_data = *(struct serial_data *)(pdev->dev.platform_data);
 	up->uartclk = plat_local_data.clk;
 #else
-	up->uartclk = 26 * 1000 * 1000;
+	ret = of_property_read_u32(np, "sprdclk", &up->uartclk);
+	if (ret) {
+		dev_err(&pdev->dev, "fail to get sprdclk\n");
+		up->uartclk = 26000000;
+	}
 #endif
+
 
 	up->irq = irq->start;
 	up->fifosize = 128;

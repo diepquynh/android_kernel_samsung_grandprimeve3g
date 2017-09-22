@@ -632,6 +632,11 @@ static int sprd_spi_dma_rx_chn_req(struct sprd_spi_devdata *spi_chip)
 {
 	struct sprd_spi_dev_info *dev_info_p;
 
+        if(spi_chip == NULL){
+          //  pr_debug("sprd_spi_dma_rx_chn_req: spi_chip is NULL!\n");
+            return -1;
+        }
+
 	dev_info_p = spi_chip->dev_info;
 	if (spi_chip && dev_info_p->enable_dma && spi_chip->dma_rx_dev_id) {
 		if (spi_chip->dma_rx_chn == 0) {

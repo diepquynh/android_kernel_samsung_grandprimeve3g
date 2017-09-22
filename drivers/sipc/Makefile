@@ -14,3 +14,5 @@ obj-$(CONFIG_SIPC_SETH)	+= seth.o
 obj-$(CONFIG_SIPC_SPOOL)	+= spool.o
 
 obj-$(CONFIG_SIPC_STTY)	+= stty.o
+
+obj-$(CONFIG_SIPC_DUAL_SIM_PLUG) += dual_sim_plug.o

@@ -41,6 +41,8 @@
 #include <asm/stacktrace.h>
 #include <asm/mach/time.h>
 
+#include <asm/sec/sec_log.h>
+
 #ifdef CONFIG_CC_STACKPROTECTOR
 #include <linux/stackprotector.h>
 unsigned long __stack_chk_guard __read_mostly;
@@ -379,24 +381,18 @@ static void show_extra_register_data(struct pt_regs *regs, int nbytes)
 	set_fs(fs);
 }
 
-#ifdef CONFIG_SEC_DEBUG
-void sec_debug_panic_message(int en);
-#endif
 void __show_regs(struct pt_regs *regs)
 {
 	unsigned long flags;
 	char buf[64];
 
 	show_regs_print_info(KERN_DEFAULT);
-#ifdef CONFIG_SEC_DEBUG
 	sec_debug_panic_message(0);
-#endif
 
 	print_symbol("PC is at %s\n", instruction_pointer(regs));
 	print_symbol("LR is at %s\n", regs->ARM_lr);
-#ifdef CONFIG_SEC_DEBUG
+
 	sec_debug_panic_message(1);
-#endif
 	printk("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n"
 	       "sp : %08lx  ip : %08lx  fp : %08lx\n",
 		regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr,

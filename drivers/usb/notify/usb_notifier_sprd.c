@@ -184,6 +184,9 @@ static struct otg_notify dwc3_otg_notify = {
 	.is_wakelock = 1,
 	.auto_drive_vbus = 1,
 	.booting_delay_sec = 16,
+#ifndef CONFIG_USB_HOST_NOTIFY
+	.unsupport_host = 1,
+#endif
 };
 int sm_booster_enable(bool enable)
 {
@@ -270,7 +273,7 @@ static int usb_notifier_probe(struct platform_device *pdev)
 			sizeof(struct usb_notifier_platform_data), GFP_KERNEL);
 		if (!pdata) {
 			dev_err(&pdev->dev, "Failed to allocate memory\n");
-			ret = -ENOMEM;
+			return -ENOMEM;
 		}
 		ret = of_usb_notifier_dt(&pdev->dev, pdata);
 		if (ret < 0) {

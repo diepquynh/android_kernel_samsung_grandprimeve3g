@@ -1445,16 +1445,16 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 #endif /* MIMO_ANTENNA_SETTING */
 
 #ifdef USE_WFA_CERT_CONF
-int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
+int sec_get_param(dhd_pub_t *dhd, int mode)
 {
 	struct file *fp = NULL;
 	char *filepath = NULL;
-	int val = 0;
+	int val, ret = 0;
 
 	if (!dhd || (mode < SET_PARAM_BUS_TXGLOM_MODE) ||
 		(mode >= PARAM_LAST_VALUE)) {
 		DHD_ERROR(("[WIFI_SEC] %s: invalid argument\n", __FUNCTION__));
-		return BCME_ERROR;
+		return -EINVAL;
 	}
 
 	switch (mode) {
@@ -1474,34 +1474,53 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 			filepath = "/data/.txbf.info";
 			break;
 #endif /* USE_WL_TXBF */
-#ifdef PROP_TXSTATUS
-		case SET_PARAM_PROPTX:
-			filepath = "/data/.proptx.info";
-			break;
-#endif /* PROP_TXSTATUS */
 		default:
-			DHD_ERROR(("[WIFI_SEC] %s: File to find file name for index=%d\n",
-				__FUNCTION__, mode));
-			return BCME_ERROR;
+			return -EINVAL;
 	}
 
 	fp = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(fp) || (fp == NULL)) {
-		DHD_ERROR(("[WIFI_SEC] %s: File open failed, file path=%s\n",
-			__FUNCTION__, filepath));
-		return BCME_ERROR;
+		ret = -EIO;
 	} else {
-		if (kernel_read(fp, fp->f_pos, (char *)&val, 4) < 0) {
-			filp_close(fp, NULL);
-			/* File operation is failed so we will return error code */
-			DHD_ERROR(("[WIFI_SEC] %s: read failed, file path=%s\n",
-				__FUNCTION__, filepath));
-			return BCME_ERROR;
-		}
+		ret = kernel_read(fp, fp->f_pos, (char *)&val, 4);
 		filp_close(fp, NULL);
 	}
 
+	if (ret < 0) {
+		/* File operation is failed so we will return default value */
+		switch (mode) {
+			case SET_PARAM_BUS_TXGLOM_MODE:
+				val = CUSTOM_GLOM_SETTING;
+				break;
+			case SET_PARAM_ROAMOFF:
+#ifdef ROAM_ENABLE
+				val = 0;
+#elif defined(DISABLE_BUILTIN_ROAM)
+				val = 1;
+#else
+				val = 0;
+#endif /* ROAM_ENABLE */
+				break;
+#ifdef USE_WL_FRAMEBURST
+			case SET_PARAM_FRAMEBURST:
+				val = 1;
+				break;
+#endif /* USE_WL_FRAMEBURST */
+#ifdef USE_WL_TXBF
+			case SET_PARAM_TXBF:
+				val = 1;
+				break;
+#endif /* USE_WL_TXBF */
+		}
+
+		DHD_INFO(("[WIFI_SEC] %s: File open failed, file path=%s,"
+			" default value=%d\n",
+			__FUNCTION__, filepath, val));
+		return val;
+	}
+
 	val = bcm_atoi((char *)&val);
+	DHD_INFO(("[WIFI_SEC] %s: %s = %d\n", __FUNCTION__, filepath, val));
 
 	switch (mode) {
 		case SET_PARAM_ROAMOFF:
@@ -1511,20 +1530,11 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 #ifdef USE_WL_TXBF
 		case SET_PARAM_TXBF:
 #endif /* USE_WL_TXBF */
-#ifdef PROP_TXSTATUS
-		case SET_PARAM_PROPTX:
-#endif /* PROP_TXSTATUS */
-		if (val < 0 || val > 1) {
-			DHD_ERROR(("[WIFI_SEC] %s: value[%d] is out of range\n",
-				__FUNCTION__, *read_val));
-			return BCME_ERROR;
-		}
+			val = val ? 1 : 0;
 			break;
-		default:
-			return BCME_ERROR;
 	}
-	*read_val = (uint)val;
-	return BCME_OK;
+
+	return val;
 }
 #endif /* USE_WFA_CERT_CONF */
 #ifdef WRITE_WLANINFO

@@ -1,7 +1,17 @@
-/*
- *  linux/fs/proc/proc_avc.c
+/* linux/fs/proc/proc_avc.c
  *
+ * Copyright (C) 2015 Samsung Electronics Co, Ltd.
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  */
+
 
 #include <linux/types.h>
 #include <linux/errno.h>
@@ -13,12 +23,13 @@
 #include <linux/syslog.h>
 #include <linux/bootmem.h>
 #include <linux/export.h>
+#include <linux/slab.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
-#ifdef CONFIG_SEC_DEBUG
-#include "../../../include/soc/sprd/sec_debug.h"
-#endif
+
+#include <asm/sec/sec_debug.h>
+
 #define LOG_MAGIC 0x4d474f4c	/* "LOGM" */
 
 static unsigned *sec_avc_log_ptr;
@@ -31,8 +42,8 @@ int __init sec_avc_log_init(void)
 	unsigned *sec_avc_log_mag;
 
 	sec_avc_log_size = size + 8;
-	sec_avc_log_mag = alloc_bootmem(sec_avc_log_size);
-	pr_info("allocating %u bytes at %p (%llu physical) for avc log\n",
+	sec_avc_log_mag = kzalloc(sec_avc_log_size, GFP_NOWAIT);
+	pr_info("allocating %u bytes at %p (%lu physical) for avc log\n",
 		sec_avc_log_size, sec_avc_log_mag, __pa(sec_avc_log_buf));
 
 	sec_avc_log_ptr = sec_avc_log_mag + 4;
@@ -106,7 +117,7 @@ static ssize_t sec_avc_log_write(struct file *file,
 		pr_info("%s\n", page);
 		/* print avc_log to sec_avc_log_buf */
 		sec_avc_log("%s", page);
-	} 
+	}
 	ret = count;
 out:
 	free_page((unsigned long)page);

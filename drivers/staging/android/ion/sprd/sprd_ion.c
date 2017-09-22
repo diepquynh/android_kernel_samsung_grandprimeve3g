@@ -967,17 +967,45 @@ static struct platform_driver ion_driver = {
 	}
 };
 
+#ifdef CONFIG_E_SHOW_MEM
+static int ion_e_show_mem_handler(struct notifier_block *nb,
+				unsigned long val, void *data)
+{
+	int i;
+	enum e_show_mem_type type = (enum e_show_mem_type)val;
+
+	printk("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+	printk("Enhanced Mem-info :ION\n");
+	for (i = 0; i < num_heaps; i++) {
+		if ((E_SHOW_MEM_BASIC != type)
+			|| (ION_HEAP_TYPE_SYSTEM == heaps[i]->type))
+		ion_debug_heap_show_printk(heaps[i], type);
+	}
+	return 0;
+}
+
+static struct notifier_block ion_e_show_mem_notifier = {
+	.notifier_call = ion_e_show_mem_handler,
+};
+#endif
+
 static int __init ion_init(void)
 {
 	int result;
 	result= platform_driver_register(&ion_driver);
 	pr_info("%s,result:%d\n",__FUNCTION__,result);
+#ifdef CONFIG_E_SHOW_MEM
+	register_e_show_mem_notifier(&ion_e_show_mem_notifier);
+#endif
 	return result;
 }
 
 static void __exit ion_exit(void)
 {
 	platform_driver_unregister(&ion_driver);
+#ifdef CONFIG_E_SHOW_MEM
+	unregister_e_show_mem_notifier(&ion_e_show_mem_notifier);
+#endif
 }
 
 module_init(ion_init);

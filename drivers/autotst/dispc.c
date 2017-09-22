@@ -20,13 +20,32 @@
 #include <soc/sprd/globalregs.h>
 #include <soc/sprd/irqs.h>
 #include <soc/sprd/sci.h>
-#include <soc/sprd/sci_glb_regs.h>
+//#include <soc/sprd/sci_glb_regs.h>
 
 //#include <mach/pinmap.h>
 
 #include "dispc_reg.h"
 #include "lcd_dummy.h"
 #include "dispc.h"
+
+/*7720 config */
+#if ((defined CONFIG_ARCH_SCX35) && (defined CONFIG_ARCH_SCX30G))
+
+#if (defined CONFIG_ARCH_SCX20)
+#include "7720_pinmap_gpio.h"
+#else
+#include "pinmap_gpio.h"
+#endif
+//#elif ((!defined CONFIG_MACH_SCX35_DT) && (defined CONFIG_ARCH_SCX30G2) && (defined CONFIG_ARCH_SCX35) && (defined CONFIG_ARCH_SCX30G))
+//#include "8730_pinmap_gpio.h"
+#else
+#define NO_GPIOTEST_FUNC
+#endif
+
+#ifdef CONFIG_REGULATOR_SC2723
+#define BIT_LDO_SD_PD BIT_LDO_SDIO_PD
+#endif
+//#include "pinmap_gpio.h"
 
 #define pr_debug printk
 
@@ -50,7 +69,7 @@
 
 #define DISPC_EMC_EN_PARENT ("clk_aon_apb")
 
-#ifdef CONFIG_FB_SCX30G
+#if ((defined CONFIG_FB_SCX30G)||(defined CONFIG_FB_SCX35L))
 #define DISPC_PLL_CLK				("clk_dispc0")
 #define DISPC_DBI_CLK				("clk_dispc0_dbi")
 #define DISPC_DPI_CLK				("clk_dispc0_dpi")
@@ -92,6 +111,8 @@ static struct panel_spec *autotst_panel = NULL;
 static uint32_t g_patten_table[PATTEN_COLOR_COUNT] =
 	{0xffff0000, 0xff00ff00, 0xff0000ff, 0xffffff00, 0xff00ffff, 0xffff00ff, 0xffffffff};
 
+unsigned long sprd_adi_base;
+
 #if 0 /*designed for RGB, not used for SHARKL*/
 int autotst_dispc_pin_ctrl(int type)
 {
@@ -128,6 +149,43 @@ int autotst_dispc_pin_ctrl(int type)
 	return 0;
 }
 #endif
+
+int autotst_pin_ctrl(int type, int gpio_num, int gpio_pull)
+{
+	static int pin_table;
+	int i;
+	u32 func;
+	u32 mask;
+#ifndef NO_GPIOTEST_FUNC
+
+	u32 regs = REG_PIN_U0TXD;
+	/*add the support 2723 Baseband */
+	mask = BIT_LDO_SD_PD | BIT_LDO_SIM0_PD | BIT_LDO_SIM1_PD | BIT_LDO_SIM2_PD | BIT_LDO_CAMA_PD |\
+        BIT_LDO_CAMD_PD | BIT_LDO_CAMIO_PD | BIT_LDO_CAMMOT_PD;
+	ANA_REG_BIC(ANA_REG_GLB_LDO_PD_CTRL, mask);
+
+	for (i = 0; i < ARRAY_SIZE(pinmap_gpio); ++i) {
+		if( gpio_num == pinmap_gpio[i].num){
+			regs = pinmap_gpio[i].reg;
+			pin_table = pinmap_get(regs);
+			break;
+		}
+	}
+
+	if (type == DISPC_PIN_FUNC3){
+		func = BITS_PIN_DS(1) | BITS_PIN_AF(DISPC_PIN_FUNC3) | BIT_PIN_SLP_AP | gpio_pull;
+	}else {
+		pr_err("The function hasn't been implemented yet\n");
+	}
+
+	if (type == DISPC_PIN_FUNC0){
+		pinmap_set(regs, pin_table);
+	}else{
+		pinmap_set(regs, func);
+	}
+#endif
+	return 0;
+}
 
 /**********************************************/
 /*                      MCU PANEL CONFIG                                */

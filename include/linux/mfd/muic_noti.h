@@ -34,16 +34,26 @@ enum {
     MUIC_CABLE_TYPE_INVALID, // Un-initialized
 
     MUIC_CABLE_TYPE_OTG_WITH_VBUS,
+    MUIC_CABLE_TYPE_UNKNOWN_WITH_VBUS,
 };
 
+#ifdef CONFIG_MFD_SM5504
 extern int unregister_muic_notifier(struct notifier_block *nb);
 extern int register_muic_notifier(struct notifier_block *nb);
+#else
+#define register_muic_notifier register_adapter_notifier
+#define unregister_muic_notifier unregister_adapter_notifier
+extern int unregister_adapter_notifier(struct notifier_block *nb);
+extern int register_adapter_notifier(struct notifier_block *nb);
+#endif
 
+#define MUIC_CHG_ATTACH_NOTI		0x0006
+#define MUIC_CHG_DETACH_NOTI		0x0005
 #define MUIC_OTG_DETACH_NOTI		0x0004
 #define MUIC_OTG_ATTACH_NOTI		0x0003
-#define MUIC_VBUS_NOTI				0x0002
+#define MUIC_VBUS_NOTI			0x0002
 #define MUIC_USB_ATTACH_NOTI		0x0001
-#define MUIC_USB_DETACH_NOTI 		0x0000
+#define MUIC_USB_DETACH_NOTI		0x0000
 
 struct muic_notifier_param {
 	uint32_t vbus_status;

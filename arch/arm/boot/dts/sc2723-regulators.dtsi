@@ -82,6 +82,7 @@
 			regulator-name = "vddwpa";
 			reg = <0x40038814 0x4000 0x40038a10 0x7 0 0>; /* pd reg && vol trm reg && otp_sel_reg */
 			regulator-cal-channel = <0x40038888 0xe000 0xd>;
+			regulator-default-microvolt = <3125000>;
 			regulator-step-microvolt = <3125>;
 			regulator-min-microvolt = <3125000>;
 			regulator-max-microvolt = <3400000>;
@@ -105,12 +106,12 @@
 
 		vddrf0: vddrf0 {
 			regulator-name = "vddrf0";
-			reg = <0x40038810 0x100 0x40038818 0xff00 0x400388c0 0x800>; /* pd reg && vol trm reg && otp_sel_reg */
+			reg = <0x40038810 0x100 0x40038818 0x7f00 0x400388c0 0x800>; /* pd reg && vol trm reg && otp_sel_reg */
 			regulator-cal-channel = <0x40038844 0x4 0x15>;
 			regulator-default-microvolt = <1800000>;
 			regulator-step-microvolt = <6250>;
 			regulator-min-microvolt = <1150000>;
-			regulator-max-microvolt = <2750000>;
+			regulator-max-microvolt = <1943000>;
 			regulator-microvolt-offset = <0>;
 			hide-offset = <1000>;
 			default-on;
@@ -211,7 +212,7 @@
 			regulator-name = "vddwifipa";
 			reg = <0x40038814 0x800 0x40038818 0xff 0 0>; /* pd reg && vol trm reg && otp_sel_reg */
 			regulator-cal-channel = <0x40038844 0x20 0x17>;
-			regulator-default-microvolt = <3300000>;
+			regulator-default-microvolt = <1800000>;
 			regulator-step-microvolt = <10000>;
 			regulator-min-microvolt = <1200000>;
 			regulator-max-microvolt = <3760000>;

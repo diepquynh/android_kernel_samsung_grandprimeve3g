@@ -21,6 +21,7 @@ obj-$(CONFIG_FB_SCX15) := sprdfb_main.o sprdfb_panel.o sprdfb_dispc.o sprdfb_mcu
 obj-$(CONFIG_FB_SCX15) += spi/
 obj-$(CONFIG_FB_SCX15) += lcd/
 obj-$(CONFIG_FB_DYNAMIC_FPS_SUPPORT) += sprdfb_notifier.o
+obj-$(CONFIG_LCD_ESD_RECOVERY) += esd_detect.o
 
 # ========== SharkL/TSharkL configuration begin ===========
 ifeq ($(CONFIG_FB_SCX35L), y)

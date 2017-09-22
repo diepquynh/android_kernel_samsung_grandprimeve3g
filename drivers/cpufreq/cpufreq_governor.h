@@ -275,6 +275,9 @@ static inline int delay_for_sampling_rate(unsigned int sampling_rate)
 	return delay;
 }
 
+bool is_governor_busy(struct cpufreq_policy *policy);
+void set_governor_busy(struct cpufreq_policy *policy, bool busy);
+
 #define declare_show_sampling_rate_min(_gov)				\
 static ssize_t show_sampling_rate_min_gov_sys				\
 (struct kobject *kobj, struct attribute *attr, char *buf)		\
@@ -289,6 +292,8 @@ static ssize_t show_sampling_rate_min_gov_pol				\
 	struct dbs_data *dbs_data = policy->governor_data;		\
 	return sprintf(buf, "%u\n", dbs_data->min_sampling_rate);	\
 }
+
+extern struct mutex cpufreq_governor_lock;
 
 void dbs_check_cpu(struct dbs_data *dbs_data, int cpu);
 bool need_load_eval(struct cpu_dbs_common_info *cdbs,

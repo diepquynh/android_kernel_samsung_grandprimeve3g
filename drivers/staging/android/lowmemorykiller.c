@@ -124,7 +124,7 @@ extern u32 zram_compressed_size;
 extern u32 zram_pages_stored;
 #endif
 
-#if defined(CONFIG_SEC_DEBUG_LMK_MEMINFO)
+#if defined(CONFIG_SEC_DEBUG_LMK_MEMINFO) || defined(CONFIG_E_SHOW_MEM)
 static void dump_tasks_info(void)
 {
 	struct task_struct *p;
@@ -260,7 +260,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int other_file;
 	bool is_need_lmk_kill = true;
 	unsigned long nr_to_scan = sc->nr_to_scan;
-
+	struct sysinfo si;
 #if defined(CONFIG_ZRAM) && !defined(CONFIG_RUNTIME_COMPCACHE)
 	int zram_score_adj = 0;
 #endif
@@ -269,6 +269,14 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 #endif
 #if defined(CONFIG_ZSWAP)
 	int stored_pages = atomic_read(&zswap_stored_pages);
+#endif
+
+#ifdef CONFIG_E_SHOW_MEM
+	/* 600s */
+	static DEFINE_RATELIMIT_STATE(lmk_mem_rs,
+		DEFAULT_RATELIMIT_INTERVAL * 12 * 10, 1);
+	static DEFINE_RATELIMIT_STATE(lmk_meminfo_rs,
+		DEFAULT_RATELIMIT_INTERVAL * 12, 1);
 #endif
 
 	if (nr_to_scan > 0) {
@@ -293,6 +301,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		array_size = lowmem_adj_size;
 	if (lowmem_minfree_size < array_size)
 		array_size = lowmem_minfree_size;
+
 	for (i = 0; i < array_size; i++) {
 		minfree = lowmem_minfree[i];
 		if (other_free < minfree && other_file < minfree) {
@@ -300,6 +309,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			break;
 		}
 	}
+
 	if (nr_to_scan > 0)
 		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d %d, ma %hd\n",
 				nr_to_scan, sc->gfp_mask, other_free,
@@ -517,6 +527,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			send_sig(SIGKILL, selected[i], 0);
 			set_tsk_thread_flag(selected[i], TIF_MEMDIE);
 			rem -= selected_tasksize[i];
+
 #ifdef LMK_COUNT_READ
 			lmk_count++;
 #endif
@@ -532,11 +543,11 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 #endif
 		/* give the system time to free up the memory */
 		msleep_interruptible(20);
+		
 	} else
 		rcu_read_unlock();
 #else
 	if (selected && (selected_oom_score_adj || is_need_lmk_kill)) {
-			struct sysinfo si;
 			si_swapinfo(&si);
 			lowmem_print(1, "Killing '%s' (%d), adj %hd,\n" \
 				"   to free %ldkB on behalf of '%s' (%d) because\n" \
@@ -572,8 +583,21 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			dump_tasks_info();
 		}
 #endif
+#ifdef CONFIG_E_SHOW_MEM
+		if ((0 == min_score_adj)
+			&& (__ratelimit(&lmk_meminfo_rs))) {
+			enhanced_show_mem(E_SHOW_MEM_ALL);
+		} else if (__ratelimit(&lmk_mem_rs)) {
+			if ((!si.freeswap)
+				|| ((si.totalswap / (si.freeswap + 1)) >= 10))
+				enhanced_show_mem(E_SHOW_MEM_CLASSIC);
+			else
+				enhanced_show_mem(E_SHOW_MEM_BASIC);
+		}
+#endif
 		/* give the system time to free up the memory */
 		msleep_interruptible(20);
+
 	} else
 		rcu_read_unlock();
 #endif
@@ -617,7 +641,16 @@ static int android_oom_handler(struct notifier_block *nb,
 	int selected_oom_score_adj;
 #endif
 #ifdef CONFIG_SEC_DEBUG_LMK_MEMINFO
-	static DEFINE_RATELIMIT_STATE(oom_rs, DEFAULT_RATELIMIT_INTERVAL/5, 1);
+	static DEFINE_RATELIMIT_STATE(oom_rs,
+		DEFAULT_RATELIMIT_INTERVAL/5, 1);
+#endif
+#ifdef CONFIG_E_SHOW_MEM
+	/* 600s */
+	static DEFINE_RATELIMIT_STATE(oom_mem_rs,
+		DEFAULT_RATELIMIT_INTERVAL * 12 * 10, 1);
+	/* 60s */
+	static DEFINE_RATELIMIT_STATE(oom_meminfo_rs,
+		DEFAULT_RATELIMIT_INTERVAL * 12, 1);
 #endif
 
 	unsigned long *freed = data;
@@ -732,6 +765,7 @@ static int android_oom_handler(struct notifier_block *nb,
 			     p->pid, p->comm, oom_score_adj, tasksize);
 #endif
 	}
+	min_score_adj = 1000;
 #ifdef MULTIPLE_OOM_KILLER
 	for (i = 0; i < OOM_DEPTH; i++) {
 		if (selected[i]) {
@@ -740,6 +774,8 @@ static int android_oom_handler(struct notifier_block *nb,
 				     selected[i]->pid, selected[i]->comm,
 				     selected_oom_score_adj[i],
 				     selected_tasksize[i]);
+			if (min_score_adj > selected_oom_score_adj[i])
+				min_score_adj = selected_oom_score_adj[i];
 			send_sig(SIGKILL, selected[i], 0);
 			set_tsk_thread_flag(selected[i], TIF_MEMDIE);
 			rem -= selected_tasksize[i];
@@ -758,6 +794,7 @@ static int android_oom_handler(struct notifier_block *nb,
 			     selected->pid, selected->comm,
 			     selected_oom_score_adj, selected_tasksize);
 		oom_deathpending_timeout = jiffies + HZ;
+		min_score_adj = selected_oom_score_adj;
 		send_sig(SIGKILL, selected, 0);
 		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		rem -= selected_tasksize;
@@ -768,6 +805,13 @@ static int android_oom_handler(struct notifier_block *nb,
 	}
 #endif
 	read_unlock(&tasklist_lock);
+
+#ifdef CONFIG_E_SHOW_MEM
+	if (!min_score_adj && __ratelimit(&oom_meminfo_rs))
+		enhanced_show_mem(E_SHOW_MEM_CLASSIC);
+	else if (__ratelimit(&oom_mem_rs))
+		enhanced_show_mem(E_SHOW_MEM_BASIC);
+#endif
 
 	/* give the system time to free up the memory */
 	msleep_interruptible(20);
@@ -781,6 +825,31 @@ static struct notifier_block android_oom_notifier = {
 };
 #endif /* CONFIG_OOM_NOTIFIER */
 
+#ifdef CONFIG_E_SHOW_MEM
+static int tasks_e_show_mem_handler(struct notifier_block *nb,
+			unsigned long val, void *data)
+{
+	enum e_show_mem_type type = val;
+	struct sysinfo i;
+
+	si_swapinfo(&i);
+	printk("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+	printk("Enhanced Mem-info :TASK\n");
+	printk("Detail:\n");
+	if (E_SHOW_MEM_CLASSIC == type || E_SHOW_MEM_ALL == type)
+		dump_tasks_info();
+	printk("Total used:\n");
+	printk("        anon: %lu kB\n", ((global_page_state(NR_ACTIVE_ANON)
+		+ global_page_state(NR_INACTIVE_ANON)) << PAGE_SHIFT) / 1024);
+	printk("        swaped: %lu kB\n", ((i.totalswap - i.freeswap)
+		<< PAGE_SHIFT) / 1024);
+	return 0;
+}
+
+static struct notifier_block tasks_e_show_mem_notifier = {
+	.notifier_call = tasks_e_show_mem_handler,
+};
+#endif
 
 static struct shrinker lowmem_shrinker = {
 	.shrink = lowmem_shrink,
@@ -793,12 +862,18 @@ static int __init lowmem_init(void)
 #ifdef CONFIG_OOM_NOTIFIER
 	register_oom_notifier(&android_oom_notifier);
 #endif
+#ifdef CONFIG_E_SHOW_MEM
+	register_e_show_mem_notifier(&tasks_e_show_mem_notifier);
+#endif
 	return 0;
 }
 
 static void __exit lowmem_exit(void)
 {
 	unregister_shrinker(&lowmem_shrinker);
+#ifdef CONFIG_E_SHOW_MEM
+	unregister_e_show_mem_notifier(&tasks_e_show_mem_notifier);
+#endif
 }
 
 #ifdef CONFIG_ADAPTIVE_KSM
@@ -945,3 +1020,4 @@ module_init(lowmem_init);
 module_exit(lowmem_exit);
 
 MODULE_LICENSE("GPL");
+

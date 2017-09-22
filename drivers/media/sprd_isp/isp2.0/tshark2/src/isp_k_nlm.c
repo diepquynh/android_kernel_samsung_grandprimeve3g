@@ -123,8 +123,7 @@ static int32_t isp_k_nlm_block(struct isp_io_param *param)
 	REG_MWR(ISP_NLM_PARA, BIT_2, nlm_info.flat_opt_bypass << 2);
 	REG_MWR(ISP_NLM_PARA, BIT_3, nlm_info.flat_thr_bypass << 3);
 	REG_MWR(ISP_NLM_PARA, BIT_4, nlm_info.direction_mode_bypass << 4);
-
-	REG_MWR(ISP_NLM_PARA, BIT_31, nlm_info.buf_sel);
+	REG_MWR(ISP_NLM_PARA, BIT_31, nlm_info.buf_sel<<31);
 
 	for (i = 0; i < 5; i++) {
 		val = (nlm_info.thresh[i] & 0x3FFF) | ((nlm_info.cnt[i] & 0x1F) << 16)
@@ -139,6 +138,14 @@ static int32_t isp_k_nlm_block(struct isp_io_param *param)
 	//REG_WR(ISP_NLM_IS_FLAT, nlm_info.is_flat & 0xFF);
 
 	REG_MWR(ISP_NLM_ADD_BACK, 0x7F, nlm_info.addback);
+
+#if defined(CONFIG_ARCH_SCX30G3)
+		REG_MWR(ISP_NLM_ADD_BACK_NEW0, 0x7F, nlm_info.addback);
+		REG_MWR(ISP_NLM_ADD_BACK_NEW0, (0x7F << 8), (nlm_info.addback << 8));
+		REG_MWR(ISP_NLM_ADD_BACK_NEW0, (0x7F << 16), (nlm_info.addback << 16));
+		REG_MWR(ISP_NLM_ADD_BACK_NEW0, (0x7F << 24), (nlm_info.addback << 24));
+		REG_MWR(ISP_NLM_ADD_BACK_NEW1, 0x7F, nlm_info.addback);
+#endif
 
 	REG_MWR(ISP_NLM_ADD_BACK, BIT_7, nlm_info.opt_mode << 7);
 

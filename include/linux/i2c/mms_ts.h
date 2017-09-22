@@ -51,7 +51,6 @@ struct mms_ts_platform_data {
 	const char *tsp_ic_name;
 };
 #ifndef CONFIG_TOUCHSCREEN_MMS134
-extern struct class *sec_class;
 extern int touch_is_pressed;
 /* SPRD remove this declaration due to a compile error */
 //extern int system_rev;

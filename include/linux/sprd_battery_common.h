@@ -20,7 +20,11 @@ struct sprdbat_table_data {
 	int x;
 	int y;
 };
-
+struct sprdbat_jeita_table_data {
+	int x;
+	int y;
+	int z;
+};
 struct sprd_battery_platform_data {
 	uint32_t chg_end_vol_h;	//charging
 	uint32_t chg_end_vol_l;
@@ -52,6 +56,9 @@ struct sprd_battery_platform_data {
 	uint32_t cap_one_per_time_fast;	//reserved
 	int cap_valid_range_poweron;
 
+	uint32_t chg_full_condition;
+
+
 	//temp param
 	int temp_support;	/*0:do NOT support temperature,1:support temperature */
 	int temp_adc_ch;
@@ -61,6 +68,10 @@ struct sprd_battery_platform_data {
 	int temp_comp_res;	//mohm, use rsense + connector resistor to compensate temp;
 	struct sprdbat_table_data *temp_tab;	/* OCV curve adjustment */
 	int temp_tab_size;
+
+	int jeita_tab_size;
+	struct sprdbat_jeita_table_data * jeita_tab;
+
 
 	//resource
 	uint32_t gpio_vchg_detect;
@@ -90,6 +101,7 @@ struct sprd_battery_platform_data {
 	int cnom_temp_tab_size;
 	struct sprdbat_table_data *rint_temp_tab;	/* impedance temp table */
 	int rint_temp_tab_size;
+	int ocv_type;
 	struct sprdbat_table_data *ocv_tab;	/* OCV curve adjustment */
 	int ocv_tab_size;
 	void *ext_data;		/*reserved, other battery data,fg ic data,and so on */

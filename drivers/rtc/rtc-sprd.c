@@ -582,7 +582,7 @@ static irqreturn_t rtc_interrupt_handler(int irq, void *dev_id)
 {
 	struct rtc_device *rdev = dev_id;
 
-	printk("RTC ***** interrupt happen\n");
+	pr_info("RTC ***** interrupt happen\n");
 	//rtc_update_irq(rdev, 1, RTC_AF | RTC_IRQF);
 	wake_lock_timeout(&rtc_interrupt_wake_lock,2*HZ);
 	rtc_aie_update_irq(rdev);

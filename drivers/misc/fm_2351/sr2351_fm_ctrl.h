@@ -218,9 +218,15 @@ extern unsigned long rf2351_fm_get_pin_base(void);
 
 #define SHARK_CHIP_BD   1
 
+#if defined(CONFIG_ARCH_SCX20)
+#define SHARK_PIN_U0TXD			(SHARK_PIN_BASE + 0x01A8)
+#define SHARK_PIN_U0RXD			(SHARK_PIN_BASE + 0x01AC)
+#define SHARK_PIN_U0CTS			(SHARK_PIN_BASE + 0x01B0)
+#else
 #define SHARK_PIN_U0TXD			(SHARK_PIN_BASE + 0x0048)
 #define SHARK_PIN_U0RXD			(SHARK_PIN_BASE + 0x004c)
-#define SHARK_PIN_U0CTS			(SHARK_PIN_BASE + 0x0050)	
+#define SHARK_PIN_U0CTS			(SHARK_PIN_BASE + 0x0050)
+#endif	
 
 
 struct shark_fm_info_t {

@@ -197,12 +197,13 @@ static void android_work(struct work_struct *data)
 	char **uevent_envp = NULL;
 	unsigned long flags;
 
+	if (!cdev)
+		return;
+
 	printk(KERN_DEBUG "usb: %s config=%p,connected=%d,sw_connected=%d\n",
 			__func__, cdev->config, dev->connected,
 			dev->sw_connected);
 
-	if (!cdev)
-		return;
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (cdev->config)
 		uevent_envp = configured;

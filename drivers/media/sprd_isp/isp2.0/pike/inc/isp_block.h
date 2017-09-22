@@ -66,7 +66,7 @@ int32_t isp_k_cfg_dispatch(struct isp_io_param *param);
 int32_t isp_k_cfg_arbiter(struct isp_io_param *param);
 int32_t isp_k_cfg_common(struct isp_io_param *param);
 int32_t isp_k_cfg_raw_sizer(struct isp_io_param *param);
-//pike add 
+//pike add
 int32_t isp_k_cfg_yuv_nlm(struct isp_io_param *param);
 int32_t isp_k_cfg_uv_prefilter(struct isp_io_param *param);
 int32_t isp_k_cfg_rgb2y(struct isp_io_param *param);

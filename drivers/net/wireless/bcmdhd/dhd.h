@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd.h 561632 2015-06-05 13:09:58Z $
+ * $Id: dhd.h 557500 2015-05-19 06:30:12Z $
  */
 
 /****************
@@ -666,7 +666,7 @@ extern int dhd_net2idx(struct dhd_info *dhd, struct net_device *net);
 extern struct net_device * dhd_idx2net(void *pub, int ifidx);
 extern int net_os_send_hang_message(struct net_device *dev);
 extern int wl_host_event(dhd_pub_t *dhd_pub, int *idx, void *pktdata,
-                         size_t pktlen, wl_event_msg_t *, void **data_ptr);
+                         wl_event_msg_t *, void **data_ptr);
 extern void wl_event_to_host_order(wl_event_msg_t * evt);
 
 extern int dhd_wl_ioctl(dhd_pub_t *dhd_pub, int ifindex, wl_ioctl_t *ioc, void *buf, int len);
@@ -684,7 +684,7 @@ extern struct net_device* dhd_allocate_if(dhd_pub_t *dhdpub, int ifidx, char *na
 extern int dhd_remove_if(dhd_pub_t *dhdpub, int ifidx, bool need_rtnl_lock);
 extern void dhd_vif_add(struct dhd_info *dhd, int ifidx, char * name);
 extern void dhd_vif_del(struct dhd_info *dhd, int ifidx);
-extern void dhd_event(struct dhd_info *dhd, char *evpkt, uint evlen, int ifidx);
+extern void dhd_event(struct dhd_info *dhd, char *evpkt, int evlen, int ifidx);
 extern void dhd_vif_sendup(struct dhd_info *dhd, int ifidx, uchar *cp, int len);
 
 /* Send packet to dongle via data channel */
@@ -966,13 +966,9 @@ enum {
 #ifdef USE_WL_TXBF
 	SET_PARAM_TXBF,
 #endif /* USE_WL_TXBF */
-#ifdef PROP_TXSTATUS
-	SET_PARAM_PROPTX,
-	SET_PARAM_PROPTXMODE,
-#endif /* PROP_TXSTATUS */
 	PARAM_LAST_VALUE
 };
-extern int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val);
+extern int sec_get_param(dhd_pub_t *dhd, int mode);
 #endif /* CUSTOMER_HW4 && USE_WFA_CERT_CONF */
 
 #endif /* _dhd_h_ */

@@ -512,6 +512,7 @@ void sec_charger_cb(u8 cable_type)
 	struct power_supply *psy = power_supply_get_by_name("battery");
 
 	pr_info("%s: cable type (0x%02x)\n", __func__, cable_type);
+	is_jig_on = false;
 
 	attached_cable = cable_type;
 
@@ -529,27 +530,42 @@ void sec_charger_cb(u8 cable_type)
 
 	switch (cable_type) {
 	case MUIC_SM5504_CABLE_TYPE_NONE:
-	case MUIC_SM5504_CABLE_TYPE_JIG_UART_ON:
-	case MUIC_SM5504_CABLE_TYPE_JIG_UART_OFF:
-#if !defined(CONFIG_MACH_GOYAVE3G) && !defined(CONFIG_MACH_GOYAVEWIFI)
+#if !defined(CONFIG_MACH_GOYAVE3G) && \
+	!defined(CONFIG_MACH_GOYAVEWIFI) && \
+	!defined(CONFIG_MACH_J1POP3G) && \
+	!defined(CONFIG_MACH_J1X3G)
 	case MUIC_SM5504_CABLE_TYPE_OTG:
 #endif
+		current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
+		break;
+	case MUIC_SM5504_CABLE_TYPE_JIG_UART_ON:
+	case MUIC_SM5504_CABLE_TYPE_JIG_UART_ON_WITH_VBUS:
+	case MUIC_SM5504_CABLE_TYPE_JIG_UART_OFF:
+		is_jig_on = true;
 		current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
 		break;
 	case MUIC_SM5504_CABLE_TYPE_USB:
 	case MUIC_SM5504_CABLE_TYPE_CDP:
 	case MUIC_SM5504_CABLE_TYPE_L_USB:
+	case MUIC_SM5504_CABLE_TYPE_TYPE1_CHARGER:
+	case MUIC_SM5504_CABLE_TYPE_ATT_TA:
+		current_cable_type = POWER_SUPPLY_TYPE_USB;
+		break;
 	case MUIC_SM5504_CABLE_TYPE_JIG_USB_ON:
 	case MUIC_SM5504_CABLE_TYPE_JIG_USB_OFF:
+		is_jig_on = true;
 		current_cable_type = POWER_SUPPLY_TYPE_USB;
 		break;
 	case MUIC_SM5504_CABLE_TYPE_REGULAR_TA:
-	case MUIC_SM5504_CABLE_TYPE_ATT_TA:
-	case MUIC_SM5504_CABLE_TYPE_JIG_UART_OFF_WITH_VBUS:
-	case MUIC_SM5504_CABLE_TYPE_JIG_UART_ON_WITH_VBUS:
-	case MUIC_SM5504_CABLE_TYPE_TYPE1_CHARGER:
+	case MUIC_SM5504_CABLE_TYPE_UNKNOWN_WITH_VBUS:
+	case MUIC_SM5504_CABLE_TYPE_0x1A_WITH_VBUS:
 		current_cable_type = POWER_SUPPLY_TYPE_MAINS;
 		break;
+	case MUIC_SM5504_CABLE_TYPE_JIG_UART_OFF_WITH_VBUS:
+		is_jig_on = true;
+		current_cable_type = POWER_SUPPLY_TYPE_MAINS;
+		break;
+	case MUIC_SM5504_CABLE_TYPE_0x15:
 	case MUIC_SM5504_CABLE_TYPE_UART:
 		current_cable_type = POWER_SUPPLY_TYPE_UNKNOWN;
 		break;
@@ -560,17 +576,18 @@ void sec_charger_cb(u8 cable_type)
 	defined(CONFIG_MACH_YOUNG2VE3G) || defined(CONFIG_MACH_YOUNG23GDTV)
 		current_cable_type = POWER_SUPPLY_TYPE_UNKNOWN;
 		break;
-#elif defined(CONFIG_MACH_GOYAVE3G) || defined(CONFIG_MACH_GOYAVEWIFI)
+#elif defined(CONFIG_MACH_GOYAVE3G) || \
+	defined(CONFIG_MACH_GOYAVEWIFI) || \
+	defined(CONFIG_MACH_J1POP3G) || defined(CONFIG_MACH_J1X3G)
 	case MUIC_SM5504_CABLE_TYPE_OTG:
 		current_cable_type = POWER_SUPPLY_TYPE_OTG;
 		break;
 #else
 		goto skip;
 #endif
-	case MUIC_SM5504_CABLE_TYPE_0x15:
 	case MUIC_SM5504_CABLE_TYPE_0x1A:
 //	case MUIC_SM5504_CABLE_TYPE_0x1A_VBUS:
-		current_cable_type = POWER_SUPPLY_TYPE_MISC;
+		current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
 		break;
 	default:
 		pr_err("%s: invalid type for charger:%d\n",
@@ -1263,7 +1280,8 @@ int sec_fg_dt_init(struct device_node *np,
 		of_property_read_u32(np, "relax_current", &battery_data->relax_current);
 		of_property_read_u32(np, "cal_ajust", &battery_data->fgu_cal_ajust);
 
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
+#if defined(CONFIG_MACH_GRANDPRIMEVE3G) || defined(CONFIG_MACH_J1MINI3G) || defined(CONFIG_MACH_J3X3G) || defined(CONFIG_MACH_J1X3G) ||	\
+	defined(CONFIG_MACH_GTEXSWIFI)
 		of_get_property(np, "cnom_temp_tab", &len);
 		len /= sizeof(u32);
 		battery_data->cnom_temp_tab_size = len >> 1;

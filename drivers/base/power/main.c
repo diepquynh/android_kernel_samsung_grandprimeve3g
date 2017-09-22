@@ -37,6 +37,8 @@
 #include "../base.h"
 #include "power.h"
 
+/* #define SPRD_PM_DEBUG */
+
 typedef int (*pm_callback_t)(struct device *);
 
 /*
@@ -702,9 +704,11 @@ static int device_resume(struct device *dev, pm_message_t state, bool async)
  End:
 	error = dpm_run_callback(callback, dev, state, info);
 	dev->power.is_suspended = false;
+#ifdef SPRD_PM_DEBUG
 	if(callback){
 		printk("-------- resume %s %pf with %d\n", dev->kobj.name, callback, error);
 	}
+#endif
 
  Unlock:
 	device_unlock(dev);
@@ -1220,9 +1224,11 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 	}
 
 	error = dpm_run_callback(callback, dev, state, info);
+#ifdef SPRD_PM_DEBUG
 	if(callback){
 		printk("-------- suspend %s %pf with %d\n", dev->kobj.name, callback, error);
 	}
+#endif
 
  End:
 	if (!error) {

@@ -38,6 +38,24 @@ static int syssleep_write_proc(struct file *file, const char __user *buffer,
     sci_glb_write(REG_PMU_APB_PD_CP0_GSM_CFG, BIT(24) | BIT(25), -1UL);
     sci_glb_write(REG_PMU_APB_PD_CP0_L1RAM_CFG, BIT(24) | BIT(25), -1UL);
     sci_glb_write(REG_PMU_APB_PD_CP0_SYS_CFG, BIT(25) | BIT(28), -1UL);
+#endif
+#if defined(CONFIG_MACH_J3_3G)
+    sci_glb_write(REG_PMU_APB_PD_CP0_ARM9_0_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_HU3GE_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_GSM_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_CEVA_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_ARM_IRAM_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_SYS_CFG, BIT(25) | BIT(28), -1UL);
+    sci_glb_write(REG_PMU_APB_SLEEP_CTRL,BIT(12),BIT(12));
+#elif defined(CONFIG_ARCH_SCX20)
+    sci_glb_write(REG_PMU_APB_PD_CP0_ARM9_0_CFG, BIT(24) | BIT(25), -1UL);    
+    sci_glb_write(REG_PMU_APB_PD_CP0_ARM9_1_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_HU3GE_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_GSM_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_TD_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_CEVA_CFG, BIT(24) | BIT(25), -1UL);
+    sci_glb_write(REG_PMU_APB_PD_CP0_SYS_CFG, BIT(25) | BIT(28), -1UL);
+    sci_glb_write(REG_PMU_APB_SLEEP_CTRL,BIT(12),BIT(12));
 #else
     sci_glb_write(REG_PMU_APB_PD_CP0_ARM9_0_CFG, BIT(24) | BIT(25), -1UL);
     sci_glb_write(REG_PMU_APB_PD_CP0_HU3GE_CFG, BIT(24) | BIT(25), -1UL);
@@ -67,3 +85,5 @@ static int __init syssleep_init(void)
 }
 
 module_init(syssleep_init);
+MODULE_DESCRIPTION("System sleep in factory mode");
+MODULE_LICENSE("GPL");

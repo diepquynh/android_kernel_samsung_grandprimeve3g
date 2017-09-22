@@ -41,6 +41,8 @@
 #include <linux/of_i2c.h>
 #include <linux/kthread.h>
 
+#include "parse_hwinfo.h"
+
 #ifndef CONFIG_64BIT
 #include <soc/sprd/dma.h>
 #include <soc/sprd/hardware.h>
@@ -56,15 +58,15 @@
 #include "sensor_drv_sprd.h"
 #include "compat_sensor_drv_k.h"
 #include "csi2/csi_api.h"
-#include "parse_hwinfo.h"
 #ifdef  CONFIG_SC_FPGA
 #include "dcam_reg.h"
 #endif
 #include "power/sensor_power.h"
-#include "otp/sensor_otp.h"
+#include "sensor_reloadinfo_thread.h"
 
 #include <linux/leds.h>
 #include <linux/mfd/sm5701_core.h>
+#include <../flash/flash.h>
 
 #define SENSOR_CLK                        "clk_sensor"
 #define SENSOR_DEVICE_NAME                "sprd_sensor"
@@ -116,23 +118,13 @@
 #define SENSOR_LOWEST_ADDR                0x800
 #define SENSOR_ADDR_INVALID(addr)         ((unsigned long)(addr) < SENSOR_LOWEST_ADDR)
 
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)// || defined(CONFIG_MACH_COREPRIMEVE3G)
-#define CAM_LDO_ENABLE_GPIO 162
+#if defined(CONFIG_MACH_J1X3G)
+#define CAM_FLASH_EN 214
+#define CAM_FLASH_TORCH 236
+#elif defined(CONFIG_MACH_J3X3G)
+#define CAM_FLASH_EN 232
+#define CAM_FLASH_TORCH 233
 #endif
-
-// Camera Anti-Banding (enum is also defined at SprdCameraHardwareInterface.h)
-typedef enum{
-	CAM_BANDFILTER_50HZ_AUTO	= 0,
-	CAM_BANDFILTER_50HZ_FIXED	= 1,
-	CAM_BANDFILTER_60HZ_AUTO	= 2,
-	CAM_BANDFILTER_60HZ_FIXED	= 3,
-	CAM_BANDFILTER_LIMIT			= 0x7fffffff,
-}CAM_BandFilterMode;
-
-
-int camera_antibanding_val = CAM_BANDFILTER_60HZ_AUTO; // Default
-uint16_t VENDOR_ID = 0xFFFF;
-
 #define SENSOR_CHECK_ZERO(a)                                   \
 	do {                                                       \
 		if (SENSOR_ADDR_INVALID(a)) {                          \
@@ -151,63 +143,9 @@ uint16_t VENDOR_ID = 0xFFFF;
 		}                                                       \
 	} while(0)
 
-struct sensor_mclk_tag {
-	uint32_t                        clock;
-	char                            *src_name;
-};
+struct class *camera_class;
 
-struct sensor_mem_tag {
-	void                            *buf_ptr;
-	size_t                          size;
-};
-
-struct sensor_module_tag {
-	struct mutex                    sync_lock;
-	atomic_t                        users;
-	struct i2c_client               *cur_i2c_client;
-	struct i2c_client               *vcm_i2c_client;
-	uint32_t                        vcm_gpio_i2c_flag;
-};
-
-struct sensor_module_tab_tag {
-	atomic_t                        total_users;
-	uint32_t                        padding;
-	struct mutex                    sensor_id_lock;
-	struct device_node              *of_node;
-	struct clk                      *sensor_mm_in_clk;
-	struct wake_lock                wakelock;
-	struct sensor_module_tag        sensor_dev_tab[SENSOR_DEV_MAX];
-	SENSOR_OTP_PARAM_T 				otp_param[SENSOR_DEV_MAX];
-};
-
-struct sensor_gpio_tag {
-	int                             pwn;
-	int                             reset;
-};
-
-struct sensor_file_tag {
-	struct sensor_module_tab_tag    *module_data;
-	uint32_t                        sensor_id;
-	uint32_t                        sensor_mclk;
-	uint32_t                        iopower_on_count;
-	uint32_t                        avddpower_on_count;
-	uint32_t                        dvddpower_on_count;
-	uint32_t                        motpower_on_count;
-	uint32_t                        mipi_on;
-	uint32_t                        padding;
-	uint32_t                        phy_id;
-	uint32_t                        if_type;
-	struct sensor_gpio_tag          gpio_tab;
-	struct clk                      *ccir_clk;
-	struct clk                      *ccir_enable_clk;
-	struct clk                      *mipi_clk;
-	struct regulator                *camvio_regulator;
-	struct regulator                *camavdd_regulator;
-	struct regulator                *camdvdd_regulator;
-	struct regulator                *cammot_regulator;
-	struct sensor_mem_tag           sensor_mem;
-	void                            *csi_handle;
-};
+uint32_t flash_torch_status = 0;
 
 LOCAL const struct sensor_mclk_tag c_sensor_mclk_tab[SENSOR_MCLK_SRC_NUM] = {
 						{96, "clk_96m"},
@@ -215,8 +153,6 @@ LOCAL const struct sensor_mclk_tag c_sensor_mclk_tab[SENSOR_MCLK_SRC_NUM] = {
 						{48, "clk_48m"},
 						{26, "ext_26m"}
 };
-
-uint32_t flash_torch_status=0;
 
 LOCAL void* _sensor_k_malloc(struct sensor_file_tag *fd_handle, size_t size)
 {
@@ -267,6 +203,22 @@ LOCAL struct platform_device*  _sensor_k_get_platform_device(void)
 }
 #endif
 
+int sensor_set_pd_level_fromkernel(struct file *file, uint8_t arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	uint8_t pd_level;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	pd_level = arg;
+
+	ret = sensor_k_set_pd_level((uint32_t *)p_file, pd_level);
+
+	return ret;
+}
+
 int sensor_k_set_pd_level(uint32_t *fd_handle, uint8_t power_level)
 {
 	struct sensor_module_tab_tag    *p_mod;
@@ -278,7 +230,7 @@ int sensor_k_set_pd_level(uint32_t *fd_handle, uint8_t power_level)
 
 #ifndef	CONFIG_SC_FPGA_PIN
 	get_gpio_id(p_mod->of_node, &fd->gpio_tab.pwn, &fd->gpio_tab.reset, fd->sensor_id);
-	SENSOR_PRINT_HIGH("SENSOR: pwn=%d level=%d \n", fd->gpio_tab.pwn, power_level);
+	SENSOR_PRINT_HIGH("SENSOR: pwn %d \n", fd->gpio_tab.pwn);
 	if (0 == power_level) {
 		gpio_direction_output(fd->gpio_tab.pwn, 0);
 	} else {
@@ -321,7 +273,7 @@ LOCAL int _sensor_regulator_enable(struct sensor_file_tag *fd_handle, uint32_t *
 	err = regulator_enable(ptr_cam_regulator);
 	(*power_on_count)++;
 
-	SENSOR_PRINT_HIGH("sensor pwr on done: cnt=0x%x, io=%x, av=%x, dv=%x, mo=%x \n", *power_on_count,
+	SENSOR_PRINT("sensor pwr on done: cnt=0x%x, io=%x, av=%x, dv=%x, mo=%x \n", *power_on_count,
 		fd_handle->iopower_on_count,
 		fd_handle->avddpower_on_count,
 		fd_handle->dvddpower_on_count,
@@ -468,14 +420,62 @@ LOCAL int _sensor_k_set_voltage(struct sensor_file_tag *fd_handle, uint32_t val,
 #endif
 }
 
+int sensor_set_voltage_cammot_fromkernel(struct file *file, SENSOR_VDD_VAL_E arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	SENSOR_VDD_VAL_E cammot_vdd;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	cammot_vdd = arg;
+
+	ret = sensor_k_set_voltage_cammot((uint32_t *)p_file, (uint32_t)cammot_vdd);
+
+	return ret;
+}
+
 int sensor_k_set_voltage_cammot(uint32_t *fd_handle, uint32_t cammot_val)
 {
 	return _sensor_k_set_voltage((struct sensor_file_tag *)fd_handle, cammot_val, REGU_CAMMOT);
 }
 
+int sensor_set_voltage_avdd_fromkernel(struct file *file, SENSOR_VDD_VAL_E arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	SENSOR_VDD_VAL_E avdd;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	avdd = arg;
+
+	ret = sensor_k_set_voltage_avdd((uint32_t *)p_file, (uint32_t)avdd);
+
+	return ret;
+}
+
 int sensor_k_set_voltage_avdd(uint32_t *fd_handle, uint32_t avdd_val)
 {
 	return _sensor_k_set_voltage((struct sensor_file_tag *)fd_handle, avdd_val, REGU_CAMAVDD);
+}
+
+int sensor_set_voltage_dvdd_fromkernel(struct file *file, SENSOR_VDD_VAL_E arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	SENSOR_VDD_VAL_E dvdd;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	dvdd = arg;
+
+	ret = sensor_k_set_voltage_dvdd((uint32_t *)p_file, (uint32_t)dvdd);
+
+	return ret;
 }
 
 int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val)
@@ -490,10 +490,9 @@ int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val)
 	SENSOR_CHECK_ZERO(fd);
 	p_mod = fd->module_data;
 	SENSOR_CHECK_ZERO(p_mod);
-
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, fd->sensor_id);
-	if ((SENSOR_DEV_0 == fd->sensor_id) && (0 != gpio_id)) {
-		SENSOR_PRINT_HIGH("sensor set DVDD gpio=%d, level=%d\n", gpio_id, dvdd_val);
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINDVDD, &gpio_id, fd->sensor_id);
+	if (SENSOR_DEV_0 == fd->sensor_id && 0 != gpio_id) {
+		SENSOR_PRINT_HIGH("sensor set GPIO_MAINDVDD gpio %d\n", gpio_id);
 		if (SENSOR_VDD_CLOSED == dvdd_val) {
 			gpio_direction_output(gpio_id, 1);
 			gpio_set_value(gpio_id, 0);
@@ -504,8 +503,23 @@ int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val)
 		return SENSOR_K_SUCCESS;
 	}
 
-	if ((SENSOR_DEV_1 == fd->sensor_id) && (0 != gpio_id)) {
-		SENSOR_PRINT_HIGH("sensor set DVDD gpio %d\n", gpio_id);
+	gpio_id = 0;
+	get_gpio_id_ex(p_mod->of_node, GPIO_SUBDVDD, &gpio_id, fd->sensor_id);
+	if (SENSOR_DEV_1 == fd->sensor_id && 0 != gpio_id) {
+		SENSOR_PRINT_HIGH("sensor set GPIO_SUBDVDD gpio %d\n", gpio_id);
+		if (SENSOR_VDD_CLOSED == dvdd_val) {
+			gpio_direction_output(gpio_id, 1);
+			gpio_set_value(gpio_id, 0);
+		} else {
+			gpio_direction_output(gpio_id, 1);
+			gpio_set_value(gpio_id, 1);
+		}
+		return SENSOR_K_SUCCESS;
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_SUB2DVDD, &gpio_id, fd->sensor_id);
+	if (SENSOR_DEV_2 == fd->sensor_id && 0 != gpio_id) {
+		SENSOR_PRINT_HIGH("sensor set GPIO_SUB2DVDD gpio %d\n", gpio_id);
 		if (SENSOR_VDD_CLOSED == dvdd_val) {
 			gpio_direction_output(gpio_id, 1);
 			gpio_set_value(gpio_id, 0);
@@ -518,6 +532,22 @@ int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val)
 
 	return _sensor_k_set_voltage((struct sensor_file_tag *)fd_handle, dvdd_val, REGU_CAMDVDD);
 #endif
+}
+
+int sensor_set_voltage_iovdd_fromkernel(struct file *file,SENSOR_VDD_VAL_E arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	SENSOR_VDD_VAL_E iovdd;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	iovdd = arg;
+
+	ret = sensor_k_set_voltage_iovdd((uint32_t *)p_file, (uint32_t)iovdd);
+
+	return ret;
 }
 
 int sensor_k_set_voltage_iovdd(uint32_t *fd_handle, uint32_t iodd_val)
@@ -735,6 +765,34 @@ int sensor_k_set_mclk(uint32_t *fd_handle, uint32_t mclk)
 	return _sensor_k_set_mclk(fd, p_mod->of_node, mclk);
 }
 
+int sensor_set_mclk_fromkernel(struct file *file, uint32_t arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	uint32_t mclk;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	mclk = arg;
+
+	ret = _sensor_k_set_mclk(p_file, p_mod->of_node, mclk);
+
+	return ret;
+}
+
+unsigned short sensor_k_get_sensor_i2c_addr(uint32_t *fd_handle, uint32_t sensor_id)
+{
+	struct sensor_module_tab_tag	*p_mod;
+	struct sensor_file_tag			*fd = (struct sensor_file_tag *)fd_handle;
+
+	SENSOR_CHECK_ZERO(fd);
+	p_mod = fd->module_data;
+	SENSOR_CHECK_ZERO(p_mod);	
+
+	return p_mod->sensor_dev_tab[sensor_id].cur_i2c_client->addr;
+}
+
 LOCAL int _sensor_k_reset(struct sensor_file_tag *fd_handle, uint32_t level, uint32_t width)
 {
 #ifndef	CONFIG_SC_FPGA_PIN
@@ -769,8 +827,6 @@ int sensor_k_sensor_sel(uint32_t *fd_handle, uint32_t sensor_id)
 	SENSOR_CHECK_ZERO(fd);
 	fd->sensor_id = sensor_id;
 
-	SENSOR_PRINT_HIGH("sensor id = %d\n", sensor_id);
-
 	return SENSOR_K_SUCCESS;
 }
 
@@ -784,6 +840,22 @@ int sensor_k_sensor_desel(struct sensor_file_tag *fd_handle, uint32_t sensor_id)
 	return SENSOR_K_SUCCESS;
 }
 
+int sensor_set_rst_level_fromkernel(struct file *file, uint32_t arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	uint32_t rst_level;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	rst_level = arg;
+
+	ret = sensor_k_set_rst_level((uint32_t *)p_file, rst_level);
+
+	return ret;
+}
+
 int sensor_k_set_rst_level(uint32_t *fd_handle, uint32_t plus_level)
 {
 	struct sensor_module_tab_tag    *p_mod;
@@ -794,7 +866,7 @@ int sensor_k_set_rst_level(uint32_t *fd_handle, uint32_t plus_level)
 	SENSOR_CHECK_ZERO(p_mod);
 
 	get_gpio_id(p_mod->of_node, &fd->gpio_tab.pwn, &fd->gpio_tab.reset, fd->sensor_id);
-	SENSOR_PRINT_HIGH("SENSOR: set rst lvl: lvl %d, rst pin %d \n", plus_level, fd->gpio_tab.reset);
+	SENSOR_PRINT("SENSOR: set rst lvl: lvl %d, rst pin %d \n", plus_level, fd->gpio_tab.reset);
 
 #ifndef CONFIG_SC_FPGA_PIN
 	gpio_direction_output(fd->gpio_tab.reset, plus_level);
@@ -806,6 +878,24 @@ int sensor_k_set_rst_level(uint32_t *fd_handle, uint32_t plus_level)
 #endif
 	return SENSOR_K_SUCCESS;
 }
+
+int sensor_k_set_mipi_level(uint32_t *fd_handle, uint32_t plus_level)
+{
+	struct sensor_module_tab_tag    *p_mod;
+	struct sensor_file_tag          *fd = (struct sensor_file_tag *)fd_handle;
+	int gpio_mipi_mode = 0;
+
+	SENSOR_CHECK_ZERO(fd);
+	p_mod = fd->module_data;
+	SENSOR_CHECK_ZERO(p_mod);
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_MIPI_SWITCH_MODE, &gpio_mipi_mode, fd->sensor_id);
+	gpio_direction_output(gpio_mipi_mode, plus_level);
+	gpio_set_value(gpio_mipi_mode, plus_level);
+
+	return SENSOR_K_SUCCESS;
+}
+
 
 LOCAL int _Sensor_K_ReadReg(struct sensor_file_tag *fd_handle, struct sensor_reg_bits_tag *pReg)
 {
@@ -863,6 +953,22 @@ LOCAL int _Sensor_K_ReadReg(struct sensor_file_tag *fd_handle, struct sensor_reg
 	return ret;
 }
 
+int sensor_ReadReg_fromkernel(struct file *file, struct sensor_reg_bits_tag *arg)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	struct sensor_reg_bits_tag *reg;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	reg = arg;
+
+	ret = _Sensor_K_ReadReg(p_file, reg);
+
+	return ret;
+}
+
+#define SENSOR_WRITE_DELAY_8BIT                       0xff
 LOCAL int _Sensor_K_WriteReg(struct sensor_file_tag *fd_handle, struct sensor_reg_bits_tag *pReg)
 {
 	uint8_t                       cmd[4] = { 0 };
@@ -872,10 +978,7 @@ LOCAL int _Sensor_K_WriteReg(struct sensor_file_tag *fd_handle, struct sensor_re
 	int32_t                       ret = SENSOR_K_SUCCESS;
 	uint16_t                      subaddr;
 	uint16_t                      data;
-	uint16_t                      delay_value = 0;
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-	uint16_t                      max_data_value = 0;
-#endif
+	int                           i;
 	struct sensor_module_tab_tag  *p_mod;
 	SENSOR_CHECK_ZERO(fd_handle);
 
@@ -905,26 +1008,9 @@ LOCAL int _Sensor_K_WriteReg(struct sensor_file_tag *fd_handle, struct sensor_re
 		index++;
 	}
 
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-	if (SENSOR_I2C_REG_16BIT == (pReg->reg_bits & SENSOR_I2C_REG_16BIT))
-		delay_value = SENSOR_WRITE_DELAY;
-	else
-		delay_value = 0xFF;
-	if (SENSOR_I2C_VAL_16BIT == (pReg->reg_bits & SENSOR_I2C_VAL_16BIT))
-		max_data_value = 0xFFFF;
-	else
-		max_data_value = 0xFF;
-#else
-	delay_value = SENSOR_WRITE_DELAY;
-#endif
 
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-	if ((delay_value == subaddr) && (max_data_value == data)) {
-		// skip this case
-	} else
-#endif
-	if (delay_value != subaddr) {
-		int i;
+	if ((SENSOR_WRITE_DELAY != subaddr) && (SENSOR_WRITE_DELAY_8BIT != subaddr)) {
+
 		for (i = 0; i < SENSOR_I2C_OP_TRY_NUM; i++) {
 			msg_w.addr = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client->addr;
 			msg_w.flags = 0;
@@ -941,18 +1027,61 @@ LOCAL int _Sensor_K_WriteReg(struct sensor_file_tag *fd_handle, struct sensor_re
 				break;
 			}
 		}
-	} else {
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-		if (SENSOR_I2C_VAL_16BIT == (pReg->reg_bits & SENSOR_I2C_VAL_16BIT))
-			SLEEP_MS(data*10);
-		else
-			SLEEP_MS(data);
-#else
+	}else if(SENSOR_WRITE_DELAY == subaddr){
 		SLEEP_MS(data);
-#endif
-	}
+	} else if ((SENSOR_WRITE_DELAY_8BIT == subaddr) && (SENSOR_WRITE_DELAY_8BIT != data)) {
+			//SENSOR_PRINT_HIGH("_Sensor_K_WriteReg subaddr = %x, data = %x \n", subaddr, data);
+			SLEEP_MS(data*10);
+		} else {
+			SENSOR_PRINT_HIGH("_Sensor_K_WriteReg RegTab END \n");
+		}
 
 	return ret;
+}
+
+
+enum cmr_flash_status {
+	FLASH_CLOSE	= 0x0,
+	FLASH_OPEN		= 0x1,
+	FLASH_TORCH	= 0x2, /* User only set flash to close/open/torch state */
+	FLASH_AUTO	= 0x3,
+	FLASH_CLOSE_AFTER_OPEN	= 0x10, /* Following is set to sensor */
+	FLASH_HIGH_LIGHT			= 0x11,
+	FLASH_OPEN_ON_RECORDING	= 0x22,
+	FLASH_CLOSE_AFTER_AUTOFOCUS	= 0x30,
+	FLASH_STATUS_MAX
+};
+
+LOCAL int _sensor_k_set_flash(uint32_t flash_mode)
+{
+	printk("_sensor_k_set_flash : flash_mode 0x%x\n", flash_mode);
+
+	if(flash_torch_status==1)
+		return 0;
+
+		switch (flash_mode)
+		{
+			case FLASH_OPEN: /* Flash on */
+			case FLASH_TORCH: /* For torch */
+				sprd_flash_on();
+				break;
+
+			case FLASH_HIGH_LIGHT:
+				sprd_flash_high_light();
+				break;
+
+			case FLASH_CLOSE_AFTER_OPEN: /* Close flash */
+			case FLASH_CLOSE_AFTER_AUTOFOCUS:
+			case FLASH_CLOSE:
+				sprd_flash_close();
+				break;
+
+			default:
+				printk("_sensor_k_set_flash : Unknow mode : Flash_mode 0x%x\n", flash_mode);
+				break;
+		}
+
+	return 0;
 }
 
 LOCAL int _sensor_k_get_flash_level(struct sensor_file_tag *fd_handle, struct sensor_flash_level *level)
@@ -964,6 +1093,7 @@ LOCAL int _sensor_k_get_flash_level(struct sensor_file_tag *fd_handle, struct se
 
 	return SENSOR_K_SUCCESS;
 }
+
 
 int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_reg_tag *p_reg_table, uint32_t init_table_size);
 
@@ -997,8 +1127,6 @@ LOCAL int _sensor_k_wr_regtab(struct sensor_file_tag *fd_handle, struct sensor_r
 		goto _Sensor_K_WriteRegTab_return;
 	}
 
-	SENSOR_PRINT_HIGH("_sensor_k_wr_regtab start: mode=%d, cnt=%d\n", pRegTab->burst_mode, cnt);
-
 	sensor_reg_ptr = (struct sensor_reg_tag *)pBuff;
 
 	if (0 == pRegTab->burst_mode) {
@@ -1028,6 +1156,22 @@ _Sensor_K_WriteRegTab_return:
 	return ret;
 }
 
+int sensor_wr_regtab_fromkernel(struct file *file, struct sensor_reg_tab_tag *arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	struct sensor_reg_tab_tag *regTab;
+	p_file = file->private_data;
+	p_file->sensor_id = sensor_id;
+	p_mod = p_file->module_data;
+	regTab = arg;
+
+	ret = _sensor_k_wr_regtab(p_file, regTab);
+
+	return ret;
+}
+
 LOCAL int _sensor_k_set_i2c_clk(struct sensor_file_tag *fd_handle, uint32_t clock)
 {
 	struct sensor_module_tab_tag  *p_mod;
@@ -1040,17 +1184,33 @@ LOCAL int _sensor_k_set_i2c_clk(struct sensor_file_tag *fd_handle, uint32_t cloc
 	if (NULL != p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client) {
 		i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client;
 		sprd_i2c_ctl_chg_clk(i2c_client->adapter->nr, clock);
-		printk("sensor set i2c id %d clk %d  \n", i2c_client->adapter->nr, clock);
+		SENSOR_PRINT("sensor set i2c id %d clk %d  \n", i2c_client->adapter->nr, clock);
 	}
 	if (NULL != p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client
 		&& 0 == p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_gpio_i2c_flag) {
 		i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client;
 		sprd_i2c_ctl_chg_clk(i2c_client->adapter->nr, clock);
-		printk("sensor set i2c id %d clk %d  \n", i2c_client->adapter->nr, clock);
+		SENSOR_PRINT("sensor set i2c id %d clk %d  \n", i2c_client->adapter->nr, clock);
 	}
 	SENSOR_PRINT("sensor set i2c clk %d  \n", clock);
 
 	return SENSOR_K_SUCCESS;
+}
+
+int sensor_set_i2c_clk_fromkernel(struct file *file, uint32_t arg, uint32_t sensor_id)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *p_file;
+	struct sensor_module_tab_tag *p_mod;
+	uint32_t i2c_clk;
+	p_file = file->private_data;
+	p_mod = p_file->module_data;
+	p_file->sensor_id = sensor_id;
+	i2c_clk = arg;
+
+	ret = _sensor_k_set_i2c_clk(p_file, i2c_clk);
+
+	return ret;
 }
 
 LOCAL int _sensor_k_wr_i2c(struct sensor_file_tag *fd_handle, struct sensor_i2c_tag *pI2cTab)
@@ -1108,7 +1268,62 @@ sensor_k_writei2c_return:
 	return ret;
 }
 
-LOCAL int _sensor_k_rd_i2c(struct sensor_file_tag *fd_handle, struct sensor_i2c_tag *pI2cTab)
+int sensor_wr_i2c_fromkernel(struct file *file, struct sensor_i2c_tag *arg)
+{
+	uint32_t ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *fd_handle = file->private_data;
+	struct sensor_module_tab_tag *p_mod;
+	struct sensor_i2c_tag *i2cTab = arg;
+	char   *pBuff = PNULL;
+	struct i2c_msg                msg_w;
+	uint32_t cnt = 0;
+	struct i2c_client             *i2c_client;
+
+	p_mod = fd_handle->module_data;
+
+	cnt = i2cTab->i2c_count;
+	pBuff = _sensor_k_malloc(fd_handle, cnt);
+	if (PNULL == pBuff) {
+		SENSOR_PRINT_ERR("sensor W I2C ERR: alloc fail, size %d\n", cnt);
+		goto sensor_k_writei2c_return;
+	} else {
+		SENSOR_PRINT("sensor W I2C: alloc success, size %d\n", cnt);
+	}
+
+	memcpy(pBuff, i2cTab->i2c_data, cnt);
+
+	msg_w.addr = i2cTab->slave_addr;
+	msg_w.flags = 0;
+	msg_w.buf = pBuff;
+	msg_w.len = cnt;
+#if 1
+	if (NULL == p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client) {
+		i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client;
+	} else {
+		i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client;
+	}
+#else
+	i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client;
+#endif
+	ret = i2c_transfer(i2c_client->adapter, &msg_w, 1);
+	if (ret != 1) {
+		SENSOR_PRINT_ERR("SENSOR: w reg fail, ret: %d, addr: 0x%x\n",
+		ret, msg_w.addr);
+	} else {
+		ret = SENSOR_K_SUCCESS;
+	}
+
+sensor_k_writei2c_return:
+	if(PNULL != pBuff)
+		_sensor_k_free(fd_handle, pBuff);
+
+	SENSOR_PRINT("sensor w done, ret %d \n", ret);
+	return ret;
+
+}
+
+
+int _sensor_k_rd_i2c(struct sensor_file_tag *fd_handle, struct sensor_i2c_tag *pI2cTab)
 {
 	struct i2c_msg	   msg_r[2];
 	int                i;
@@ -1181,6 +1396,76 @@ sensor_k_readi2c_return:
 
 	SENSOR_PRINT("_Sensor_K_ReadI2C, ret %d \n", ret);
 	return ret;
+}
+
+int sensor_rd_i2c_fromkernel(struct file *f, struct sensor_i2c_tag *arg, uint32_t sensor_id)
+{
+	int  ret = SENSOR_K_SUCCESS;
+	struct sensor_file_tag *fd_handle;
+	struct sensor_module_tab_tag *p_mod;
+	struct sensor_i2c_tag *i2cTab;
+	struct i2c_msg	   msg_r[2];
+	struct i2c_client  *i2c_client;
+	char   *pBuff ;
+	uint32_t   cnt;
+	uint16_t read_num;
+	int i;
+	pBuff = PNULL;
+	read_num = 0;
+	i2cTab = arg;
+	i = 0;
+	fd_handle = f->private_data;
+	fd_handle->sensor_id = sensor_id;
+	p_mod = fd_handle->module_data;
+
+	read_num = i2cTab->i2c_count;
+	cnt = i2cTab->i2c_count;
+	/*alloc buffer */
+	pBuff = _sensor_k_malloc(fd_handle, cnt);
+	if (PNULL == pBuff) {
+		ret = SENSOR_K_FAIL;
+		SENSOR_PRINT_ERR("sensor rd I2C ERR: alloc fail, size %d\n", cnt);
+		goto sensor_k_readi2c_return;
+	} else {
+		SENSOR_PRINT("sensor rd I2C: alloc success, size %d\n", cnt);
+	}
+
+	memcpy(pBuff, i2cTab->i2c_data, cnt);
+
+	for (i = 0; i < SENSOR_I2C_OP_TRY_NUM; i++) {
+		msg_r[0].addr =  i2cTab->slave_addr;
+		msg_r[0].flags = 0;
+		msg_r[0].buf = pBuff;
+		msg_r[0].len = cnt;
+		msg_r[1].addr =  i2cTab->slave_addr;
+		msg_r[1].flags = I2C_M_RD;
+		msg_r[1].buf = pBuff;
+		msg_r[1].len = read_num;
+#if 1
+		if (NULL == p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client) {
+			i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client;
+		} else {
+			i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].vcm_i2c_client;
+		}
+#else
+		i2c_client = p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client;
+#endif
+		ret = i2c_transfer(i2c_client->adapter, msg_r, 2);
+		if (ret != 2) {
+			SENSOR_PRINT_ERR("SENSOR:read reg fail, ret %d, addr 0x%x \n",
+					ret, p_mod->sensor_dev_tab[fd_handle->sensor_id].cur_i2c_client->addr);
+			SLEEP_MS(20);
+			ret = SENSOR_K_FAIL;
+		}
+	}
+
+sensor_k_readi2c_return:
+	if(PNULL != pBuff)
+		_sensor_k_free(fd_handle, pBuff);
+
+	SENSOR_PRINT("_Sensor_K_ReadI2C, ret %d \n", ret);
+	return ret;
+
 }
 
 LOCAL int _sensor_csi2_error(uint32_t err_id, uint32_t err_status, void* u_data)
@@ -1279,6 +1564,15 @@ int sensor_k_release(struct inode *node, struct file *file)
 	if (SENSOR_ADDR_INVALID(p_file)) {
 		printk("SENSOR: Invalid addr, %p", p_mod);
 	} else {
+		if (NULL == p_file->sensor_mem.buf_ptr || 0 == p_file->sensor_mem.size) {
+			printk("check !! free size = %d, ptr=%p \n", p_file->sensor_mem.size, p_file->sensor_mem.buf_ptr);
+		}
+		else {
+			vfree(p_file->sensor_mem.buf_ptr);
+			p_file->sensor_mem.buf_ptr = PNULL;
+			p_file->sensor_mem.size = 0;
+		}
+
 		csi_api_free(p_file->csi_handle);
 		vfree(p_file);
 		p_file = NULL;
@@ -1318,15 +1612,15 @@ LOCAL ssize_t sensor_k_write(struct file *filp, const char __user *ubuf, size_t 
 	}  else {
 		pBuff = _sensor_k_malloc(p_file, cnt);
 		if (PNULL == pBuff) {
-			SENSOR_PRINT_ERR("sensor w ERR: alloc fail, size %ld \n", cnt);
+			SENSOR_PRINT_ERR("sensor w ERR: alloc fail, size %d \n", cnt);
 			goto sensor_k_write_return;
 		} else {
-			SENSOR_PRINT("sensor w: alloc success, size %ld \n", cnt);
+			SENSOR_PRINT("sensor w: alloc success, size %d \n", cnt);
 		}
 	}
 
 	if (copy_from_user(pBuff, ubuf, cnt)) {
-		SENSOR_PRINT_ERR("sensor w ERR: copy user fail, size %ld\n", cnt);
+		SENSOR_PRINT_ERR("sensor w ERR: copy user fail, size %d\n", cnt);
 		goto sensor_k_write_return;
 	}
 	printk("sensor clnt addr 0x%x.\n", i2c_client->addr);
@@ -1350,7 +1644,7 @@ sensor_k_write_return:
 	SENSOR_PRINT("sensor w done, ret %d \n", ret);
 	return ret;
 }
-
+#if defined(CONFIG_MACH_J1X3G) || defined(CONFIG_MACH_GTEXSWIFI)
 #define I2C_WRITE_BURST_LENGTH 512
 
 static int _burst_write(struct sensor_file_tag *fd_handle, uint16_t reg,  uint16_t val)
@@ -1360,37 +1654,26 @@ static int _burst_write(struct sensor_file_tag *fd_handle, uint16_t reg,  uint16
 	struct i2c_client *i2c_client = PNULL;
 	struct sensor_module_tab_tag  *p_mod;
 	struct sensor_file_tag        *p_file = fd_handle;
-	
 	p_mod = p_file->module_data;
 	SENSOR_CHECK_ZERO(p_mod);
-
 	i2c_client = p_mod->sensor_dev_tab[p_file->sensor_id].cur_i2c_client;
-
-
-	//SENSOR_PRINT("SENSOR: _burst_write Init\n");
-
 	if (0 == i2c_client)
 	{
 		SENSOR_PRINT_ERR("SENSOR: _burst_write err, i2c_clnt NULL!.\n");
 		return -1;
 	}
-
 	data[0] = reg>>8;
 	data[1] = reg;
 	data[2]=  val>>8;
 	data[3] = val;
-
 	if (reg == 0xffff)
 	{
 		msleep(val); /* Wait for reset to run */
 		return 0;
 	}
-
 	ret = i2c_master_send(i2c_client, data, 4);
-
 	return (ret < 0) ? ret: 0;
 }
-
 int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_reg_tag *p_reg_table, uint32_t init_table_size)
 {
 	int i = 0, ret=0;
@@ -1399,20 +1682,14 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 	struct i2c_client *i2c_client = PNULL;
 	struct sensor_module_tab_tag  *p_mod;
 	struct sensor_file_tag        *p_file = fd_handle;
-	
 	p_mod = p_file->module_data;
 	SENSOR_CHECK_ZERO(p_mod);
-
 	i2c_client = p_mod->sensor_dev_tab[p_file->sensor_id].cur_i2c_client;
-
-	//SENSOR_PRINT("SENSOR: _sensor_burst_write_init\n");
-
 	if (0 == i2c_client)
 	{
 		SENSOR_PRINT_ERR("SENSOR: burst w Init err, i2c_clnt NULL!.\n");
 		return -1;
 	}
-
 	for( i = 0 ; i < init_table_size ; i++ )
 	{
 		if( p_reg_table[i].reg_addr == 0x0F12 )
@@ -1420,7 +1697,6 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 			iic_data[iic_length] = p_reg_table[i].reg_value >>8;
 			iic_data[iic_length+1] = p_reg_table[i].reg_value & 0x00FF;
 			iic_length = iic_length+2;
-
 			if( i == (init_table_size-1) )
 			{
 				iic_data[0]=0x0F;
@@ -1438,7 +1714,6 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 				i2c_master_send(i2c_client, iic_data, iic_length);
 				iic_length =2;
 			}
-
 			ret = _burst_write(fd_handle, p_reg_table[i].reg_addr, p_reg_table[i].reg_value);
 			if (ret < 0)
 			{
@@ -1447,11 +1722,9 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 			}
 		}
 	}
-
 	return 0;
 }
-
-#if 0
+#else
 int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_reg_tag *p_reg_table, uint32_t init_table_size)
 {
 	uint32_t                      rtn = 0;
@@ -1481,11 +1754,11 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 	p_reg_val_tmp = (uint8_t*)_sensor_k_malloc(fd_handle, init_table_size*sizeof(uint16_t) + 16);
 
 	if(PNULL == p_reg_val_tmp){
-		SENSOR_PRINT_ERR("_sensor_burst_write_init ERROR: alloc is fail, size = %ld \n", init_table_size*sizeof(uint16_t) + 16);
+		SENSOR_PRINT_ERR("_sensor_burst_write_init ERROR: alloc is fail, size = %d \n", init_table_size*sizeof(uint16_t) + 16);
 		return -1;
 	}
 	else{
-		SENSOR_PRINT_HIGH("_sensor_burst_write_init: alloc success, size = %ld \n", init_table_size*sizeof(uint16_t) + 16);
+		SENSOR_PRINT_HIGH("_sensor_burst_write_init: alloc success, size = %d \n", init_table_size*sizeof(uint16_t) + 16);
 	}
 
 
@@ -1538,8 +1811,30 @@ int _sensor_burst_write_init(struct sensor_file_tag *fd_handle, struct sensor_re
 }
 #endif
 
-LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd,
-				unsigned long arg)
+void sensor_k_set_i2c_addr(struct file *file, uint16_t i2c_addr)
+{
+	struct sensor_module_tab_tag    *p_mod;
+	struct sensor_file_tag         *p_file = file->private_data;
+
+	SENSOR_CHECK_ZERO(p_file);
+	p_mod = p_file->module_data;
+	SENSOR_CHECK_ZERO(p_mod);
+
+	p_mod->sensor_dev_tab[p_file->sensor_id].cur_i2c_client->addr = (p_mod->sensor_dev_tab[p_file->sensor_id].cur_i2c_client->addr & (~0xFF)) |i2c_addr;
+}
+
+void sensor_k_set_id(struct file *file, uint32_t sensor_id)
+{
+	struct sensor_module_tab_tag    *p_mod;
+	struct sensor_file_tag         *p_file = file->private_data;
+	SENSOR_CHECK_ZERO(p_file);
+	p_mod = p_file->module_data;
+	SENSOR_CHECK_ZERO(p_mod);
+	p_file->sensor_id = sensor_id;
+	get_gpio_id(p_mod->of_node, &p_file->gpio_tab.pwn, &p_file->gpio_tab.reset, p_file->sensor_id);
+}
+
+LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int                            ret = 0;
 	struct sensor_module_tab_tag    *p_mod;
@@ -1669,6 +1964,16 @@ LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 
+	case SENSOR_IO_SET_MIPI_SWITCH:
+		{
+			uint32_t level;
+			SENSOR_PRINT("SENSOR: ioctl SENSOR_IO_SET_MIPI_SWITCH \n");
+			ret = copy_from_user(&level, (uint32_t *) arg, sizeof(uint32_t));
+			if (0 == ret)
+				ret = sensor_k_set_mipi_level((uint32_t *)p_file, level);
+		}
+		break;
+
 	case SENSOR_IO_I2C_ADDR:
 		{
 			uint16_t i2c_addr;
@@ -1763,6 +2068,15 @@ LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd,
 			}
 		}
 		break;
+	case SENSOR_IO_SET_FLASH:
+		{
+			uint32_t flash_mode;
+			ret = copy_from_user(&flash_mode, (uint32_t *) arg, sizeof(uint32_t));
+			if (0 == ret)
+				ret = _sensor_k_set_flash(flash_mode);
+		}
+		break;
+		
 	case SENSOR_IO_GET_SOCID:
 		{
 			struct sensor_socid_tag	Id  ;
@@ -1831,21 +2145,31 @@ LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd,
 			SENSOR_PRINT("SENSOR: ioctl SENSOR_IO_POWER_CFG \n");
 			ret = copy_from_user(&pwr_cfg, (struct sensor_power_info_tag*) arg, sizeof(struct sensor_power_info_tag));
 			if (0 == ret) {
+#if defined(CONFIG_MACH_J1MINI3G)
+				if(1 == pwr_cfg.is_on) {
+					ret = sensor_power_on((uint32_t *)p_file, pwr_cfg.op_sensor_id, &pwr_cfg.dev0, &pwr_cfg.dev1, &pwr_cfg.dev2);
+				} else if (0x10 == pwr_cfg.is_on) {
+					ret = sensor_power_init((uint32_t *)p_file, pwr_cfg.op_sensor_id, &pwr_cfg.dev0, &pwr_cfg.dev1, &pwr_cfg.dev2);
+				} else {
+					ret = sensor_power_off((uint32_t *)p_file, pwr_cfg.op_sensor_id, &pwr_cfg.dev0, &pwr_cfg.dev1, &pwr_cfg.dev2);
+				}
+#else
 				if (pwr_cfg.is_on) {
 					ret = sensor_power_on((uint32_t *)p_file, pwr_cfg.op_sensor_id, &pwr_cfg.dev0, &pwr_cfg.dev1, &pwr_cfg.dev2);
 				} else {
 					ret = sensor_power_off((uint32_t *)p_file, pwr_cfg.op_sensor_id, &pwr_cfg.dev0, &pwr_cfg.dev1, &pwr_cfg.dev2);
 				}
+#endif
 			}
 		}
 		break;
-		
-	    case SENSOR_IO_READ_OTPDATA:
+
+		case SENSOR_IO_READ_OTPDATA:
 		{
 			SENSOR_OTP_PARAM_T *para = (SENSOR_OTP_PARAM_T *)arg;
 			uint32_t type;
 			copy_from_user(&type, &para->type, sizeof(uint32_t));
-			printk("SENSOR: ioctl SENSOR_IO_READ_OTPDATA %p type %d\n", arg, para->type);
+			printk("SENSOR: ioctl SENSOR_IO_READ_OTPDATA 0x%lx type %d\n", arg, para->type);
 
 			if(type == SENSOR_OTP_PARAM_CHECKSUM) {
 				SENSOR_OTP_DATA_INFO_T *chksum = &p_mod->otp_param[p_file->sensor_id].golden;
@@ -1988,8 +2312,8 @@ int sensor_k_probe(struct platform_device *pdev)
 #ifndef	CONFIG_SC_FPGA_PIN
 	struct sensor_gpio_tag       gpio_tab;
 #endif
-	int                          gpio_id = 0;
-
+	int gpio_id = 0;
+	int gpio_mipi_en = 0;
 	printk(KERN_ALERT "sensor probe called\n");
 	p_mod = (struct sensor_module_tab_tag *)vzalloc(sizeof(struct sensor_module_tab_tag));
 	SENSOR_CHECK_ZERO(p_mod);
@@ -2018,36 +2342,157 @@ int sensor_k_probe(struct platform_device *pdev)
 #ifndef	CONFIG_SC_FPGA_PIN
 	for (i = 0; i < SENSOR_DEV_MAX; i++) {
 		get_gpio_id(p_mod->of_node, &gpio_tab.pwn, &gpio_tab.reset, i);
-		ret = gpio_request(gpio_tab.pwn, NULL);
-		if (ret) {
-			tmp = 1;
-			printk("sensor: gpio already request pwn %d %d.\n", gpio_tab.pwn, i);
+		if(gpio_tab.pwn > 0) {
+			ret = gpio_request(gpio_tab.pwn, NULL);
+			if (ret) {
+				tmp = 1;
+				printk("sensor: gpio already request pwn %d %d.\n", gpio_tab.pwn, i);
+			}
+			gpio_direction_output(gpio_tab.pwn, 1);
+			gpio_set_value(gpio_tab.pwn, 0);
+		} else {
+			printk("sensor: can't find gpio pwn %d (errno = %d)\n",
+					i, gpio_tab.pwn);
 		}
-		ret = gpio_request(gpio_tab.reset, NULL);
-		if (ret) {
-			tmp = 1;
-			printk("sensor:  gpio already request reset %d %d.\n", gpio_tab.reset, i);
+		if(gpio_tab.reset > 0) {
+			ret = gpio_request(gpio_tab.reset, NULL);
+			if (ret) {
+				tmp = 1;
+				printk("sensor:  gpio already request reset %d %d.\n", gpio_tab.reset, i);
+			}
+			gpio_direction_output(gpio_tab.reset, 1);
+			gpio_set_value(gpio_tab.reset, 0);
+		} else {
+			printk("sensor: can't find gpio reset %d (errno = %d)\n",
+					i, gpio_tab.pwn);
 		}
 	}
 
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, 0);
-	ret = gpio_request(gpio_id, NULL);
-	if (ret) {
-		tmp = 1;
-		printk("sensor: gpio already request GPIO_CAMDVDD %d.\n", gpio_id);
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINDVDD, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_MAINDVDD,  gpio_id = %d.\n", gpio_id);
+		 }
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_MAINDVDD (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_SUBDVDD, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_SUBDVDD,  gpio_id = %d.\n", gpio_id);
+		 }
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_SUBDVDD (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_SUB2DVDD, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_SUB2DVDD,  gpio_id = %d.\n", gpio_id);
+		 }
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_SUB2DVDD (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_FLASH_EN, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_FLASH_EN,  gpio_id = %d.\n", gpio_id);
+		}
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_FLASH_EN (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_SWITCH_MODE, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_SWITCH_MODE,  gpio_id = %d.\n", gpio_id);
+		 }
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_SWITCH_MODE (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_MIPI_SWITCH_EN, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_MIPI_SWITCH_EN,  gpio_id = %d.\n", gpio_id);
+		 }
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 0);
+	} else {
+		printk("sensor: can't find GPIO_MIPI_SWITCH_EN (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_MIPI_SWITCH_MODE, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_MIPI_SWITCH_MODE,  gpio_id = %d.\n", gpio_id);
+		}
+		gpio_direction_output(gpio_id, 1);
+		gpio_set_value(gpio_id, 1);
+	} else {
+		printk("sensor: can't find GPIO_MIPI_SWITCH_MODE (errno = %d)\n",
+				gpio_id);
+	}
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINCAM_ID, &gpio_id, 0);
+	if(gpio_id > 0) {
+		ret = gpio_request(gpio_id, NULL);
+		if (ret) {
+			tmp = 1;
+			printk("sensor: gpio already request GPIO_MAINCAM_ID,  gpio_id = %d.\n", gpio_id);
+		}
+		gpio_direction_output(gpio_id, 1);
+	} else {
+		printk("sensor: can't find GPIO_MAINCAM_ID (errno = %d)\n",
+				gpio_id);
 	}
 #endif
-
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)// || defined(CONFIG_MACH_COREPRIMEVE3G)
-	// Below code purpose is DVS test. (GPIO IORA test)
-	// Before kernel_init() which checks GPIO init values, camera driver sets camera LDO GPIO to output from input(Default) by calling "gpio_direction_output()" function.
-	if (!gpio_is_valid(CAM_LDO_ENABLE_GPIO)) // Flash EN
-	{
-		printk("CAM_LDO_ENABLE_GPIO gpio pin error\n");
+#if defined(CONFIG_MACH_J1X3G) || defined(CONFIG_MACH_J3X3G)
+	if (!gpio_is_valid(CAM_FLASH_EN)) { // Flash EN
+		printk("CAM_FLASH_EN gpio pin error\n");
 		return 1;
 	}
-	gpio_request(CAM_LDO_ENABLE_GPIO, "camLDOEnable");
-	gpio_direction_output(CAM_LDO_ENABLE_GPIO, 0); // Set Flash Enable GPIO as Output
+	gpio_request(CAM_FLASH_EN, "CAM_FLASH_EN");
+	gpio_direction_output(CAM_FLASH_EN, 0); // Set Flash Enable GPIO as Output
+
+	if (!gpio_is_valid(CAM_FLASH_TORCH)) { // Flash Torch
+		printk("CAM_FLASH_TORCH gpio pin error\n");
+		return 1;
+	}
+	gpio_request(CAM_FLASH_TORCH, "CAM_FLASH_TORCH");
+	gpio_direction_output(CAM_FLASH_TORCH, 0); // Set Flash Enable GPIO as Output
 #endif
 
 	ret = sensor_k_register_subdevs(pdev);
@@ -2057,6 +2502,22 @@ int sensor_k_probe(struct platform_device *pdev)
 		goto misc_register_error;
 	}
 	kthread_run(sensor_reloadinfo_thread, p_mod->otp_param, "otpreload");
+
+#if defined(CONFIG_MACH_J1MINI3G)		// Set Front Camera GPIO value for DVS
+	get_gpio_id(p_mod->of_node, &gpio_tab.pwn, &gpio_tab.reset, 1);
+	ret = gpio_request(gpio_tab.pwn, NULL);
+	if (ret) {
+		printk("sensor: gpio already request pwn %d %d.\n", gpio_tab.pwn, 1);
+	}
+	gpio_direction_output(gpio_tab.pwn, 0);
+
+	ret = gpio_request(gpio_tab.reset, NULL);
+	if (ret) {
+		printk("sensor:  gpio already request reset %d %d.\n", gpio_tab.reset, 1);
+	}
+	gpio_direction_output(gpio_tab.reset, 0);
+#endif
+
 	goto exit;
 
 misc_register_error:
@@ -2079,6 +2540,12 @@ exit:
 	return ret;
 }
 
+struct device_node *get_device_node(void)
+{
+    return ((struct sensor_module_tab_tag *)(sensor_dev.this_device->platform_data))->of_node;
+}
+
+
 LOCAL int sensor_k_remove(struct platform_device *dev)
 {
 	struct sensor_module_tab_tag *p_mod = platform_get_drvdata(dev);
@@ -2099,8 +2566,11 @@ LOCAL int sensor_k_remove(struct platform_device *dev)
 		gpio_free(gpio_tab.reset);
 	}
 
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, 0);
-	gpio_free(gpio_id);
+       for (i = 0; i < GPIO_CAMMAX; i++) {
+	   	get_gpio_id_ex(p_mod->of_node, i, &gpio_id, 0);
+		gpio_free(gpio_id);
+		gpio_id = 0;
+	}
 #endif
 
 	misc_deregister(&sensor_dev);
@@ -2132,32 +2602,57 @@ static struct platform_driver sensor_dev_driver = {
 		},
 };
 
-struct class *camera_class;
-
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
-#define REAR_SENSOR_NAME	"J08PLIC01AA J08PLIC01AA\n"	// 150504, heechul. temporal hardcoding
-#define REAR_FULL_SENSOR_NAME	"J08PLIC01AA J08PLIC01AA J08PLIC01AA\n"	// 150504, heechul. temporal hardcoding
-#define FRONT_SENSOR_NAME	"S5K5E3YX N\n"
-#define FRONT_FULL_SENSOR_NAME	"S5K5E3YX N S5K5E3YX\n"
-#define REAR_SENSOR_TYPE "ISP\n"
-#define FRONT_SENSOR_TYPE "SOC\n"
-#define REAR_CAMERA_INFO	"ISP=INT;CALMEM=Y;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
-#define FRONT_CAMERA_INFO	"ISP=INT;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
-#else // CONFIG_MACH_COREPRIMEVE3G
-#define REAR_SENSOR_NAME	"S5K4ECGX N\n"
-#define FRONT_SENSOR_NAME	"SR200PC20M N\n"
-#define REAR_SENSOR_TYPE "SOC\n"
-#define FRONT_SENSOR_TYPE "SOC\n"
-#define REAR_CAMERA_INFO	"ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
-#define FRONT_CAMERA_INFO	"ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
+#if defined(CONFIG_MACH_J1X3G)
+#define REAR_SENSOR_NAME            "S5K4ECGA N\n"
+#define FRONT_SENSOR_NAME           "SR200PC20M N\n"
+#define REAR_SENSOR_TYPE            "SOC\n"
+#define FRONT_SENSOR_TYPE           "SOC\n"
+#define REAR_CAMERA_INFO            "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
+#define FRONT_CAMERA_INFO           "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
+#elif defined(CONFIG_MACH_J3X3G)
+#define REAR_SENSOR_NAME            "J08PLIC01AA J08PLIC01AA\n"
+#define REAR_FULL_SENSOR_NAME       "J08PLIC01AA J08PLIC01AA J08PLIC01AA\n"	
+#define FRONT_SENSOR_NAME           "S5K5E3YX N\n"
+#define FRONT_FULL_SENSOR_NAME      "S5K5E3YX N S5K5E3YX\n"
+#define REAR_SENSOR_TYPE            "ISP\n"
+#define FRONT_SENSOR_TYPE           "SOC\n"
+#define REAR_CAMERA_INFO            "ISP=INT;CALMEM=Y;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
+#define FRONT_CAMERA_INFO           "ISP=INT;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
+#elif defined(CONFIG_MACH_GTEXSWIFI)
+#define REAR_SENSOR_NAME            "S5K4ECGA N\n"
+#define FRONT_SENSOR_NAME           "SR259 N\n"
+#define REAR_SENSOR_TYPE            "SOC\n"
+#define FRONT_SENSOR_TYPE           "SOC\n"
+#define REAR_CAMERA_INFO            "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
+#define FRONT_CAMERA_INFO           "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"	// 150514, heechul. temporal hardcoding
+#elif defined(CONFIG_MACH_J1MINI3G)
+#define REAR_SENSOR_NAME            "A05PFII01PA A05PFII01PA\n"
+#define REAR_FULL_SENSOR_NAME       "A05PFII01PA A05PFII01PA A05PFII01PA\n"
+#define FRONT_SENSOR_NAME           "SR030PC50 N\n"
+#define FRONT_FULL_SENSOR_NAME      "SR030PC50 N SR030PC50\n"
+#define REAR_SENSOR_TYPE            "ISP\n"
+#define FRONT_SENSOR_TYPE           "SOC\n"
+#define REAR_CAMERA_INFO            "ISP=INT;CALMEM=Y;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
+#define FRONT_CAMERA_INFO           "ISP=INT;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
+#else
+#define REAR_SENSOR_NAME            "S5K4ECGX N\n"
+#define FRONT_SENSOR_NAME           "SR200PC20M N\n"
+#define REAR_SENSOR_TYPE            "SOC\n"
+#define FRONT_SENSOR_TYPE           "SOC\n"
+#define REAR_CAMERA_INFO            "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
+#define FRONT_CAMERA_INFO           "ISP=SOC;CALMEM=N;READVER=SYSFS;COREVOLT=N;UPGRADE=N;CC=N;OIS=N;"
 #endif
 
 LOCAL int _Sensor_K_SetTorch(uint32_t flash_mode)
 {
 	printk("_Sensor_K_SetTorch : mode %d, flash_torch_status = %d\n", flash_mode, flash_torch_status);
+
+#if !defined(CONFIG_MACH_J1MINI3G)
 	switch (flash_mode)
 	{
-		case 1: /* For torch */
+		case 1:
+		case 100:
+		  	/* For torch */
 			flash_torch_status=1;
 			sm5701_led_ready(MOVIE_MODE);
 			sm5701_set_fleden(SM5701_FLEDEN_ON_MOVIE);
@@ -2166,21 +2661,43 @@ LOCAL int _Sensor_K_SetTorch(uint32_t flash_mode)
 		case 0:
 			flash_torch_status=0;
 			sm5701_set_fleden(SM5701_FLEDEN_DISABLED);
-			sm5701_led_ready(LED_DISABLE);
+			sm5701_led_ready(LED_DISABLE);			
 			break;
 
 		default:
 			printk("_Sensor_K_SetTorch : Un-know mode : flash_mode : 0x%x\n", flash_mode);
 			break;
 	}
+#endif
 	printk("_Sensor_K_SetTorch : Flash_mode : 0x%x\n", flash_mode);
 
 	return 0;
 }
 
+#if defined(CONFIG_MACH_J1X3G)||defined(CONFIG_MACH_GTEXSWIFI)
+uint16_t VENDOR_ID = 0xFFFF;
+static ssize_t camera_vendorid_show(struct device *dev, struct device_attribute *attr, char *buf)
+{	
+	int count;	
+
+	count = sprintf(buf, "0x%04X", VENDOR_ID);	
+	printk("%s : vendor ID is 0x%04X\n", __func__, VENDOR_ID);	
+	return count;
+}
+
+static ssize_t camera_vendorid_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	int tmp = 0;
+	sscanf(buf, "%x", &tmp);	
+	VENDOR_ID = tmp;	
+	printk("%s : vendor ID is 0x%04X\n", __func__, VENDOR_ID);	
+	return size;
+}
+#endif
+
 static ssize_t Rear_Cam_Sensor_ID(struct device *dev, struct device_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
+#if defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3X3G) || defined(CONFIG_MACH_J1MINI3G)
 	char fw_version[12]={0};
 	sensor_get_fw_version_otp(fw_version);
 	printk("%s : sensor id: %s", __func__, fw_version);
@@ -2191,46 +2708,10 @@ static ssize_t Rear_Cam_Sensor_ID(struct device *dev, struct device_attribute *a
 #endif
 }
 
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-static ssize_t S5K4ECGX_camera_vendorid_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int count;
-	count = sprintf(buf, "0x%04X", VENDOR_ID);
-	printk("%s : vendor ID is 0x%04X\n", __func__, VENDOR_ID);
-	return count;
-}
-
-static ssize_t S5K4ECGX_camera_vendorid_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
-{
-	int tmp = 0;
-	sscanf(buf, "%x", &tmp);
-	VENDOR_ID = tmp;
-	printk("%s : vendor ID is 0x%04X\n", __func__, VENDOR_ID);
-	return size;
-}
-
-static ssize_t S5K4ECGX_camera_antibanding_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int count;
-	count = sprintf(buf, "%d", camera_antibanding_val);
-	printk("%s : antibanding is %d\n", __func__, camera_antibanding_val);
-	return count;
-}
-
-static ssize_t S5K4ECGX_camera_antibanding_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
-{
-	int tmp = 0;
-	sscanf(buf, "%d", &tmp);
-	camera_antibanding_val = tmp;
-	printk("%s : antibanding is %d\n", __func__, camera_antibanding_val);
-	return size;
-}
-#endif
-
 #if defined(REAR_FULL_SENSOR_NAME)
 static ssize_t Rear_Cam_Full_Sensor_ID(struct device *dev, struct device_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
+#if defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3X3G) || defined(CONFIG_MACH_J1MINI3G)
 	char fw_version[12]={0};
 	sensor_get_fw_version_otp(fw_version);
 	printk("%s : sensor id: %s", __func__, fw_version);
@@ -2244,7 +2725,7 @@ static ssize_t Rear_Cam_Full_Sensor_ID(struct device *dev, struct device_attribu
 
 static ssize_t Rear_camera_checkfw_factory(struct device *dev, struct device_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
+#if defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3XNLTE) || defined(CONFIG_MACH_J3X3G)
 	char cam_checkfw_factory[3]={0};
 	char fw_version[12]={0};
 	sensor_get_fw_version_otp(fw_version);
@@ -2266,8 +2747,7 @@ static ssize_t Rear_camera_checkfw_factory(struct device *dev, struct device_att
 #else
 		sprintf(cam_checkfw_factory, "OK");
 #endif
-	}
-	else {
+	} else {
 		sprintf(cam_checkfw_factory, "NG_VER");
 	}
 
@@ -2280,7 +2760,7 @@ static ssize_t Rear_camera_checkfw_factory(struct device *dev, struct device_att
 
 static ssize_t Rear_camera_checkfw_user(struct device *dev, struct device_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MACH_GRANDPRIMEVE3G)
+#if defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3XNLTE) || defined(CONFIG_MACH_J3X3G)
 	char cam_checkfw_user[3]={0};
 	char fw_version[12]={0};
 	sensor_get_fw_version_otp(fw_version);
@@ -2300,7 +2780,7 @@ static ssize_t Rear_camera_checkfw_user(struct device *dev, struct device_attrib
 		else
 			sprintf(cam_checkfw_user, "NG");
 #else
-		sprintf(cam_checkfw_factory, "OK");
+		sprintf(cam_checkfw_user, "OK");
 #endif
 	}
 	else {
@@ -2344,15 +2824,55 @@ static ssize_t Rear_Cam_show_flash(struct device *dev, struct device_attribute *
 #if defined(FRONT_SENSOR_NAME)
 static ssize_t Front_Cam_Sensor_ID(struct device *dev, struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_MACH_J1MINI3G)
+#define FRONT_SENSOR_NAME_SR030      "SR030PC50 N\n"
+#define FRONT_SENSOR_NAME_GC0310     "GC0310 N\n"
+#define SR030PC50_CHIP_ID_VALUE      0xB8
+#define GC0310_CHIP_ID_VALUE         0xA310
+
+	uint32_t pid = 0x0000;
+	sensor_get_front_sensor_pid(&pid);
+	SENSOR_PRINT("%s : sensor pid: 0x%4x\n", __func__, pid);
+	SENSOR_PRINT("Front_Cam_Sensor_ID\n");
+
+	if ( SR030PC50_CHIP_ID_VALUE == pid ) {
+		return sprintf(buf, FRONT_SENSOR_NAME_SR030);
+	} else if ( GC0310_CHIP_ID_VALUE == pid) {
+		return sprintf(buf, FRONT_SENSOR_NAME_GC0310);
+	} else {
+		return sprintf(buf, FRONT_SENSOR_NAME);
+	}
+#else
 	SENSOR_PRINT("Front_Cam_Sensor_ID\n");
 	return sprintf(buf, FRONT_SENSOR_NAME);
+#endif
 }
 
 #if defined(FRONT_FULL_SENSOR_NAME)
 static ssize_t Front_Cam_Full_Sensor_ID(struct device *dev, struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_MACH_J1MINI3G)
+#define FRONT_FULL_SENSOR_NAME_SR030     "SR030PC50 N SR030PC50\n"
+#define FRONT_FULL_SENSOR_NAME_GC0310    "GC0310 N GC0310\n"
+#define SR030PC50_CHIP_ID_VALUE          0xB8
+#define GC0310_CHIP_ID_VALUE             0xA310
+
+	uint32_t pid = 0x0000;
+	sensor_get_front_sensor_pid(&pid);
+	SENSOR_PRINT("%s : sensor pid: 0x%4x\n", __func__, pid);
+	SENSOR_PRINT("Front_Cam_Full_Sensor_ID\n");
+
+	if ( SR030PC50_CHIP_ID_VALUE == pid ) {
+		return sprintf(buf, FRONT_FULL_SENSOR_NAME_SR030);
+	} else if ( GC0310_CHIP_ID_VALUE == pid) {
+		return sprintf(buf, FRONT_FULL_SENSOR_NAME_GC0310);
+	} else {
+		return sprintf(buf, FRONT_SENSOR_NAME);
+	}
+#else
 	SENSOR_PRINT("Front_Cam_Full_Sensor_ID\n");
 	return sprintf(buf, FRONT_FULL_SENSOR_NAME);
+#endif
 }
 #endif
 
@@ -2369,6 +2889,7 @@ static ssize_t Front_Cam_Camera_Info(struct device *dev, struct device_attribute
 }
 #endif
 
+/* Device Attribute List */
 static DEVICE_ATTR(rear_camfw, S_IRUGO | S_IXOTH, Rear_Cam_Sensor_ID, NULL); // Read(User, Group, Other), Execute(Other)
 #if defined(REAR_FULL_SENSOR_NAME)
 static DEVICE_ATTR(rear_camfw_full, S_IRUGO | S_IXOTH, Rear_Cam_Full_Sensor_ID, NULL); // Read(User, Group, Other), Execute(Other)
@@ -2379,9 +2900,7 @@ static DEVICE_ATTR(rear_checkfw_user, S_IRUGO | S_IXOTH, Rear_camera_checkfw_use
 
 static DEVICE_ATTR(rear_type, S_IRUGO | S_IXOTH, Rear_Cam_Sensor_TYPE, NULL); // Read(User, Group, Other), Execute(Other)
 static DEVICE_ATTR(rear_camtype, S_IRUGO | S_IXOTH, Rear_Cam_Sensor_TYPE, NULL); // Read(User, Group, Other), Execute(Other)
-
-static DEVICE_ATTR(rear_caminfo, S_IRUGO | S_IWUSR | S_IWGRP, Rear_Cam_Camera_Info, NULL); // Read(User, Group, Other), Write(User, Group)
-
+static DEVICE_ATTR(rear_caminfo, S_IRUGO, Rear_Cam_Camera_Info, NULL); // Read(User, Group, Other), Write(User, Group)
 static DEVICE_ATTR(rear_flash, S_IRUGO | S_IWUSR | S_IWGRP | S_IXOTH, Rear_Cam_show_flash, Rear_Cam_store_flash); // Read(User, Group, Other), Write(User, Group), Execute(Other)
 
 #if defined(FRONT_SENSOR_NAME)
@@ -2392,33 +2911,25 @@ static DEVICE_ATTR(front_camfw_full, S_IRUGO | S_IXOTH, Front_Cam_Full_Sensor_ID
 static DEVICE_ATTR(front_type, S_IRUGO | S_IXOTH, Front_Cam_Sensor_TYPE, NULL); // Read(User, Group, Other), Execute(Other)
 static DEVICE_ATTR(front_camtype, S_IRUGO | S_IXOTH, Front_Cam_Sensor_TYPE, NULL); // Read(User, Group, Other), Execute(Other)
 
-static DEVICE_ATTR(front_caminfo, S_IRUGO | S_IWUSR | S_IWGRP, Front_Cam_Camera_Info, NULL); // Read(User, Group, Other), Write(User, Group)
+static DEVICE_ATTR(front_caminfo, S_IRUGO, Front_Cam_Camera_Info, NULL); // Read(User, Group, Other), Write(User, Group)
 #endif
 
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-static struct device_attribute S5K4ECGX_camera_vendorid_attr = {
-	.attr = {
+#if defined(CONFIG_MACH_J1X3G)||defined(CONFIG_MACH_GTEXSWIFI)
+static struct device_attribute camera_vendorid_attr = {
+	.attr = {	
 		.name = "rear_vendorid",
-		.mode = (S_IRWXU | S_IRWXG | S_IRWXO)},
-	.show = S5K4ECGX_camera_vendorid_show,
-	.store = S5K4ECGX_camera_vendorid_store
-};
-
-static struct device_attribute S5K4ECGX_camera_antibanding_attr = {
-	.attr = {
-		.name = "Cam_antibanding",
-		.mode = (S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH)},
-	.show = S5K4ECGX_camera_antibanding_show,
-	.store = S5K4ECGX_camera_antibanding_store
+		.mode = (S_IRWXU | S_IRWXG | S_IRWXO)},	
+	.show = camera_vendorid_show,	
+	.store = camera_vendorid_store
 };
 #endif
 
 int __init sensor_k_init(void)
 {
 	int err = 0;
-	struct device *dev_t_rear;
-	struct device *dev_t_flash;
-	struct device *dev_t_front;
+	struct device *dev_t_rear = NULL;
+	struct device *dev_t_flash = NULL;
+	struct device *dev_t_front = NULL;
 
 	printk(KERN_INFO "sensor_k_init called !\n");
 
@@ -2430,16 +2941,14 @@ int __init sensor_k_init(void)
 	flash_torch_status = 0;
 
 	camera_class = class_create(THIS_MODULE, "camera");
-	if (IS_ERR(camera_class))
-	{
+	if(IS_ERR(camera_class)) {
 		SENSOR_PRINT("Failed to create camera_class!\n");
 		platform_driver_unregister(&sensor_dev_driver);
 		return PTR_ERR( camera_class );
 	}
 
 	dev_t_rear = device_create(camera_class, NULL, 0, "%s", "rear");
-	if (IS_ERR(dev_t_rear))
-	{
+	if (IS_ERR(dev_t_rear)){
 		platform_driver_unregister(&sensor_dev_driver);
 		class_destroy(camera_class);
 		SENSOR_PRINT("Failed to create camera_dev!\n");
@@ -2447,16 +2956,14 @@ int __init sensor_k_init(void)
 	}
 
 	err = device_create_file(dev_t_rear, &dev_attr_rear_camfw);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_camfw.attr.name);
 		goto err_make_rear_camfw_file;
 	}
 
 #if defined(REAR_FULL_SENSOR_NAME)
 	err = device_create_file(dev_t_rear, &dev_attr_rear_camfw_full);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_camfw_full.attr.name);
 		goto err_make_rear_camfw_full_file;
 	}
@@ -2477,98 +2984,83 @@ int __init sensor_k_init(void)
 	}
 
 	err = device_create_file(dev_t_rear, &dev_attr_rear_type);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_type.attr.name);
 		goto err_make_rear_type_file;
 	}
 
 	err = device_create_file(dev_t_rear, &dev_attr_rear_camtype);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_camtype.attr.name);
 		goto err_make_rear_camtype_file;
 	}
 
 	err = device_create_file(dev_t_rear, &dev_attr_rear_caminfo);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_caminfo.attr.name);
 		goto err_make_rear_camera_info;
 	}
-
+	
+#if defined(CONFIG_MACH_J1X3G)||defined(CONFIG_MACH_GTEXSWIFI)	
+	err = device_create_file(dev_t_rear, &camera_vendorid_attr);
+	if(err) {		
+		SENSOR_PRINT("Failed to create device file(%s)!\n", camera_vendorid_attr.attr.name);
+		goto err_make_camera_vendorid;	
+	}
+#endif
+	
+#if defined(CONFIG_MACH_J1X3G) || defined(CONFIG_MACH_J3X3G) 
+	/* Prevent CID 63391 : Fix explicit null dereferenced issue (FORWARD_NULL) */
 	dev_t_flash = device_create(camera_class, NULL, 0, "%s", "flash");
-	if (IS_ERR(dev_t_flash))
-	{
+	if (IS_ERR(dev_t_flash)) {
 		SENSOR_PRINT("Failed to create camera_dev flash!\n");
 		err = PTR_ERR( dev_t_flash );
 		goto err_make_flash_device;
 	}
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-	err = device_create_file(dev_t_rear, &S5K4ECGX_camera_vendorid_attr);
-	if(err)
-	{
-		SENSOR_PRINT("Failed to create device file(%s)!\n", S5K4ECGX_camera_vendorid_attr.attr.name);
-		goto err_make_camera_vendorid;
-	}
-
-	err = device_create_file(dev_t_rear, &S5K4ECGX_camera_antibanding_attr);
-	if(err)
-	{
-		SENSOR_PRINT("Failed to create device file(%s)!\n", S5K4ECGX_camera_antibanding_attr.attr.name);
-		goto err_make_camera_antibanding;
-	}
-#endif
 
 	err = device_create_file(dev_t_flash, &dev_attr_rear_flash);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_rear_flash.attr.name);
 		goto err_make_flash_file;
 	}
-
+#endif
+		
 #if defined(FRONT_SENSOR_NAME)
 	dev_t_front = device_create(camera_class, NULL, 0, "%s", "front");
-	if (IS_ERR(dev_t_front))
-	{
+	if (IS_ERR(dev_t_front)) {
 		SENSOR_PRINT("Failed to create camera_dev front!\n");
 		err = PTR_ERR( dev_t_front );
 		goto err_make_front_device;
 	}
 
 	err = device_create_file(dev_t_front, &dev_attr_front_camfw);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_front_camfw.attr.name);
 		goto err_make_front_camfw_file;
 	}
 
 #if defined(FRONT_FULL_SENSOR_NAME)
 	err = device_create_file(dev_t_front, &dev_attr_front_camfw_full);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_front_camfw_full.attr.name);
 		goto err_make_front_camfw_full_file;
 	}
 #endif
 
 	err = device_create_file(dev_t_front, &dev_attr_front_type);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_front_type.attr.name);
 		goto err_make_front_type_file;
 	}
 
 	err = device_create_file(dev_t_front, &dev_attr_front_camtype);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_front_camtype.attr.name);
 		goto err_make_front_camtype_file;
 	}
 
 	err = device_create_file(dev_t_front, &dev_attr_front_caminfo);
-	if(err)
-	{
+	if(err) {
 		SENSOR_PRINT("Failed to create device file(%s)!\n", dev_attr_front_caminfo.attr.name);
 		goto err_make_front_camera_info;
 	}
@@ -2576,54 +3068,57 @@ int __init sensor_k_init(void)
 
 	return 0;
 
-
 #if defined(FRONT_SENSOR_NAME)
-		device_remove_file(dev_t_front, &dev_attr_front_caminfo);
-	err_make_front_camera_info:
-		device_remove_file(dev_t_front, &dev_attr_front_camtype);
-	err_make_front_camtype_file:
-		device_remove_file(dev_t_front, &dev_attr_front_type);
-	err_make_front_type_file:
-		device_remove_file(dev_t_front, &dev_attr_rear_checkfw_user);
-	err_make_rear_checkfw_user_file:
-		device_remove_file(dev_t_front, &dev_attr_rear_checkfw_factory);
-	err_make_rear_checkfw_factory_file:
+	device_remove_file(dev_t_front, &dev_attr_front_caminfo);
+err_make_front_camera_info:
+	device_remove_file(dev_t_front, &dev_attr_front_camtype);
+err_make_front_camtype_file:
+	device_remove_file(dev_t_front, &dev_attr_front_type);
+err_make_front_type_file:
+
 #if defined(FRONT_FULL_SENSOR_NAME)
-		device_remove_file(dev_t_front, &dev_attr_front_camfw_full);
-	err_make_front_camfw_full_file:
+	device_remove_file(dev_t_front, &dev_attr_front_camfw_full);
+err_make_front_camfw_full_file:
 #endif
-		device_remove_file(dev_t_front, &dev_attr_front_camfw);
-	err_make_front_camfw_file:
-	err_make_front_device:
-		device_destroy(camera_class, dev_t_front);
+	device_remove_file(dev_t_front, &dev_attr_front_camfw);
+err_make_front_camfw_file:
+	device_destroy(camera_class, dev_t_front);
+err_make_front_device:
 #endif
 
-		device_remove_file(dev_t_flash, &dev_attr_rear_flash);
-	err_make_flash_file:
-	err_make_flash_device:
-		device_destroy(camera_class, dev_t_flash);
-
-		device_remove_file(dev_t_rear, &dev_attr_rear_caminfo);
-	err_make_rear_camera_info:
-		device_remove_file(dev_t_rear, &dev_attr_rear_camtype);
-	err_make_rear_camtype_file:
-		device_remove_file(dev_t_rear, &dev_attr_rear_type);
-#if defined(CONFIG_MACH_COREPRIMEVE3G)
-	err_make_camera_vendorid:
-		device_remove_file(dev_t_rear, &S5K4ECGX_camera_vendorid_attr);
-	err_make_camera_antibanding:
-		device_remove_file(dev_t_rear, &S5K4ECGX_camera_antibanding_attr);
+#if defined(CONFIG_MACH_J1X3G) || defined(CONFIG_MACH_J3X3G)
+	device_remove_file(dev_t_flash, &dev_attr_rear_flash);
+err_make_flash_file :
+	device_destroy(camera_class, dev_t_flash);
+err_make_flash_device :
 #endif
-	err_make_rear_type_file:
+
+#if defined(CONFIG_MACH_J1X3G)||defined(CONFIG_MACH_GTEXSWIFI)	
+	device_remove_file(dev_t_rear, &camera_vendorid_attr);	
+err_make_camera_vendorid:		
+#endif
+	device_remove_file(dev_t_rear, &dev_attr_rear_caminfo);
+err_make_rear_camera_info:
+	device_remove_file(dev_t_rear, &dev_attr_rear_camtype);
+err_make_rear_camtype_file:
+	device_remove_file(dev_t_rear, &dev_attr_rear_type);
+err_make_rear_type_file:
+	device_remove_file(dev_t_rear, &dev_attr_rear_checkfw_user);
+err_make_rear_checkfw_user_file:
+	device_remove_file(dev_t_rear, &dev_attr_rear_checkfw_factory);
+err_make_rear_checkfw_factory_file:
+
 #if defined(REAR_FULL_SENSOR_NAME)
-		device_remove_file(dev_t_rear, &dev_attr_rear_camfw_full);
-	err_make_rear_camfw_full_file:
+	device_remove_file(dev_t_rear, &dev_attr_rear_camfw_full);
+err_make_rear_camfw_full_file:
 #endif
-		device_remove_file(dev_t_rear, &dev_attr_rear_camfw);
-	err_make_rear_camfw_file:
-		device_destroy(camera_class,dev_t_rear);
-		class_destroy(camera_class);
-		platform_driver_unregister(&sensor_dev_driver);
+
+	device_remove_file(dev_t_rear, &dev_attr_rear_camfw);
+
+err_make_rear_camfw_file:
+	device_destroy(camera_class,dev_t_rear);
+	class_destroy(camera_class);
+	platform_driver_unregister(&sensor_dev_driver);
 
 	return err;
 }

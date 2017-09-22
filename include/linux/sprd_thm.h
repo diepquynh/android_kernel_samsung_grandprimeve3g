@@ -4,6 +4,7 @@
 #include <linux/thermal.h>
 
 #define COOLING_DEV_MAX 8
+#define THM_DEV_MAX 8
 #define THM_TEMP_DEGREE_SETP   		15
 #define THM_TEMP_DEGREE_START  		105
 #define THM_TEMP_DEGREE_CRITICAL 	114
@@ -12,8 +13,9 @@ enum sprd_thm_sensor_id {
 	SPRD_ARM_SENSOR = 0,
 	SPRD_GPU_SENSOR = 1,
 	SPRD_PMIC_SENSOR = 2,
-	SPRD_BOARD_SENSOR= 3,
-	SPRD_MAX_SENSOR = 4,
+	SPRD_BCORE_SENSOR = 3,
+	SPRD_BOARD_SENSOR= 4,
+	SPRD_MAX_SENSOR = 5,
 };
 struct sprd_trip_point {
 	unsigned long temp;
@@ -21,9 +23,17 @@ struct sprd_trip_point {
 	enum thermal_trip_type type;
 	char cdev_name[COOLING_DEV_MAX][THERMAL_NAME_LENGTH];
 };
+
+struct sprd_thm {
+	struct sprd_thm_platform_data *sprd_data;
+	int nsensor;
+};
 struct sprd_thm_platform_data {
 	struct sprd_trip_point trip_points[THERMAL_MAX_TRIPS];
 	int num_trips;
+	int sensor_id;
+	int temp_interval;
+	char thm_name[THERMAL_NAME_LENGTH];
 };
 struct sprdboard_table_data {
 	int x;
@@ -38,5 +48,5 @@ struct sprd_board_sensor_config {
 	struct sprdboard_table_data *temp_tab;	/* OCV curve adjustment */
 	int temp_tab_size;
 };
-
+extern int  sprd_thermal_temp_get(enum sprd_thm_sensor_id thermal_id,unsigned long *temp);
 #endif /**/

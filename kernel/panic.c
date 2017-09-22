@@ -23,6 +23,8 @@
 #include <linux/init.h>
 #include <linux/nmi.h>
 
+#include <asm/sec/sec_log.h>
+
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
 
@@ -75,9 +77,6 @@ void __weak panic_smp_self_stop(void)
  *
  *	This function never returns.
  */
-#ifdef CONFIG_SEC_DEBUG
-void sec_debug_panic_message(int en);
-#endif
 void panic(const char *fmt, ...)
 {
 	static DEFINE_SPINLOCK(panic_lock);
@@ -112,13 +111,9 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-#ifdef CONFIG_SEC_DEBUG
 	sec_debug_panic_message(0);
-#endif
 	printk(KERN_EMERG "Kernel panic - not syncing: %s\n",buf);
-#ifdef CONFIG_SEC_DEBUG
 	sec_debug_panic_message(1);
-#endif
 	print_modules();
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*

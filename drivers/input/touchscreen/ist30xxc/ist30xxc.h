@@ -30,7 +30,7 @@
 #define IMAGIS_IST3044C			(4) /* 3044C */
 #define IMAGIS_IST3048C			(5) /* 3048C */
 
-#ifdef CONFIG_MACH_SS_SHARKLT8
+#if defined(CONFIG_MACH_SS_SHARKLT8) || defined(CONFIG_MACH_SS_SHARKLT8LIGHTSLEEP) || defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3_3G) || defined(CONFIG_MACH_J3X3G) || defined(CONFIG_MACH_GTEXSWIFI)
 #define IMAGIS_TSP_IC			IMAGIS_IST3038C
 #else
 #define IMAGIS_TSP_IC			IMAGIS_IST3032C
@@ -96,6 +96,7 @@
 #define IST30XX_USE_KEY			(1)
 #define IST30XX_DEBUG			(1)
 #define IST30XX_CMCS_TEST		(1)
+#define IST30XX_CMCS_JIT_TEST		(1)
 #define IST30XX_GESTURE			(0)
 #define IST30XX_STATUS_DEBUG		(0)
 #if (IST30XX_DEBUG && IST30XX_CMCS_TEST)
@@ -113,7 +114,7 @@
 #define IST30XX_MAX_MT_FINGERS	(10)
 #define IST30XX_MAX_KEYS			(5)
 
-#ifdef CONFIG_MACH_SS_SHARKLT8
+#if defined(CONFIG_MACH_SS_SHARKLT8) || defined(CONFIG_MACH_SS_SHARKLT8LIGHTSLEEP) || defined(CONFIG_MACH_J3XLTE) || defined(CONFIG_MACH_J3_3G) || defined(CONFIG_MACH_J3X3G) || defined(CONFIG_MACH_GTEXSWIFI)
 #define IST30XX_MAX_X			(720) // LCD Resolution
 #define IST30XX_MAX_Y			(1280) // LCD Resolution
 #else
@@ -370,8 +371,9 @@ struct ist30xx_platform_data {
 	int avdd_volt;
 	int chip_id;
 	int chip_code;
+	int tkey;
+	int octa_hw;
 	const char *chip_name;
-	const char *pwr_src;
 	struct regulator *avdd_regulator;
 };
 
@@ -452,6 +454,7 @@ struct ist30xx_data {
 	volatile bool irq_working;
 	u32 irq_enabled;
 	bool initialized;
+	bool ignore_delay;
 	u32 noise_mode;
 	u32 debug_mode;
 #if IST30XX_JIG_MODE

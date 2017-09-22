@@ -67,6 +67,7 @@
 
 #define BM_DEBUG_ALL_CHANNEL	0xFF
 #define BM_CHANNEL_ENABLE_FLAGE	0x03FF0000
+#define BM_CHN_NAME_CMD_OFFSET	0x7
 
 #define BM_DBG(f,x...)	printk(KERN_DEBUG "BM_DEBGU " f, ##x)
 #define BM_INFO(f,x...)	printk(KERN_INFO "BM_INFO " f, ##x)
@@ -157,6 +158,16 @@ enum sci_bm_cmd_index {
 	BM_DBG_INT_SET,
 	BM_DISABLE,
 	BM_ENABLE,
+	BM_PROF_SET,
+	BM_PROF_CLR,
+	BM_CHN_CNT,
+	BM_RD_CNT,
+	BM_WR_CNT,
+	BM_RD_BW,
+	BM_WR_BW,
+	BM_RD_LATENCY,
+	BM_WR_LATENCY,
+	BM_KERNEL_TIME,
 	BM_CMD_MAX,
 };
 

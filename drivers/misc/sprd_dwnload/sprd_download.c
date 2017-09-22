@@ -24,7 +24,8 @@
 
 
 #define		READ_BUFFER_SIZE	(4096)
-#define		WRITE_BUFFER_SIZE	(33*1024)
+#define		WRITE_BUFFER_SIZE	(129*1024)
+
 
 bool flag_read = 0;
 uint32 read_len;
@@ -57,16 +58,23 @@ static inline void sprd_download_unlock(atomic_t *excl)
 }
 
 void sprd_download_sdio_read(void)
+
 {
 	read_len = sdio_dev_get_chn_datalen(DOWNLOAD_CHANNEL_READ);	
+
 	if(read_len <= 0){
+
 		return;
+
 	}
+
 
 	sdio_dev_read(DOWNLOAD_CHANNEL_READ,download_dev->read_buffer,&read_len);
 	printk(KERN_INFO "%s read: %s\n",__func__,download_dev->read_buffer);
 	flag_read = 1;
+
 	return;
+
 }
 
 int sprd_download_sdio_write(char *buffer, uint32 size)
@@ -79,18 +87,29 @@ int sprd_download_sdio_write(char *buffer, uint32 size)
 	return size;
 }
 
+
 int sprd_download_sdio_init(void)
+
 {
+
 	int retval=0;
+
 
 	retval = sdiodev_readchn_init(DOWNLOAD_CHANNEL_READ, sprd_download_sdio_read,0);
 	if(retval!= 0){
+
 		printk(KERN_ERR "Sdio dev read channel init failed!");
 		retval = -1;
+
 	}	
+
 		
+
 	return retval;
+
 }
+
+
 
 
 static int sprd_download_open(struct inode *inode,struct file *filp)
@@ -138,6 +157,7 @@ static int sprd_download_read(struct file *filp,char __user *buf,size_t count,lo
 		return 0;
 	}
 
+
 		if(copy_to_user(buf,download_dev->read_buffer,read_len)){
 			sprd_download_unlock(&download_dev->read_excl);
 			return -EFAULT;
@@ -175,7 +195,6 @@ static int sprd_download_write(struct file *filp, const char __user *buf,size_t 
 	{
 		printk("wait marlin ready start\n");
 		/*wait marlin ready*/
-		#if !(defined CONFIG_MACH_SP8730SEEA || defined CONFIG_MACH_SP8730SEEA_QHD)
 		while(1){
 			if(1 == get_sdiohal_status()){
 				//marlin_sdio_sync_uninit();
@@ -185,11 +204,6 @@ static int sprd_download_write(struct file *filp, const char __user *buf,size_t 
 			}
 			msleep(50);
 		}
-		#else
-		flag_cali = true;
-		msleep(800);
-		printk("wait marlin ready ok\n");
-		#endif
 	}else if(strncmp(download_dev->write_buffer,"end_calibration",15) == 0)
 		flag_cali = false;
 	else

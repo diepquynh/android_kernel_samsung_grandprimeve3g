@@ -50,7 +50,7 @@ static struct isp_cfg_fun isp_cfg_fun_tab[] = {
 	{ISP_BLOCK_PRE_CDN_RGB,            isp_k_cfg_pre_cdn_rgb},
 	{ISP_BLOCK_POSTERIZE,              isp_k_cfg_posterize},
 	{ISP_BLOCK_AFM_V1,                 isp_k_cfg_rgb_afm},
-	{ISP_BLOCK_YIQ_AEM,                isp_k_cfg_yiq_aem},
+	/*{ISP_BLOCK_YIQ_AEM,                isp_k_cfg_yiq_aem},*/
 	/*{ISP_BLOCK_ANTI_FLICKER,           isp_k_cfg_anti_flicker},*/
 	{ISP_BLOCK_YIQ_AFM,                isp_k_cfg_yiq_afm},
 	{ISP_BLOCK_YUV_PRECDN,             isp_k_cfg_yuv_precdn},
@@ -102,6 +102,8 @@ int32_t isp_cfg_param(void  *param, struct isp_k_private *isp_private)
 		ret = isp_k_cfg_2d_lsc(&isp_param, isp_private);
 	} else if (ISP_BLOCK_RAW_AEM == isp_param.sub_block) {
 		ret = isp_k_cfg_raw_aem(&isp_param, isp_private);
+	} else if (ISP_BLOCK_YIQ_AEM == isp_param.sub_block) {
+		ret = isp_k_cfg_yiq_aem(&isp_param, isp_private);
 	} else if (ISP_BLOCK_GAMMA == isp_param.sub_block) {
 		ret = isp_k_cfg_gamma(&isp_param, isp_private);
 	} else if (ISP_BLOCK_CT == isp_param.sub_block) {

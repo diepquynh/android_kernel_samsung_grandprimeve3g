@@ -4592,160 +4592,207 @@ tracing_free_buffer_release(struct inode *inode, struct file *filp)
 #ifdef CONFIG_GATOR
 #define NUMBER_OF_ATRACE_INT    3
 #define NUM_COLOR       8
-const char * gator_enabled_atrace_int[NUMBER_OF_ATRACE_INT+1] =
+const char * gator_enabled_atrace_int[NUMBER_OF_ATRACE_INT] =
 { 
-  "FramebufferSurface",
-  "SurfaceView", 
-  "HW_VSYNC_0",
-  "END_OF_TAG"   // Must be last!!!
+	"FramebufferSurface",
+	"SurfaceView", 
+	"HW_VSYNC_0"
 };
 unsigned char channels[32768];  //max pid
 unsigned int gator_atrace_enabled;
-unsigned int color_table[NUM_COLOR]= {
-        ANNOTATE_LTGRAY,
-        ANNOTATE_DKGRAY,
-        ANNOTATE_RED,
-        ANNOTATE_BLUE,
-        ANNOTATE_GREEN,
-        ANNOTATE_PURPLE,
-        ANNOTATE_YELLOW,
-        ANNOTATE_CYAN
+unsigned int counter_color_table[NUM_COLOR]= {
+	0xffff801b,
+	0x80ff801b,
+	0x80ffff1b,
+	0x0080ff1b,
+	0x0048911b,
+	0x00264d1b,
+	0x0000801b,
+	0x0000001b
 };
 
 static inline int atoi(const char *str)
 {
 	int result = 0;
 	int count = 0;
+
 	while (str[count] != 0	/* NULL */
 		&& str[count] >= '0' && str[count] <= '9')	{
 		result = result * 10 + str[count] - '0';
 		++count;
 	}
+
 	return result;
 }
 
 static inline char * parse_atrace(char *buf)
 {
-        int count=0;
-        while ((buf[count]) && (buf[count] != '|'))
-                count++;
+	int count=0;
 
-        return &buf[count+1];
+	while ((buf[count]) && (buf[count] != '|'))
+		count++;
+
+	return &buf[count+1];
 }
 
 static unsigned int get_color(char * buf)
 {
-        int sum = buf[0]+buf[1]+buf[2]+buf[3];
-        return color_table[sum % NUM_COLOR ];
+	int sum = (buf[0]+buf[1]+buf[2]+buf[3]) % 8;
+
+	switch (sum) {
+		case 0 :
+			return ANNOTATE_LTGRAY;
+		case 1 :
+			return ANNOTATE_DKGRAY;
+		case 2 :
+			return ANNOTATE_RED;
+		case 3 :
+			return ANNOTATE_BLUE;
+		case 4 :
+			return ANNOTATE_GREEN;
+		case 5 :
+			return ANNOTATE_PURPLE;
+		case 6 :
+			return ANNOTATE_YELLOW;
+		case 7 :
+			return ANNOTATE_CYAN;
+	}
+
+	return ANNOTATE_BLACK;
 }
 
 static void gator_begin(char * buf)
 {
-        int pid;
-        pid = current->pid;
-        ANNOTATE_CHANNEL_COLOR(channels[pid]++,get_color(buf), buf); 
-        return;
+	int pid;
+
+	pid = current->pid;
+	ANNOTATE_CHANNEL_COLOR(channels[pid]++,get_color(buf), buf); 
+
+	return;
 }
 
 static void gator_end(void)
 {
-        int  pid = current->pid;
-        if(channels[pid] >0)
-                ANNOTATE_CHANNEL_END(--channels[pid]);
-        return;
+	int pid = current->pid;
+
+	if(channels[pid] >0)
+		ANNOTATE_CHANNEL_END(--channels[pid]);
+
+	return;
 }
 
 static void gator_async_begin(char * buf)
 {
-        int cookie;
-        char * p1;
+	int cookie;
+	char * p1;
 
-        p1 = parse_atrace(buf);
-        cookie = atoi(p1);
-        cookie = cookie+256;    //256 is base channel for async gator
-        ANNOTATE_CHANNEL_COLOR(cookie ,get_color(buf), buf); 
-        return;
+	p1 = parse_atrace(buf);
+	cookie = atoi(p1);
+	cookie = cookie+256;    //256 is base channel for async gator
+	ANNOTATE_CHANNEL_COLOR(cookie ,get_color(buf), buf); 
+
+	return;
 }
 
 static void gator_async_end(char * buf)
 {
-        int cookie;
-        char * p1;
+	int cookie;
+	char * p1;
 
-        p1 = parse_atrace(buf);
-        cookie = atoi(p1);
-        cookie = cookie+256;   //256 is base channel for async gator
-        ANNOTATE_CHANNEL_END(cookie); 
-        return;
+	p1 = parse_atrace(buf);
+	cookie = atoi(p1);
+	cookie = cookie+256;   //256 is base channel for async gator
+	ANNOTATE_CHANNEL_END(cookie); 
+
+	return;
 }
 
-static void gator_counter(char * buf)
+static int gator_counter(char * buf)
 {
-        int channel, count, index;
-        char * p1;
+	int channel, count, index;
+	char * p1;
 
-        buf[0] = '@';
-        p1 = parse_atrace(buf);   
+	buf[0] = '@';
+	p1 = parse_atrace(buf);   
+	for(index=0; index < NUMBER_OF_ATRACE_INT; index++)
+		if(!strncmp(gator_enabled_atrace_int[index], buf+1 , 10))
+			break;
+#if 1  // in case of ds5.21
+	if(index < NUMBER_OF_ATRACE_INT)
+		channel = 4000+index;  // atrace int start channel
+	else 
+		return 0;
+	count = atoi(p1);
+	ANNOTATE_CHANNEL_COLOR(channel, counter_color_table[count%NUM_COLOR ], buf); 
+#else  // in case of ds5.22
+	if(index < NUMBER_OF_ATRACE_INT)
+		return 1;
+#endif
 
-        for(index=0; index < NUMBER_OF_ATRACE_INT; index++)
-                if(!strncmp(gator_enabled_atrace_int[index], buf+1 , 10))
-                        break;
-
-        if(index < NUMBER_OF_ATRACE_INT)
-                channel = 4000+index;  // atrace int start channel
-        else 
-                return;
-
-        count = atoi(p1);
-
-        ANNOTATE_CHANNEL_COLOR(channel, color_table[count%NUM_COLOR ], buf); 
-        return;
+	return 0;
 }
 
-static void gator_hub(const char __user *ubuf, size_t cnt)
+static int gator_hub(const char __user *ubuf, size_t cnt)
 {
-        char buf[80];
-        char trace_ops;
-        unsigned int pid_offset, pid;
-        if(cnt>=80)
-                cnt=79;
+	char buf[80];
+	char trace_ops;
+	unsigned int pid_offset, pid, ret=0;
 
+	if(cnt>=80)
+		cnt=79;
 	if (copy_from_user(&buf, ubuf, cnt))
 		return ;
-       
-        trace_ops = buf[0];
-        buf[cnt]=NULL;
-        pid = current -> pid;
+
+	trace_ops = buf[0];
+	buf[cnt]=NULL;
+	pid = current -> pid;
 
         if(pid >= 10000)
-                pid_offset = 8;
-        else if(pid >= 1000)
-                pid_offset = 7;
-        else if (pid >= 100)
-                pid_offset = 6;
-        else
-                pid_offset = 5;
+		pid_offset = 8;
+	else if(pid >= 1000)
+		pid_offset = 7;
+	else if(pid >= 100)
+		pid_offset = 6;
+	else
+		pid_offset = 5;
 
-        switch(trace_ops) {
-                case 'B' :
-                        gator_begin(&buf[pid_offset]);
-                        break;
-                case 'E' :
-                        gator_end();
-                        break;
-                case 'C' :
-                        gator_counter(&buf[pid_offset-1]);
-                        break;
-                case 'S' :
-                        gator_async_begin(&buf[pid_offset]);
-                        break;
-                case 'F' :
-                        gator_async_end(&buf[pid_offset]);
-                        break;
-                default :
-                        return ;
-        }
+	switch(trace_ops) {
+		case 'B' :
+			gator_begin(&buf[pid_offset]);
+			break;
+		case 'E' :
+			gator_end();
+			break;
+		case 'C' :
+			ret=gator_counter(&buf[pid_offset-1]);
+			break;
+		case 'S' :
+			gator_async_begin(&buf[pid_offset]);
+			break;
+		case 'F' :
+			gator_async_end(&buf[pid_offset]);
+			break;
+		default :
+			return ret;
+	}
+
+	return ret;
 }
+
+static ssize_t
+tracing_atrace_gator_read(struct file *filp, char __user *ubuf, size_t cnt,
+			loff_t *ppos)
+{
+	char *buf;
+
+	if (gator_atrace_enabled)
+		buf = "1\n";
+	else
+		buf = "0\n";
+
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, 2);
+}
+
 
 static ssize_t
 tracing_atrace_gator_write(struct file *filp, const char __user *ubuf, size_t cnt,
@@ -4761,18 +4808,18 @@ tracing_atrace_gator_write(struct file *filp, const char __user *ubuf, size_t cn
 	if (val != 0 && val != 1)
 		return -EINVAL;
         
-        gator_atrace_enabled = val;
-        
-
+	gator_atrace_enabled = val;
+   
 	return cnt;
 }
 
 static const struct file_operations tracing_atrace_gator = {
 	.open		= tracing_open_generic_tr,
+	.read		=  tracing_atrace_gator_read,
 	.write		=  tracing_atrace_gator_write,
 	.release	= tracing_release_generic_tr,
 };
-#endif
+#endif  // CONFIG_GATOR
 
 static ssize_t
 tracing_mark_write(struct file *filp, const char __user *ubuf,
@@ -4795,10 +4842,10 @@ tracing_mark_write(struct file *filp, const char __user *ubuf,
 	int i;
 
 #ifdef CONFIG_GATOR
-        if(gator_atrace_enabled) {    // atrace_gator
-                gator_hub(ubuf, cnt);
-                goto out;
-        }
+	if(gator_atrace_enabled) {    // atrace_gator
+		if(!gator_hub(ubuf, cnt))
+		goto out;
+	}
 #endif
 	if (tracing_disabled)
 		return -EINVAL;

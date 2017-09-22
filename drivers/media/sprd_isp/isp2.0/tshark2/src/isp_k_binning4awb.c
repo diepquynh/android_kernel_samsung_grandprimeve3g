@@ -21,22 +21,10 @@
 static int32_t isp_k_binging_param_update(struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	uint32_t addr = 0;
-#ifndef CONFIG_64BIT
-	void *buf_ptr = (void *)isp_private->bing4awb_buf_addr;
-#endif
-	uint32_t buf_len = isp_private->bing4awb_buf_len;
 
-	if((0x00 != isp_private->bing4awb_buf_addr) && (0x00 != isp_private->bing4awb_buf_len)) {
-
-#ifndef CONFIG_64BIT
-		dmac_flush_range(buf_ptr, buf_ptr + buf_len);
-		outer_flush_range(__pa(buf_ptr), __pa(buf_ptr) + buf_len);
-#endif
-		addr = (uint32_t)__pa(isp_private->bing4awb_buf_addr);
-
-		REG_WR(ISP_BINNING_MEM_ADDR, addr);
-	}
+	/*config buf_id 0 as default*/
+	isp_private->b4awb_buf[0].buf_flag = 1;
+	REG_WR(ISP_BINNING_MEM_ADDR, isp_private->b4awb_buf[0].buf_phys_addr);
 
 	return ret;
 }
@@ -46,7 +34,6 @@ static int32_t isp_k_binning_block(struct isp_io_param *param,
 {
 	int32_t ret = 0;
 	uint32_t val = 0;
-	int32_t i = 0;
 	struct isp_dev_binning4awb_info_v1 binning_info;
 
 	ret = copy_from_user((void *)&binning_info, param->property_param, sizeof(binning_info));
@@ -55,7 +42,12 @@ static int32_t isp_k_binning_block(struct isp_io_param *param,
 		return -1;
 	}
 
-//	isp_k_binging_param_update(isp_private);
+	if (isp_private->b4awb_buf[0].buf_phys_addr == 0 || isp_private->b4awb_buf[1].buf_phys_addr == 0) {
+		REG_MWR(ISP_BINNING_PARAM, BIT_0, 0x1);
+		return ret;
+	}
+
+	isp_k_binging_param_update(isp_private);
 
 	val = (binning_info.burst_mode & 0x3) << 2;
 	REG_MWR(ISP_BINNING_PARAM, 0xC, val);
@@ -92,6 +84,21 @@ static int32_t isp_k_binging_bypass(struct isp_io_param *param)
 	return ret;
 }
 
+static int32_t isp_k_binging_endian(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t endian = 0;
+	ret = copy_from_user((void *)&endian, param->property_param, sizeof(uint32_t));
+	if (0 != ret) {
+		printk("isp_k_binning_scaling_ratio: copy_from_user error, ret = 0x%x\n",(uint32_t)ret);
+		return -1;
+	}
+
+	REG_MWR(ISP_BINNING_PARAM, BIT_1, endian << 1);
+
+	return ret;
+}
+
 static int32_t isp_k_binning_scaling_ratio(struct isp_io_param *param)
 {
 	int32_t ret = 0;
@@ -105,6 +112,26 @@ static int32_t isp_k_binning_scaling_ratio(struct isp_io_param *param)
 
 	val = ((scaling_ratio.vertical & 0x7)<< 8)| ((scaling_ratio.horizontal & 0x7) << 4);
 	REG_MWR(ISP_BINNING_PARAM, 0x770, val);
+
+	return ret;
+}
+
+static int32_t isp_k_binning_get_scaling_ratio(struct isp_io_param *param)
+{
+	int32_t ret = 0;
+	uint32_t val = 0;
+	struct isp_scaling_ratio scaling_ratio;
+
+	val = REG_RD(ISP_BINNING_PARAM);
+
+	scaling_ratio.vertical= (val >> 8) & 0x7;
+	scaling_ratio.horizontal = (val >> 4) & 0x7;
+
+	ret = copy_to_user(param->property_param, (void *)&scaling_ratio, sizeof(struct isp_scaling_ratio));
+	if (0 != ret) {
+		ret = -1;
+		printk("isp_k_binning_get_scaling_ratio: copy error, ret=0x%x\n", (uint32_t)ret);
+	}
 
 	return ret;
 }
@@ -134,7 +161,7 @@ static int32_t isp_k_binning_statistics_buf(struct isp_io_param *param,
 	if (isp_private->b4awb_buf[0].buf_flag == 0) {
 		buf_id = isp_private->b4awb_buf[0].buf_id;
 	} else if (isp_private->b4awb_buf[1].buf_flag == 0) {
-		buf_id = isp_private->b4awb_buf[0].buf_id;
+		buf_id = isp_private->b4awb_buf[1].buf_id;
 	}
 
 	ret = copy_to_user(param->property_param, (void*)&buf_id, sizeof(uint32_t));
@@ -155,6 +182,10 @@ static int32_t isp_k_binning_buffaddr(struct isp_io_param *param,
 	struct isp_b4awb_phys phy_addr;
 
 	ret = copy_from_user((void *)&phy_addr, param->property_param, sizeof(struct isp_b4awb_phys));
+	if (0 != ret) {
+		ret = -1;
+		printk("isp_k_binning_buffaddr: copy error, ret=0x%x\n", (uint32_t)ret);
+	}
 
 	phys_addr[0] = phy_addr.phys0;
 	phys_addr[1] = phy_addr.phys1;
@@ -165,11 +196,7 @@ static int32_t isp_k_binning_buffaddr(struct isp_io_param *param,
 		isp_private->b4awb_buf[i].buf_phys_addr = phys_addr[i];
 	}
 
-	/*config buf_id 0 as default*/
-	isp_private->b4awb_buf[i].buf_flag = 1;
-	REG_WR(ISP_BINNING_MEM_ADDR, isp_private->b4awb_buf[i].buf_phys_addr);
-
-	printk("eric phys_addr 0x%x, 0x%x\n",phys_addr[0], phys_addr[1]);
+	printk("phys_addr 0x%lx, 0x%lx\n",phys_addr[0], phys_addr[1]);
 
 	return ret;
 }
@@ -198,6 +225,9 @@ int32_t isp_k_cfg_binning(struct isp_io_param *param, struct isp_k_private *isp_
 	case ISP_PRO_BINNING4AWB_SCALING_RATIO:
 		ret = isp_k_binning_scaling_ratio(param);
 		break;
+	case ISP_PRO_BINNING4AWB_GET_SCALING_RATIO:
+		ret = isp_k_binning_get_scaling_ratio(param);
+		break;
 	case ISP_PRO_BINNING4AWB_MEM_ADDR:
 		ret = isp_k_binging_mem_addr(param);
 		break;
@@ -206,6 +236,9 @@ int32_t isp_k_cfg_binning(struct isp_io_param *param, struct isp_k_private *isp_
 		break;
 	case ISP_PRO_BINNING4AWB_TRANSADDR:
 		ret = isp_k_binning_buffaddr(param, isp_private);
+		break;
+	case ISP_PRO_BINNING4AWB_ENDIAN:
+		ret = isp_k_binging_endian(param);
 		break;
 	default:
 		printk("isp_k_cfg_binning: fail cmd id:%d, not supported.\n", param->property);

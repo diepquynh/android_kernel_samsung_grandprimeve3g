@@ -71,6 +71,32 @@ static ssize_t mdnie_auto_brightness_store(struct device *dev,
 	}
 	return size;
 }
+
+static ssize_t mdnie_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mdnie_lite *mdnie = dev_get_drvdata(dev);
+
+	return sprintf(buf, "mode : %d\n", mdnie->config.mode);
+}
+
+static ssize_t mdnie_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct mdnie_lite *mdnie = dev_get_drvdata(dev);
+	unsigned int value;
+
+	if (kstrtoul(buf, 0, (unsigned long *)&value))
+		return -EINVAL;
+
+	if (mdnie->config.mode != value) {
+		mdnie->config.mode = value;
+		update_mdnie_mode(mdnie);
+	}
+
+	return size;
+}
+
 static ssize_t mdnie_scenario_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -189,6 +215,7 @@ static ssize_t cabc_store(struct device *dev,
 }
 static DEVICE_ATTR(auto_brightness, 0664,
 		mdnie_auto_brightness_show, mdnie_auto_brightness_store);
+static DEVICE_ATTR(mode, 0664, mdnie_mode_show, mdnie_mode_store);
 static DEVICE_ATTR(scenario, 0664, mdnie_scenario_show, mdnie_scenario_store);
 static DEVICE_ATTR(accessibility, 0664, mdnie_accessibility_show,
 		mdnie_accessibility_store);
@@ -210,15 +237,12 @@ int gen_panel_attach_mdnie(struct mdnie_lite *mdnie,
 	}
 
 	mdnie->dev = device_create(mdnie->class, NULL, 0, "%s", "mdnie");
+	device_create_file(mdnie->dev, &dev_attr_mode);
 	device_create_file(mdnie->dev, &dev_attr_scenario);
 	device_create_file(mdnie->dev, &dev_attr_accessibility);
 	device_create_file(mdnie->dev, &dev_attr_negative);
 	device_create_file(mdnie->dev, &dev_attr_cabc);
 	device_create_file(mdnie->dev, &dev_attr_auto_brightness);
-	printk("[LCD_TEST] %s: tuning command reg(%Xh) len(%d)\n", __func__,
-				mdnie->cmd_reg,
-				mdnie->cmd_len);
-
 	/*
 	pr_info("%s: tuning command reg(%Xh) len(%d)\n", __func__,
 			mdnie->cmd_reg,
@@ -226,6 +250,7 @@ int gen_panel_attach_mdnie(struct mdnie_lite *mdnie,
 	*/
 	mutex_init(&mdnie->ops_lock);
 	mdnie->ops = ops;
+	mdnie->config.mode = MDNIE_STANDARD;
 
 	dev_set_drvdata(mdnie->dev, mdnie);
 	pr_info("%s: done\n", __func__);
@@ -243,6 +268,7 @@ void gen_panel_detach_mdnie(struct mdnie_lite *mdnie)
 	device_remove_file(mdnie->dev, &dev_attr_accessibility);
 	device_remove_file(mdnie->dev, &dev_attr_negative);
 	device_remove_file(mdnie->dev, &dev_attr_scenario);
+	device_remove_file(mdnie->dev, &dev_attr_mode);
 	device_remove_file(mdnie->dev, &dev_attr_auto_brightness);
 	device_destroy(mdnie->class, 0);
 	class_destroy(mdnie->class);

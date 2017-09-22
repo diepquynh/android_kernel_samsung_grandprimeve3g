@@ -3,7 +3,7 @@
 #define _SPRD_2713_FGU_H_
 #include <linux/sprd_battery_common.h>
 #include <linux/types.h>
-#if defined(CONFIG_SPRD_2713_POWER) || defined(CONFIG_SPRD_EXT_IC_POWER)
+#if defined(CONFIG_SPRD_2713_POWER)
 #include "sprd_2713_charge.h"
 #endif
 

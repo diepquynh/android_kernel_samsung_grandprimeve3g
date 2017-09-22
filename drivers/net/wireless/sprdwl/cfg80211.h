@@ -113,7 +113,7 @@ int sprdwl_open_mac(struct sprdwl_vif *vif, enum nl80211_iftype type);
 int sprdwl_close_mac(struct sprdwl_vif *vif);
 
 void sprdwl_scan_timeout(unsigned long data);
-void sprdwl_event_scan_results(struct sprdwl_priv *priv, bool aborted);
+void sprdwl_event_scan_results(struct sprdwl_priv *priv, int flag);
 void sprdwl_event_connect_result(struct sprdwl_vif *vif);
 void sprdwl_event_disconnect(struct sprdwl_vif *vif);
 void sprdwl_event_ready(struct sprdwl_priv *priv);

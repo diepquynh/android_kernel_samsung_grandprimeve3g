@@ -344,6 +344,7 @@ i2c_gpio7: i2c_gpio@2 {
 };
 
 /include/ "sprd-dsi-panel-dsi_sc7798d_wVGA_video.dtsi"
+/include/ "sprd-dsi-panel-dsi_sc7798d_wVGA_coreprimeve3g_dtc_video.dtsi"
 
 &pinctrl {
 	pwr_domain ="vdd18", /* "vdd18" */ /* VIO_2_0_ms */

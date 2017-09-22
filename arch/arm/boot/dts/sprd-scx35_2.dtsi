@@ -301,7 +301,7 @@
 		};
 	};
 
-sprd_vpp@61000000{
+	 sprd_vpp@61000000{
                  compatible = "sprd,sprd_vpp";
                  reg = <0x61000000 0x4000>;
                  interrupts = <0 43 0x0>;
@@ -311,9 +311,9 @@ sprd_vpp@61000000{
          };
 
 	 sprd_coda7l@62100000{
-                 compatible = "sprd,sprd_coda7l";
-                 reg = <0x62100000 0x4000>;
-                 interrupts = <0 43 0x0>;
+		compatible = "sprd,sprd_coda7l";
+		reg = <0x62100000 0x4000>;
+		interrupts = <0 43 0x0>;
 		clock-names = "clk_mm_i","clk_coda7_axi","clk_coda7_cc","clk_coda7_apb",
 			"clk_192m","clk_153m6","clk_128m","clk_76m8",
 			"clk_128m","clk_96m","clk_76m8","ext_26m";

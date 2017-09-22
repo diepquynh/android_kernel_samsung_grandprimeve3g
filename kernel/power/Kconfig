@@ -357,6 +357,12 @@ config CPU_PM
 	bool
 	depends on SUSPEND || CPU_IDLE
 
+config SW_SELF_DISCHARGING
+	bool "enable sw_self_discharging"
+	default n
+	help
+	  Say Y to enable CONFIG_SW_SELF_DISCHARGING
+
 config SUSPEND_TIME
 	bool "Log time spent in suspend"
 	---help---

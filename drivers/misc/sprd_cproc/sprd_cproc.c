@@ -36,7 +36,10 @@
 #include <linux/sipc.h>
 #include <soc/sprd/sci.h>
 #include <soc/sprd/sci_glb_regs.h>
-//#include <soc/sprd/arch_misc.h>
+
+
+
+
 #define CPROC_WDT_TRUE   1
 #define CPROC_WDT_FLASE  0
 /*used for ioremap to limit vmalloc size, shi yunlong*/
@@ -60,7 +63,11 @@ struct cproc_proc_fs;
 struct cproc_proc_entry {
 	char				*name;
 	struct proc_dir_entry	*entry;
-	struct cproc_device		*cproc;
+	union
+	{
+		struct cproc_device		*cproc;
+		struct cproc_segments	*seg;
+	}data;
 };
 
 struct cproc_proc_fs {
@@ -68,11 +75,12 @@ struct cproc_proc_fs {
 
 	struct cproc_proc_entry		start;
 	struct cproc_proc_entry		stop;
-	struct cproc_proc_entry		modem;
-	struct cproc_proc_entry		dsp[3];
 	struct cproc_proc_entry		status;
 	struct cproc_proc_entry		wdtirq;
 	struct cproc_proc_entry		mem;
+	struct cproc_proc_entry		mini_dump;
+	struct cproc_proc_entry		*processor;
+	struct cproc_proc_entry		cp_crash;
 };
 
 struct cproc_device {
@@ -87,6 +95,82 @@ struct cproc_device {
 	struct cproc_proc_fs		procfs;
 };
 
+struct cproc_dump_info
+{
+	char parent_name[20];
+	char name[20];
+	uint32_t start_addr;
+	uint32_t size;
+};
+ 
+static int list_each_dump_info(struct cproc_dump_info *base,struct cproc_dump_info **info)
+{
+	struct cproc_dump_info *next;
+	int ret = 1;
+
+	if(info == NULL)
+		return 0;
+	
+	next = *info;
+	if(!next)
+		next = base;
+	else
+		next ++;
+	if(next->parent_name[0] != '\0')
+		*info = next;
+	else{
+		*info = NULL;
+		ret = 0;
+	}
+	return ret;
+}
+
+static ssize_t sprd_cproc_seg_dump(uint32_t base,uint32_t maxsz,
+	char __user *buf,size_t count,loff_t offset)
+{
+	void *vmem;
+	uint32_t loop = 0;
+	uint32_t start_addr;
+	uint32_t total;
+
+	if (offset >= maxsz) {
+		return 0;
+	}
+	if ((offset + count) > maxsz) {
+		count = maxsz - offset;
+	}
+	start_addr = base + offset;
+	total = count;
+	
+	do{
+		uint32_t copy_size = CPROC_VMALLOC_SIZE_LIMIT;
+		
+		vmem = ioremap_nocache(start_addr + CPROC_VMALLOC_SIZE_LIMIT * loop, CPROC_VMALLOC_SIZE_LIMIT);
+		if (!vmem) {
+			pr_info( "Unable to map cproc base: 0x%08x\n", 
+				start_addr + CPROC_VMALLOC_SIZE_LIMIT * loop);
+			if(loop > 0){
+				return CPROC_VMALLOC_SIZE_LIMIT * loop;
+			}else{
+				return -ENOMEM;
+			}
+		}
+		if(count < CPROC_VMALLOC_SIZE_LIMIT) 
+			copy_size = count;
+		if (unalign_copy_to_user(buf, vmem, copy_size)) {
+			pr_info( "cproc_proc_read copy data to user error !\n");
+			iounmap(vmem);
+			return -EFAULT;
+		}
+		iounmap(vmem);
+		count -= copy_size;
+		loop ++;
+		buf += copy_size;
+	}while(count);
+	return total;
+}
+
+bool bfirst = 0;
 static int sprd_cproc_open(struct inode *inode, struct file *filp)
 {
 	struct cproc_device *cproc = container_of(filp->private_data,
@@ -145,11 +229,11 @@ static int cproc_proc_open(struct inode *inode, struct file *filp)
 
 	cproc->vbase = ioremap(cproc->initdata->base, cproc->initdata->maxsz);
 	if (!cproc->vbase) {
-		printk(KERN_ERR "Unable to map cproc base: 0x%08x\n", cproc->initdata->base);
+		pr_info( "Unable to map cproc base: 0x%08x\n", cproc->initdata->base);
 		return -ENOMEM;
 	}
 */
-	pr_info("cproc proc open type: %s\n!", entry->name);
+	pr_info("cproc proc open type: %s!\n", entry->name);
 
 	filp->private_data = entry;
 
@@ -173,7 +257,8 @@ static ssize_t cproc_proc_read(struct file *filp,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct cproc_proc_entry *entry = (struct cproc_proc_entry *)filp->private_data;
-	struct cproc_device *cproc = entry->cproc;
+	struct cproc_device *cproc;
+	struct cproc_segments *seg;
 	char *type = entry->name;
 	unsigned int len;
 	void *vmem;
@@ -183,6 +268,7 @@ static ssize_t cproc_proc_read(struct file *filp,
 /*	pr_info("cproc proc read type: %s ppos %ll\n", type, *ppos);*/
 
 	if (strcmp(type, "mem") == 0) {
+		cproc= entry->data.cproc;
 		if (*ppos >= cproc->initdata->maxsz) {
 			return 0;
 		}
@@ -194,7 +280,7 @@ static ssize_t cproc_proc_read(struct file *filp,
 		/*
 		vmem = cproc->vbase + *ppos;
 		if (unalign_copy_to_user(buf, vmem, count)) {
-			printk(KERN_ERR "cproc_proc_read copy data to user error !\n");
+			pr_info( "cproc_proc_read copy data to user error !\n");
 			return -EFAULT;
 		}
 		*/
@@ -204,7 +290,7 @@ static ssize_t cproc_proc_read(struct file *filp,
 			vmem = ioremap_nocache(cproc->initdata->base + *ppos + CPROC_VMALLOC_SIZE_LIMIT*i, CPROC_VMALLOC_SIZE_LIMIT);
 			if (!vmem) {
 				size_t addr = cproc->initdata->base + *ppos + CPROC_VMALLOC_SIZE_LIMIT*i;
-				printk(KERN_ERR "Unable to map cproc base: 0x%lx\n", addr);
+				pr_info( "Unable to map cproc base: 0x%lx\n", addr);
 				if(i > 0){
 					*ppos += CPROC_VMALLOC_SIZE_LIMIT*i;
 					return CPROC_VMALLOC_SIZE_LIMIT*i;
@@ -214,16 +300,18 @@ static ssize_t cproc_proc_read(struct file *filp,
 			}
 			if(r < CPROC_VMALLOC_SIZE_LIMIT) copy_size = r;
 			if (unalign_copy_to_user(buf, vmem, copy_size)) {
-				printk(KERN_ERR "cproc_proc_read copy data to user error !\n");
+				pr_info( "cproc_proc_read copy data to user error !\n");
 				iounmap(vmem);
 				return -EFAULT;
 			}
 			iounmap(vmem);
 			r -= copy_size;
 			i++;
+			buf += copy_size;
 		}while(r > 0);
 		/*remap and unmap in each read operation, shi yunlong, end*/
 	} else if (strcmp(type, "status") == 0) {
+		cproc= entry->data.cproc;
 		if (cproc->status >= CP_MAX_STATUS) {
 			return -EINVAL;
 		}
@@ -233,14 +321,15 @@ static ssize_t cproc_proc_read(struct file *filp,
 		}
 		count = (len > count) ? count : len;
 		if (unalign_copy_to_user(buf, cp_status_info[cproc->status], count)) {
-			printk(KERN_ERR "cproc_proc_read copy data to user error !\n");
+			pr_info( "cproc_proc_read copy data to user error !\n");
 			return -EFAULT;
 		}
 	} else if (strcmp(type, "wdtirq") == 0) {
+		cproc= entry->data.cproc;
 		/* wait forever */
 		rval = wait_event_interruptible(cproc->wdtwait, cproc->wdtcnt  != CPROC_WDT_FLASE);
 		if (rval < 0) {
-			printk(KERN_ERR "cproc_proc_read wait interrupted error !\n");
+			pr_info( "cproc_proc_read wait interrupted error !\n");
 		}
 		len = strlen(cp_status_info[CP_WDTIRQ_STATUS]);
 		if (*ppos >= len) {
@@ -248,11 +337,74 @@ static ssize_t cproc_proc_read(struct file *filp,
 		}
 		count = (len > count) ? count : len;
 		if (unalign_copy_to_user(buf, cp_status_info[CP_WDTIRQ_STATUS], count)) {
-			printk(KERN_ERR "cproc_proc_read copy data to user error !\n");
+			pr_info( "cproc_proc_read copy data to user error !\n");
 			return -EFAULT;
 		}
-	} else {
+	}else if(strcmp(type,"start") == 0){
 		return -EINVAL;
+	}else if(strcmp(type,"stop") == 0){
+		return -EINVAL;
+	}else if(strcmp(type,"mini_dump") == 0){
+		static struct cproc_dump_info *s_cur_info = NULL;
+		uint8_t head[sizeof(struct cproc_dump_info) + 32];
+		int len,total = 0,offset = 0;
+		ssize_t written = 0;
+
+		cproc = entry->data.cproc;
+		if(!s_cur_info && *ppos)
+			return 0;
+
+		if(!s_cur_info)
+			list_each_dump_info(cproc->initdata->shmem,&s_cur_info);
+		while(s_cur_info){
+			if(!count)
+				break;
+			len = sprintf(head,"%s_%s_0x%8x_0x%x.bin",s_cur_info->parent_name,s_cur_info->name,
+				s_cur_info->start_addr,s_cur_info->size);
+			if(*ppos > len)
+				offset = *ppos - len;
+			else{
+				if(*ppos + count > len) written = len - *ppos;
+				else written = count;
+				if (unalign_copy_to_user(buf + total, head + *ppos, written)) {
+					pr_info( "cproc_proc_read copy data to user error !\n");
+					return -EFAULT;
+				}
+				*ppos += written;
+			}
+			total += written;
+			count -= written;
+			if(count){
+				written = sprd_cproc_seg_dump(s_cur_info->start_addr,s_cur_info->size,
+					buf + total,count,offset);
+				if(written > 0){
+					total += written;
+					count -= written;
+					*ppos += written;
+				}else if(written == 0){		
+					if(list_each_dump_info(cproc->initdata->shmem,&s_cur_info))
+						*ppos = 0;
+				}else
+					return written;
+			}else
+				break;
+			written = 0;
+			offset = 0;
+		}
+		return total;
+	}else{
+		seg = entry->data.seg;
+		if(strcmp(type,seg->name) != 0)
+		{
+			pr_info( "cproc proc read type not match: %s\n", type);
+			return -EINVAL;
+		}
+		ssize_t ret;
+		ret = sprd_cproc_seg_dump(seg->base,seg->maxsz,buf,count,*ppos);
+		if(ret >= 0)
+			count = ret;
+		else
+			return ret;
 	}
 
 	*ppos += count;
@@ -263,7 +415,8 @@ static ssize_t cproc_proc_write(struct file *filp,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct cproc_proc_entry *entry = (struct cproc_proc_entry *)filp->private_data;
-	struct cproc_device *cproc = entry->cproc;
+	struct cproc_device *cproc;
+	struct cproc_segments *seg;
 	char *type = entry->name;
 	uint32_t base, size, offset;
 	void *vmem;
@@ -272,46 +425,38 @@ static ssize_t cproc_proc_write(struct file *filp,
 
 	if (strcmp(type, "start") == 0) {
 		printk(KERN_INFO "cproc_proc_write to map cproc base start\n");
+		cproc = entry->data.cproc;
 		cproc->initdata->start(cproc);
 		cproc->wdtcnt = CPROC_WDT_FLASE;
 		cproc->status = CP_NORMAL_STATUS;
 		return count;
-	}
-	if (strcmp(type, "stop") == 0) {
+	}else if (strcmp(type, "stop") == 0) {
 		printk(KERN_INFO "cproc_proc_write to map cproc base stop\n");
+		cproc = entry->data.cproc;
 		cproc->initdata->stop(cproc);
 		cproc->status = CP_STOP_STATUS;
 		return count;
-	}
-
-	if (strcmp(type, "modem") == 0) {
-		base = cproc->initdata->segs[0].base;
-		size = cproc->initdata->segs[0].maxsz;
+	}else if(strcmp(type,"mini_dump") == 0){
+		printk(KERN_INFO "cproc_proc_write mini dump not support write\n");
+		return -EINVAL;
+	} else if (strcmp(type, "cp_crash") == 0) {
+		char cp_crash_message[1024] = {0,};
+		if (unalign_copy_from_user(cp_crash_message, buf,
+			(count >= sizeof(cp_crash_message))? sizeof(cp_crash_message)-1 : count)) {
+			printk(KERN_ERR "cproc_proc_write copy data from user error !\n");
+		}
+		else
+			panic("CP Crash : %s", cp_crash_message);
+	} else{
+		seg = entry->data.seg;
+		if(strcmp(type,seg->name) != 0)
+		{
+			pr_info( "cproc proc write type not match: %s\n", type);
+			return -EINVAL;
+		}
+		base = seg->base;
+		size = seg->maxsz;
 		offset = *ppos;
-	}
-        else if (strcmp(type, "dsp") == 0) {
-		base = cproc->initdata->segs[1].base;
-		size = cproc->initdata->segs[1].maxsz;
-		offset = *ppos;
-	}
-        else if (strcmp(type, "tgdsp") == 0) {
-		base = cproc->initdata->segs[1].base;
-		size = cproc->initdata->segs[1].maxsz;
-		offset = *ppos;
-	}
-        else if (strcmp(type, "ldsp") == 0) {
-		base = cproc->initdata->segs[2].base;
-		size = cproc->initdata->segs[2].maxsz;
-		offset = *ppos;
-	}
-        else if (strcmp(type, "warm") == 0)
-        {
-            base = cproc->initdata->segs[3].base;
-            size = cproc->initdata->segs[3].maxsz;
-            offset = *ppos;
-        }
-        else {
-            return -EINVAL;
 	}
 
 	if (size <= offset) {
@@ -319,8 +464,11 @@ static ssize_t cproc_proc_write(struct file *filp,
 		*ppos += count;
 		return count;
 	}
+	if(bfirst){
+		pr_info( "cproc proc write: 0x%08x, 0x%08x\n!", base + offset, count);
+		bfirst = 0;
+	}
 
-	pr_info("cproc proc write: 0x%08x, 0x%08x\n!", base + offset, count);
 	count = min((size-offset), count);
 	r = count, i = 0;
 	do{
@@ -328,7 +476,7 @@ static ssize_t cproc_proc_write(struct file *filp,
 		vmem = ioremap_nocache(base + offset + CPROC_VMALLOC_SIZE_LIMIT*i, CPROC_VMALLOC_SIZE_LIMIT);
 		if (!vmem) {
 			size_t addr = base + offset + CPROC_VMALLOC_SIZE_LIMIT*i;
-			printk(KERN_ERR "Unable to map cproc base: 0x%lx\n", addr);
+			pr_info( "Unable to map cproc base: 0x%lx\n", addr);
 			if(i > 0){
 				*ppos += CPROC_VMALLOC_SIZE_LIMIT*i;
 				return CPROC_VMALLOC_SIZE_LIMIT*i;
@@ -338,7 +486,7 @@ static ssize_t cproc_proc_write(struct file *filp,
 		}
 		if(r < CPROC_VMALLOC_SIZE_LIMIT) copy_size = r;
 		if (unalign_copy_from_user(vmem, buf+CPROC_VMALLOC_SIZE_LIMIT*i, copy_size)) {
-			printk(KERN_ERR "cproc_proc_write copy data from user error !\n");
+			pr_info( "cproc_proc_write copy data from user error !\n");
 			iounmap(vmem);
 			return -EFAULT;
 		}
@@ -355,7 +503,7 @@ static ssize_t cproc_proc_write(struct file *filp,
 static loff_t cproc_proc_lseek(struct file* filp, loff_t off, int whence )
 {
 	struct cproc_proc_entry *entry = (struct cproc_proc_entry *)filp->private_data;
-	struct cproc_device *cproc = entry->cproc;
+	struct cproc_device *cproc;
 	char *type = entry->name;
 	loff_t new;
 
@@ -370,6 +518,7 @@ static loff_t cproc_proc_lseek(struct file* filp, loff_t off, int whence )
 		break;
 	case SEEK_END:
 		if (strcmp(type, "mem") == 0) {
+			cproc = entry->data.cproc;
 			new = cproc->initdata->maxsz + off;
 			filp->f_pos = new;
 		} else {
@@ -385,19 +534,20 @@ static loff_t cproc_proc_lseek(struct file* filp, loff_t off, int whence )
 static unsigned int cproc_proc_poll(struct file *filp, poll_table *wait)
 {
 	struct cproc_proc_entry *entry = (struct cproc_proc_entry *)filp->private_data;
-	struct cproc_device *cproc = entry->cproc;
+	struct cproc_device *cproc;
 	char *type = entry->name;
 	unsigned int mask = 0;
 
 	pr_info("cproc proc poll type: %s \n", type);
 
 	if (strcmp(type, "wdtirq") == 0) {
+		cproc = entry->data.cproc;
 		poll_wait(filp, &cproc->wdtwait, wait);
 		if (cproc->wdtcnt  != CPROC_WDT_FLASE) {
 			mask |= POLLIN | POLLRDNORM;
 		}
 	} else {
-		printk(KERN_ERR "cproc_proc_poll file don't support poll !\n");
+		pr_info( "cproc_proc_poll file don't support poll !\n");
 		return -EINVAL;
 	}
 	return mask;
@@ -415,44 +565,63 @@ struct file_operations cpproc_fs_fops = {
 static inline void sprd_cproc_fs_init(struct cproc_device *cproc)
 {
         uint8_t i= 0;
+	uint16_t mode = S_IWUSR|S_IRUSR|S_IRGRP|S_IWGRP;
+
 	cproc->procfs.procdir = proc_mkdir(cproc->name, NULL);
+	
+	cproc->procfs.processor = kzalloc(sizeof(struct cproc_proc_entry)* cproc->initdata->segnr, 
+			GFP_KERNEL);
+	if (!cproc->procfs.processor) {
+		pr_info( "sprd_cproc_fs_init alloc memory failed !\n");
+		return -ENOMEM;
+	}
 
 	cproc->procfs.start.name = "start";
-	cproc->procfs.start.entry = proc_create_data(cproc->procfs.start.name, S_IWUSR,
+	cproc->procfs.start.entry = proc_create_data(cproc->procfs.start.name, mode,
 			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.start));
-	cproc->procfs.start.cproc = cproc;
+	cproc->procfs.start.data.cproc = cproc;
 
 	cproc->procfs.stop.name = "stop";
-	cproc->procfs.stop.entry = proc_create_data(cproc->procfs.stop.name, S_IWUSR,
+	cproc->procfs.stop.entry = proc_create_data(cproc->procfs.stop.name, mode,
 			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.stop));
-	cproc->procfs.stop.cproc = cproc;
-
-	cproc->procfs.modem.name =cproc->initdata->segs[0].name;
-	cproc->procfs.modem.entry = proc_create_data(cproc->procfs.modem.name, S_IWUSR,
-			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.modem));
-	cproc->procfs.modem.cproc = cproc;
-
-       for(i = 0; i < cproc->initdata->segnr - 1; i++){
-            cproc->procfs.dsp[i].name = cproc->initdata->segs[1+i].name;
-            cproc->procfs.dsp[i].entry = proc_create_data(cproc->procfs.dsp[i].name, S_IWUSR,
-                            cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.dsp[i]));
-            cproc->procfs.dsp[i].cproc = cproc;
-        }
+	cproc->procfs.stop.data.cproc = cproc;
 
 	cproc->procfs.status.name = "status";
-	cproc->procfs.status.entry = proc_create_data(cproc->procfs.status.name, S_IWUSR,
+	cproc->procfs.status.entry = proc_create_data(cproc->procfs.status.name, mode,
 			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.status));
-	cproc->procfs.status.cproc = cproc;
+	cproc->procfs.status.data.cproc = cproc;
 
 	cproc->procfs.wdtirq.name = "wdtirq";
-	cproc->procfs.wdtirq.entry = proc_create_data(cproc->procfs.wdtirq.name, S_IWUSR,
+	cproc->procfs.wdtirq.entry = proc_create_data(cproc->procfs.wdtirq.name, mode,
 			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.wdtirq));
-	cproc->procfs.wdtirq.cproc = cproc;
+	cproc->procfs.wdtirq.data.cproc = cproc;
 
 	cproc->procfs.mem.name = "mem";
-	cproc->procfs.mem.entry = proc_create_data(cproc->procfs.mem.name, S_IWUSR,
+	cproc->procfs.mem.entry = proc_create_data(cproc->procfs.mem.name, mode | S_IROTH | S_IWOTH,
 			cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.mem));
-	cproc->procfs.mem.cproc = cproc;
+	cproc->procfs.mem.data.cproc = cproc;
+
+	cproc->procfs.cp_crash.name = "cp_crash";
+	cproc->procfs.cp_crash.entry = proc_create_data(cproc->procfs.cp_crash.name, S_IWUSR | S_IWGRP,
+	cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.cp_crash));
+	cproc->procfs.cp_crash.data.cproc = cproc;
+
+	if(cproc->initdata->shmem){
+		cproc->procfs.mini_dump.name = "mini_dump";
+		cproc->procfs.mini_dump.data.cproc = cproc;
+		cproc->procfs.mini_dump.entry = proc_create_data(cproc->procfs.mini_dump.name, S_IRUSR | S_IRGRP | S_IROTH,
+				cproc->procfs.procdir, &cpproc_fs_fops, &(cproc->procfs.mini_dump));
+	}
+
+	for(i = 0;i < cproc->initdata->segnr;i ++)
+	{
+		 cproc->procfs.processor[i].name = cproc->initdata->segs[i].name;
+		 cproc->procfs.processor[i].data.seg = &cproc->initdata->segs[i];
+		 cproc->procfs.processor[i].entry = proc_create_data(cproc->initdata->segs[i].name,mode, 
+		 		cproc->procfs.procdir,&cpproc_fs_fops,&cproc->procfs.processor[i]);
+		 
+	}
+	return;
 }
 
 static inline void sprd_cproc_fs_exit(struct cproc_device *cproc)
@@ -460,14 +629,16 @@ static inline void sprd_cproc_fs_exit(struct cproc_device *cproc)
         uint8_t i= 0;
 	remove_proc_entry(cproc->procfs.start.name, cproc->procfs.procdir);
 	remove_proc_entry(cproc->procfs.stop.name, cproc->procfs.procdir);
-	remove_proc_entry(cproc->procfs.modem.name, cproc->procfs.procdir);
-        for(i = 0; i < cproc->initdata->segnr - 1; i++){
-            remove_proc_entry(cproc->procfs.dsp[i].name, cproc->procfs.procdir);
-        }
-	remove_proc_entry(cproc->procfs.dsp[1].name, cproc->procfs.procdir);
 	remove_proc_entry(cproc->procfs.status.name, cproc->procfs.procdir);
 	remove_proc_entry(cproc->procfs.wdtirq.name, cproc->procfs.procdir);
 	remove_proc_entry(cproc->procfs.mem.name, cproc->procfs.procdir);
+	if(cproc->initdata->shmem){
+		remove_proc_entry(cproc->procfs.mini_dump.name, cproc->procfs.procdir);
+	}
+	for(i = 0; i < cproc->initdata->segnr; i++){
+		remove_proc_entry(cproc->procfs.processor[i].name, cproc->procfs.procdir);
+	}
+	kfree(cproc->procfs.processor);
 	remove_proc_entry(cproc->name, NULL);
 }
 
@@ -547,31 +718,61 @@ static int sprd_cproc_native_cp_stop(void *arg)
 	struct cproc_init_data *pdata = cproc->initdata;
 	struct cproc_ctrl *ctrl;
 
-        if (!pdata) {
-            return -ENODEV;
-	}
+	if (!pdata) 
+		return -ENODEV;
+	
 	ctrl = pdata->ctrl;
 
-            /* reset cp1 */
-        if((ctrl->ctrl_reg[CPROC_CTRL_RESET] & INVALID_REG)!= INVALID_REG){
-            sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_RESET],ctrl->ctrl_mask[CPROC_CTRL_RESET]);
-            msleep(50);
-        }
-        if((ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP] & INVALID_REG)!= INVALID_REG){
-            /* cp1 force deep sleep */
-            sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP],ctrl->ctrl_mask[CPROC_CTRL_DEEP_SLEEP]);
-            msleep(50);
-        }
-        if((ctrl->ctrl_reg[CPROC_CTRL_GET_STATUS] & INVALID_REG)!= INVALID_REG){
-           sci_glb_clr(ctrl->ctrl_reg[CPROC_CTRL_GET_STATUS],ctrl->ctrl_mask[CPROC_CTRL_GET_STATUS]);
-       }
+	/* reset cp1 */
+	if((ctrl->ctrl_reg[CPROC_CTRL_RESET] & INVALID_REG)!= INVALID_REG){
+		sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_RESET],ctrl->ctrl_mask[CPROC_CTRL_RESET]);
+		msleep(50);
+	}
+	if((ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP] & INVALID_REG)!= INVALID_REG){
+		/* cp1 force deep sleep */
+		sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP],ctrl->ctrl_mask[CPROC_CTRL_DEEP_SLEEP]);
+		msleep(50);
+ 	}
+	if((ctrl->ctrl_reg[CPROC_CTRL_GET_STATUS] & INVALID_REG)!= INVALID_REG)
+		sci_glb_clr(ctrl->ctrl_reg[CPROC_CTRL_GET_STATUS],ctrl->ctrl_mask[CPROC_CTRL_GET_STATUS]);
+
         if((ctrl->ctrl_reg[CPROC_CTRL_SHUT_DOWN] & INVALID_REG)!= INVALID_REG){
-            /* cp1 force shutdown */
-            sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_SHUT_DOWN],ctrl->ctrl_mask[CPROC_CTRL_SHUT_DOWN]);
-        }
-        return 0;
+		/* cp1 force shutdown */
+		sci_glb_set(ctrl->ctrl_reg[CPROC_CTRL_SHUT_DOWN],ctrl->ctrl_mask[CPROC_CTRL_SHUT_DOWN]);
+	}
+	return 0;
+}
+static int sprd_cproc_native_arm7_start(void *arg)
+{
+	struct cproc_device *cproc = (struct cproc_device *)arg;
+	struct cproc_init_data *pdata = cproc->initdata;
+	struct cproc_ctrl *ctrl;
+	uint32_t value, state;
+
+	if (!pdata)
+		return -ENODEV;
+
+	ctrl = pdata->ctrl;
+
+	if ((ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP] & 0xff) != 0xff) {
+		/* clear cp1 force deep sleep */
+		sci_glb_clr(ctrl->ctrl_reg[CPROC_CTRL_DEEP_SLEEP],
+				ctrl->ctrl_mask[CPROC_CTRL_DEEP_SLEEP]);
+	}
+	/* clear cp1 force shutdown */
+	if ((ctrl->ctrl_reg[CPROC_CTRL_SHUT_DOWN] & 0xff) != 0xff) {
+		sci_glb_clr(ctrl->ctrl_reg[CPROC_CTRL_SHUT_DOWN],
+			ctrl->ctrl_mask[CPROC_CTRL_SHUT_DOWN]);
+	}
+
+	return 0;
 }
 
+
+static int sprd_cproc_native_arm7_stop(void *arg)
+{
+	return 0;
+}
 static int sprd_cproc_native_cp2_start(void* arg)
 {
 	struct cproc_device *cproc = (struct cproc_device *)arg;
@@ -689,9 +890,12 @@ static int sprd_cproc_parse_dt(struct cproc_init_data **init, struct device *dev
 	struct resource res;
 	struct device_node *np = dev->of_node, *chd;
 	int ret, i, segnr;
-	uint32_t base, offset;
-	uint32_t ctrl_reg[4] = {0};
-	size_t reg_base[6] = {0};
+	uint32_t ctrl_reg[CPROC_CTRL_NR] = {0};
+	#define REG_BASE_NR	7
+	uint32_t reg_base[REG_BASE_NR];
+	struct cproc_dump_info *dump_info = NULL;
+	void *p_cmdline_addr;
+		
 
 	segnr = of_get_child_count(np);
 	pr_info("sprd_cproc mem size: %u\n", sizeof(struct cproc_init_data) + segnr * sizeof(struct cproc_segments));
@@ -714,17 +918,15 @@ static int sprd_cproc_parse_dt(struct cproc_init_data **init, struct device *dev
 	}
 
 	/* get pmu base addr */
-        for(i=0;i < 6;i++){
-	ret = of_address_to_resource(np, i, &res);
-	if (ret) {
-		ret = -ENODEV;
-		goto error;
+	for(i=0;i < sizeof(reg_base) / sizeof(uint32_t);i++){
+		ret = of_address_to_resource(np, i, &res);
+		if (!ret) {
+	        reg_base[i] = res.start;
+			pr_info( "sprd_cproc: base 0x%x\n", reg_base[i]);
+		}
 	}
-	reg_base[i] = res.start;
-	pr_info("sprd_cproc: base 0x%lx\n", reg_base[i]);
-        }
-	/* get ctrl_reg addr on pmu base */
-	ret = of_property_read_u32_array(np, "sprd,ctrl-reg", ctrl_reg, CPROC_CTRL_NR);
+    /* get ctrl_reg addr on pmu base */
+	ret = of_property_read_u32_array(np, "sprd,ctrl-reg", (uint32_t *)ctrl_reg, CPROC_CTRL_NR);
 	if (ret) {
 		goto error;
 	}
@@ -779,6 +981,21 @@ static int sprd_cproc_parse_dt(struct cproc_init_data **init, struct device *dev
 	pdata->wdtirq = irq_of_parse_and_map(np, 0);
 	pr_info("sprd_cproc: wdt irq %u\n", pdata->wdtirq);
 
+	/* get share memory base+offset */
+	ret = of_address_to_resource(np,6,&res);
+	if(ret)
+		dump_info = NULL;
+	else
+	{
+		dump_info = ioremap_nocache(res.start, res.end - res.start + 1);
+		if (!dump_info){
+			pr_info( "Unable to map dump info base: 0x%08x\n", res.start);
+			ret = -ENOMEM;
+			goto error;
+		}
+		pdata->shmem = dump_info;
+	}
+
 	i = 0;
 	for_each_child_of_node(np, chd) {
 		struct cproc_segments *seg;
@@ -797,6 +1014,14 @@ static int sprd_cproc_parse_dt(struct cproc_init_data **init, struct device *dev
 		seg->maxsz = res.end - res.start + 1;
 		pr_info("sprd_cproc: child node [%d] base=0x%x, size=0x%0x\n", i, seg->base, seg->maxsz);
 
+		/* clear cmdline */
+		if(strcmp(seg->name, "cpcmdline") == 0)
+		{
+			p_cmdline_addr = phys_to_virt(seg->base);
+			memset(p_cmdline_addr, 0, seg->maxsz);
+		}
+	
+
 		i++;
 	}
 
@@ -804,18 +1029,24 @@ static int sprd_cproc_parse_dt(struct cproc_init_data **init, struct device *dev
 		sprd_cproc_native_cp_stop, sprd_cproc_native_cp_start);
 	pdata->segnr = segnr;
 
-	if(segnr == 1){
+	if (!strcmp(pdata->devname, "cppmic")) {
+		pdata->start = sprd_cproc_native_arm7_start;
+		pdata->stop = sprd_cproc_native_arm7_stop;
+	} else if (!strcmp(pdata->devname, "cpwcn")) {
 		pdata->start = sprd_cproc_native_cp2_start;
 		pdata->stop = sprd_cproc_native_cp2_stop;
-	}
-	else{
+	} else {
 		pdata->start = sprd_cproc_native_cp_start;
 		pdata->stop = sprd_cproc_native_cp_stop;
 	}
+
 	pdata->ctrl = ctrl;
 	*init = pdata;
 	return 0;
 error:
+	if(dump_info)
+		iounmap(dump_info);
+	pdata->shmem= NULL;
 	kfree(ctrl);
 	kfree(pdata);
 	return ret;
@@ -828,8 +1059,11 @@ static void sprd_cproc_destroy_pdata(struct cproc_init_data **init)
 {
 #ifdef CONFIG_OF
 	struct cproc_init_data *pdata = *init;
-
 	if (pdata) {
+		if (pdata->shmem) {
+			iounmap(pdata->shmem);
+			pdata->shmem = NULL;
+		}
 		if (pdata->ctrl) {
 			kfree(pdata->ctrl);
 		}
@@ -845,37 +1079,31 @@ static int sprd_cproc_probe(struct platform_device *pdev)
 {
 	struct cproc_device *cproc;
 	struct cproc_init_data *pdata = pdev->dev.platform_data;
+	struct cproc_segments *seg;
 	int rval;
+	int res = -1;
+
 
 	if (!pdata && pdev->dev.of_node) {
 		rval = sprd_cproc_parse_dt(&pdata, &pdev->dev);
 		if (rval) {
-			printk(KERN_ERR "failed to parse device tree!\n");
+			pr_info( "failed to parse device tree!\n");
 			return rval;
 		}
 	}
-	pr_info("sprd_cproc: pdata=0x%x, of_node=0x%x\n",
-		(uint32_t)pdata, (uint32_t)pdev->dev.of_node);
+	pr_info( "sprd_cproc: pdata=0x%x, of_node=0x%x\n",(uint32_t)pdata, (uint32_t)pdev->dev.of_node);
+
 
 	cproc = kzalloc(sizeof(struct cproc_device), GFP_KERNEL);
 	if (!cproc) {
 		sprd_cproc_destroy_pdata(&pdata);
-		printk(KERN_ERR "failed to allocate cproc device!\n");
+		pr_info( "failed to allocate cproc device!\n");
 		return -ENOMEM;
 	}
 
 
 	pr_info("%s %p %x\n", __func__, pdata->base, pdata->maxsz);
-#if 0
-	if ( pdata->base == WCN_START_ADDR)
-		set_section_ro(__va(pdata->base), (WCN_TOTAL_SIZE & ~(SECTION_SIZE - 1)) >> SECTION_SHIFT);
-	else {
-		if (!(pdata->maxsz % SECTION_SIZE))
-			set_section_ro(__va(pdata->base), pdata->maxsz >> SECTION_SHIFT);
-		else
-			printk("%s WARN can't be marked RO now\n", __func__);
-	}
-#endif
+	
 	cproc->initdata = pdata;
 
 	cproc->miscdev.minor = MISC_DYNAMIC_MINOR;
@@ -887,7 +1115,7 @@ static int sprd_cproc_probe(struct platform_device *pdev)
 	if (rval) {
 		sprd_cproc_destroy_pdata(&cproc->initdata);
 		kfree(cproc);
-		printk(KERN_ERR "failed to register sprd_cproc miscdev!\n");
+		pr_info( "failed to register sprd_cproc miscdev!\n");
 		return rval;
 	}
 
@@ -902,7 +1130,7 @@ static int sprd_cproc_probe(struct platform_device *pdev)
 		if (rval != 0) {
 			misc_deregister(&cproc->miscdev);
 			sprd_cproc_destroy_pdata(&cproc->initdata);
-			printk(KERN_ERR "Cproc failed to request irq %s: %d\n",
+			pr_info( "Cproc failed to request irq %s: %d\n",
 					cproc->initdata->devname, cproc->initdata->wdtirq);
 			kfree(cproc);
 			return rval;
@@ -951,7 +1179,7 @@ static int __init sprd_cproc_init(void)
 {
 
 	if (platform_driver_register(&sprd_cproc_driver) != 0) {
-		printk(KERN_ERR "sprd_cproc platform drv register Failed \n");
+		pr_info( "sprd_cproc platform drv register Failed \n");
 		return -1;
 	}
 	return 0;

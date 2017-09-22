@@ -73,6 +73,9 @@ typedef struct _sleep_policy
 {
 	struct timer_list gpio_timer;
 	uint32 marlin_waketime;
+	uint32 bt_req_time;
+	uint32 ack_high_time;
+	uint32 wake_lock_time;
 	uint32 gpio_opt_tag; //  1:dont't pull gpio    0:pull gpio
 	unsigned long gpioreq_up_time;
 	unsigned long gpioreq_need_pulldown;

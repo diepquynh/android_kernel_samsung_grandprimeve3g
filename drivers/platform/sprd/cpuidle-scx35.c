@@ -40,12 +40,7 @@ static unsigned int idle_disabled_by_suspend;
 static unsigned int zipenc_status;
 static unsigned int zipdec_status;
 #endif
-
-#ifdef CONFIG_ARCH_SCX20
-	static int light_sleep_en = 0;
-#else
-	static int light_sleep_en = 1;
-#endif
+static int light_sleep_en = 1;
 
 
 static int idle_deep_en = 0;

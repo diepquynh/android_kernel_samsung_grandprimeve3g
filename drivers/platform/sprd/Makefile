@@ -4,7 +4,7 @@ obj-$(CONFIG_SPRD_MAILBOX) += mailbox.o
 obj-$(CONFIG_SC_INTERNAL_WATCHDOG) += sys_reset.o
 obj-$(CONFIG_BUS_MONITOR_DEBUG)	+= busmonitor.o
 obj-$(CONFIG_SC_VIBRATOR)	+= vibrator.o
-obj-$(CONFIG_GPS_LSI_S5N6420)	+= sec_gps_s5n6420.o
+#obj-$(CONFIG_GPS_LSI_S5N6420)	+= sec_gps_s5n6420.o
 ifneq ($(CONFIG_64BIT),y)
 obj-y	+= timer_sc8830.o
 else
@@ -36,11 +36,13 @@ obj-$(CONFIG_ARCH_SCX35) += clock-sc8830_dt.o
 obj-$(CONFIG_ARCH_SCX35) += io-sc8830.o pin_switch.o
 
 ifeq ($(CONFIG_ARCH_SCX30G),y)
+obj-y += dmc_misc.o
 obj-$(CONFIG_PM_DEVFREQ) += dmc_freq_28nm.o dmc_dfs_test.o
 obj-$(CONFIG_SCX35_DMC_FREQ_AP) += dmc_freq_ap_28nm.o
 	CFLAGS_dmc_freq_ap_28nm.o += -fPIC
 else
 ifeq ($(CONFIG_ARCH_SCX35L),y)
+obj-y += dmc_misc.o
 obj-y += dmc_freq_28nm.o
 else
 obj-$(CONFIG_PM_DEVFREQ) += dmc_freq.o
@@ -61,7 +63,3 @@ obj-$(CONFIG_SPRD_AVS_DEBUG) += avs_debug.o
 obj-$(CONFIG_SPRD_AUX_DEBUG) += aux_debug.o
 
 endif
-
-obj-$(CONFIG_SEC_DEBUG) += sec_common.o sec_debug.o sec_gaf.o sec_getlog.o sec-reboot.o
-obj-$(CONFIG_SEC_LOG) += sec_log.o
-obj-$(CONFIG_SEC_BSP) += sec_bsp.o

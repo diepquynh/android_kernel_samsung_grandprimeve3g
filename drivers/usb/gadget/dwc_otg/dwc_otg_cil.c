@@ -63,7 +63,7 @@
 
 extern int in_calibration(void);
 extern int in_autotest(void);
-extern void usb_phy_ahb_rst(void);
+extern void sprd_usb_phy_rst(void);
 static int dwc_otg_setup_params(dwc_otg_core_if_t * core_if);
 
 /**
@@ -1974,7 +1974,7 @@ void dwc_otg_core_dev_init(dwc_otg_core_if_t * core_if)
 		static uint32_t first_entrance = 1;
 		dctl_data_t dctl = {.d32 = 0 };
 		dctl.d32 = DWC_READ_REG32(&dev_if->dev_global_regs->dctl);
-		if(in_calibration() && first_entrance){
+		if(first_entrance){
 			first_entrance = 0;
 			dctl.b.sftdiscon = 1;
 		}else
@@ -3566,14 +3566,9 @@ static void init_dma_desc_chain(dwc_otg_core_if_t * core_if, dwc_ep_t * ep,
 				dma_desc->status.b.bs = BS_HOST_BUSY;
 				dma_desc->status.b.l = 0;
 				dma_desc->status.b.ioc = 0;
-				/** WORKAROUND: If this buffer length is not multiple of DWORD,
-				 ** and it wants to concatenate to next buffer, DMA would behave
-				 ** abnormally, so it is sent as a short packet.
-				 */
-				//if( core_if->snpsid <= OTG_CORE_REV_2_94a)
 				dma_desc->status.b.sp =
 					(req->short_packet && xfer_est % ep->maxpacket) ?
-						1 : (xfer_est % 4 ? 1 : 0);
+						1 : 0;
 				dma_desc->status.b.bytes = xfer_est;
 				dma_desc->buf = dma_addr + offset;
 				dma_desc->status.b.sts = 0;
@@ -3583,11 +3578,11 @@ static void init_dma_desc_chain(dwc_otg_core_if_t * core_if, dwc_ep_t * ep,
 			}
 			++dma_desc;
 			/** No more descriptors? */
-			if( ++ep->desc_cnt > MAX_DMA_DESC_CNT)
+			if (++ep->desc_cnt > MAX_DMA_DESC_CNT)
 				goto end;
 		}
 		i++;
-	}while (i < req->num_mapped_sgs);
+	} while (i < req->num_mapped_sgs);
 end:
 	/** the Last DMA Descriptor Setup */
 	--dma_desc;
@@ -3659,6 +3654,23 @@ static int32_t write_isoc_tx_fifo(dwc_otg_core_if_t * core_if, dwc_ep_t * dwc_ep
 
 	return 1;
 }
+void dwc_otg_ep_reset_ep_pid(dwc_otg_core_if_t * core_if,int is_in,int num)
+{
+	depctl_data_t depctl;
+
+	DWC_PRINTF("%s( %s_ep%d )\n",__func__,is_in?"in":"out",num);
+	if (is_in == 0) {
+		dwc_otg_dev_out_ep_regs_t *out_regs = core_if->dev_if->out_ep_regs[num];
+		depctl.d32 = DWC_READ_REG32(&out_regs->doepctl);
+		depctl.b.setd0pid = 1;
+		DWC_WRITE_REG32(&out_regs->doepctl,depctl.d32);
+	} else {
+		dwc_otg_dev_in_ep_regs_t *in_regs = core_if->dev_if->in_ep_regs[num];
+		depctl.d32 = DWC_READ_REG32(&in_regs->diepctl);
+		depctl.b.setd0pid = 1;
+		DWC_WRITE_REG32(&in_regs->diepctl,depctl.d32);
+	}
+}
 
 /**
  * This function does the setup for a data transfer for an EP and
@@ -3669,7 +3681,6 @@ static int32_t write_isoc_tx_fifo(dwc_otg_core_if_t * core_if, dwc_ep_t * dwc_ep
  * @param core_if Programming view of DWC_otg controller.
  * @param ep The EP to start the transfer on.
  */
-
 void dwc_otg_ep_start_transfer(dwc_otg_core_if_t * core_if, dwc_ep_t * ep,
 			 dwc_otg_pcd_request_t *req)
 {
@@ -3821,7 +3832,6 @@ void dwc_otg_ep_start_transfer(dwc_otg_core_if_t * core_if, dwc_ep_t * ep,
 
 		depctl.d32 = DWC_READ_REG32(&(out_regs->doepctl));
 		deptsiz.d32 = DWC_READ_REG32(&(out_regs->doeptsiz));
-
 		if (!core_if->dma_desc_enable) {
 			if (ep->maxpacket > ep->maxxfer / MAX_PKT_CNT)
 				ep->xfer_len += (ep->maxxfer < (ep->total_len - ep->xfer_len)) ?
@@ -5086,7 +5096,7 @@ void dwc_otg_core_reset(dwc_otg_core_if_t * core_if)
 		if (++count > 10000) {
 			DWC_WARN("%s() HANG! Soft Reset GRSTCTL=%0x\n",
 				 __func__, greset.d32);
-			usb_phy_ahb_rst();
+			sprd_usb_phy_rst();
 			break;
 		}
 		dwc_udelay(1);

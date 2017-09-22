@@ -27,6 +27,8 @@
 #include <linux/highuid.h>
 #include <linux/sched.h>
 #include <linux/sysctl.h>
+#include <linux/sipc.h>
+#include <linux/of.h>
 #include <asm/memory.h>
 #include <asm/cacheflush.h>
 #include <asm/outercache.h>
@@ -47,6 +49,7 @@
 #define SYSDUMP_NOTE_BYTES (ALIGN(sizeof(struct elf_note), 4) +   \
 			    ALIGN(sizeof(CORE_STR), 4) + \
 			    ALIGN(sizeof(struct elf_prstatus), 4))
+#define MAX_NUM_DUMP_MEM 20
 
 typedef char note_buf_t[SYSDUMP_NOTE_BYTES];
 
@@ -87,6 +90,7 @@ struct sysdump_config {
 };
 
 static struct sysdump_info *sprd_sysdump_info = NULL;
+static unsigned long sysdump_magic_paddr = 0;
 
 /* must be global to let gdb know */
 struct sysdump_extra sprd_sysdump_extra = {
@@ -103,267 +107,8 @@ static struct sysdump_config sysdump_conf = {
 	.dump_path = "",
 };
 
-#ifdef CONFIG_SPRD_SYSDUMP
-struct sysdump_mem sprd_dump_mem[] = {
-#if defined(CONFIG_ARCH_SCX15)
-#if defined(CONFIG_SPRD_MODEM_TD)
-	{
-		.paddr		= CONFIG_PHYS_OFFSET,
-		.vaddr		= PAGE_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= CPT_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type	 	= SYSDUMP_RAM,
-	},
-	{
-		.paddr		= CPT_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPT_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPT_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_TD
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-	{
-		.paddr		= CPT_START_ADDR + CPT_TOTAL_SIZE,
-		.vaddr		= PAGE_OFFSET + CPT_START_ADDR + CPT_TOTAL_SIZE - CONFIG_PHYS_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= WCN_START_ADDR - CPT_START_ADDR - CPT_TOTAL_SIZE,
-		.type	 	= SYSDUMP_RAM,
-	},
-#else
-	{
-		.paddr		= CONFIG_PHYS_OFFSET,
-		.vaddr		= PAGE_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= CPW_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type	 	= SYSDUMP_RAM,
-	},
-	{
-		.paddr		= CPW_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPW_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPW_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_WCDMA
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-	{
-		.paddr		= CPW_START_ADDR + CPW_TOTAL_SIZE,
-		.vaddr		= PAGE_OFFSET + CPW_START_ADDR + CPW_TOTAL_SIZE - CONFIG_PHYS_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= WCN_START_ADDR - CPW_START_ADDR - CPW_TOTAL_SIZE,
-		.type	 	= SYSDUMP_RAM,
-	},
-#endif
-#elif defined(CONFIG_ARCH_SCX30G)
-#if defined(CONFIG_SPRD_MODEM_TD)
-	{
-		.paddr		= CONFIG_PHYS_OFFSET,
-		.vaddr		= PAGE_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= CPT_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type	 	= SYSDUMP_RAM,
-	},
-
-
-	{
-		.paddr		= CPT_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPT_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPT_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_TD
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-#else
-	{
-		.paddr		= CONFIG_PHYS_OFFSET,
-		.vaddr		= PAGE_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= CPW_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type		= SYSDUMP_RAM,
-	},
-
-	{
-		.paddr		= CPW_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPW_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPW_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_WCDMA
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-#endif
-#elif defined(CONFIG_ARCH_SCX35L)
-	{
-		.paddr          = CONFIG_PHYS_OFFSET,
-		.vaddr          = PAGE_OFFSET,
-		.soff           = 0xffffffff,
-		.size           = GGE_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type           = SYSDUMP_RAM,
-	},
-	{
-		.paddr		= GGE_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(GGE_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= GGE_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_GGE
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-	{
-		.paddr		= LTE_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(LTE_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= LTE_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_LTE
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-
-#else
-
-	{
-		.paddr		= CONFIG_PHYS_OFFSET,
-		.vaddr		= PAGE_OFFSET,
-		.soff		= 0xffffffff,
-		.size		= CPT_START_ADDR - CONFIG_PHYS_OFFSET,
-		.type	 	= SYSDUMP_RAM,
-	},
-	{
-		.paddr		= CPT_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPT_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPT_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_TD
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-	{
-		.paddr		= CPT_START_ADDR + CPT_TOTAL_SIZE,
-		.vaddr		= PAGE_OFFSET +
-					(CPT_START_ADDR + CPT_TOTAL_SIZE - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPW_START_ADDR - (CPT_START_ADDR + CPT_TOTAL_SIZE),
-		.type		= SYSDUMP_RAM,
-	},
-	{
-		.paddr		= CPW_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(CPW_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= CPW_TOTAL_SIZE,
-#ifdef CONFIG_SIPC_WCDMA
-		.type		= SYSDUMP_MODEM,
-#else
-		.type		= SYSDUMP_RAM,
-#endif
-	},
-#endif
-#ifdef CONFIG_ARCH_SCX35L
-	{
-		.paddr		= LTE_START_ADDR + LTE_TOTAL_SIZE,
-		.vaddr		= PAGE_OFFSET +
-						(LTE_START_ADDR + LTE_TOTAL_SIZE - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= 0,
-		.type		= SYSDUMP_RAM,
-	},
-#else
-	{
-		.paddr		= WCN_START_ADDR,
-		.vaddr		= PAGE_OFFSET +
-					(WCN_START_ADDR - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= WCN_TOTAL_SIZE,
-//#ifdef CONFIG_SIPC_WCN
-		.type		= SYSDUMP_MODEM,
-//#else
-//		.type		= SYSDUMP_RAM,
-//#endif
-	},
-	{
-		.paddr		= WCN_START_ADDR + WCN_TOTAL_SIZE,
-		.vaddr		= PAGE_OFFSET +
-					(WCN_START_ADDR + WCN_TOTAL_SIZE - CONFIG_PHYS_OFFSET),
-		.soff		= 0xffffffff,
-		.size		= 0, /* fill this dynamically according to real ram size */
-		.type		= SYSDUMP_RAM,
-	},
-#endif
-/*	{
-		.paddr		= SPRD_AHB_PHYS,
-		.vaddr		= SPRD_AHB_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_AHB_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_INTC0_PHYS,
-		.vaddr		= SPRD_INTC0_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_INTC0_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_GPTIMER0_PHYS,
-		.vaddr		= SPRD_GPTIMER0_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_GPTIMER0_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_ADI_PHYS,
-		.vaddr		= SPRD_ADI_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_ADI_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_GPIO_PHYS,
-		.vaddr		= SPRD_GPIO_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_GPIO_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_EIC_PHYS,
-		.vaddr		= SPRD_EIC_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_EIC_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},
-	{
-		.paddr		= SPRD_GREG_PHYS,
-		.vaddr		= SPRD_GREG_BASE,
-		.soff		= 0x0,
-		.size		= SPRD_GREG_SIZE,
-		.type		= SYSDUMP_IOMEM,
-	},*/
-};
-int sprd_dump_mem_num = ARRAY_SIZE(sprd_dump_mem);
-#endif /* CONFIG_SPRD_SYSDUMP */
+static struct sysdump_mem sprd_dump_mem[MAX_NUM_DUMP_MEM];
+static int sprd_dump_mem_num;
 
 static size_t get_elfhdr_size(int nphdr)
 {
@@ -615,7 +360,134 @@ static void sysdump_fill_core_hdr(struct pt_regs *regs,
 	nhdr->p_filesz = 0;
 
 	return;
-} /* end elf_kcore_store_hdr() */
+}/* end elf_kcore_store_hdr() */
+
+static void get_sprd_sysdump_info_paddr(void)
+{
+	struct device_node *node;
+	unsigned long *magic_addr;
+	int len, sw, aw;
+
+	node = of_find_node_by_name(NULL, "sprd_sysdump");
+	/*node = of_find_compatible_node(NULL, NULL, "sprd,sysdump"); */
+	if (!node) {
+		pr_emerg("Not find sprd_sysdump node from dts, no magic-addr property\n");
+		sysdump_magic_paddr = (unsigned long)SPRD_SYSDUMP_MAGIC;
+		pr_emerg("sysdump_magic_paddr is %lx\n", sysdump_magic_paddr);
+		return;
+	} else
+		pr_emerg("node->name is %s\n", node->name);
+
+	magic_addr = (unsigned long *)of_get_property(node, "magic-addr", &len);
+	if (!magic_addr) {
+		pr_emerg("Not find magic-addr property from sprd_sysdump node!\n");
+		sysdump_magic_paddr = (unsigned long)SPRD_SYSDUMP_MAGIC;
+		return;
+	} else {
+		aw = of_n_addr_cells(node);
+		sw = of_n_size_cells(node);
+		sysdump_magic_paddr = of_read_ulong((const __be32 *)magic_addr, aw);
+	}
+	pr_emerg("magic_addr is %lx\n", sysdump_magic_paddr);
+}
+
+static void fill_sprd_sysdump_mem(void)
+{
+	struct device_node *node = NULL;
+	struct device_node *node_mem = NULL;
+	unsigned long *reg = NULL, *reg_end = NULL;
+	int len, sw, aw, i = 0;
+
+	node = of_find_node_by_name(NULL, "sprd_sysdump");
+	if (!node) {
+		pr_emerg("Not find sprd_sysdump node from dts\n");
+		return;
+	}
+	else
+		pr_emerg("node->name is %s\n", node->name);
+
+	aw = of_n_addr_cells(node);
+	sw = of_n_size_cells(node);
+
+	reg = (unsigned long *)of_get_property(node, "ram", &len);
+	if (reg == NULL)
+		pr_emerg("no ram property.\n");
+	else {
+		node_mem = of_find_node_by_path((const char *)reg);
+		reg = (unsigned long *)of_get_property(node_mem, "reg", &len);
+		reg_end = reg + len / (sizeof(unsigned long));
+		while (reg < reg_end) {
+			sprd_dump_mem[i].paddr =
+			    of_read_ulong((const __be32 *)reg, aw);
+			reg++;
+			sprd_dump_mem[i].size =
+			    of_read_ulong((const __be32 *)reg, sw);
+			reg++;
+			sprd_dump_mem[i].soff = 0xffffffff;
+			sprd_dump_mem[i].vaddr =
+			    (long)__va(sprd_dump_mem[i].paddr);
+			sprd_dump_mem[i].type = SYSDUMP_RAM;
+			pr_emerg("sprd_dump_mem[%d].paddr is0x%lx\n", i,
+				 sprd_dump_mem[i].paddr);
+			pr_emerg("sprd_dump_mem[%d].size  is0x%lx\n", i,
+				 sprd_dump_mem[i].size);
+			i++;
+		}
+	}
+	reg = (unsigned long *)of_get_property(node, "modem", &len);
+	if (reg == NULL)
+		pr_emerg("no modem property.\n");
+	else {
+		reg_end = reg + len / (sizeof(unsigned long));
+		while (reg < reg_end) {
+			sprd_dump_mem[i].paddr =
+			    of_read_ulong((const __be32 *)reg, aw);
+			reg++;
+			sprd_dump_mem[i].size =
+			    of_read_ulong((const __be32 *)reg, sw);
+			reg++;
+			sprd_dump_mem[i].soff = 0xffffffff;
+			sprd_dump_mem[i].vaddr =
+			    (long)__va(sprd_dump_mem[i].paddr);
+			sprd_dump_mem[i].type = SYSDUMP_MODEM;
+			pr_emerg("sprd_dump_mem[%d].paddr is0x%lx\n", i,
+				 sprd_dump_mem[i].paddr);
+			pr_emerg("sprd_dump_mem[%d].size  is0x%lx\n", i,
+				 sprd_dump_mem[i].size);
+			i++;
+			if (!sysdump_conf.dump_modem)
+				sprd_dump_mem[i].size = 0;
+		}
+	}
+
+	reg = (unsigned long *)of_get_property(node, "iomem", &len);
+	if (reg == NULL)
+		pr_emerg("no iomem property.\n");
+	else {
+		reg_end = reg + len / (sizeof(unsigned long));
+		while (reg < reg_end) {
+			sprd_dump_mem[i].paddr =
+			    of_read_ulong((const __be32 *)reg, aw);
+			reg++;
+			sprd_dump_mem[i].size =
+			    of_read_ulong((const __be32 *)reg, sw);
+			reg++;
+			sprd_dump_mem[i].soff = 0;
+			sprd_dump_mem[i].vaddr =
+			    (unsigned long)ioremap(sprd_dump_mem[i].paddr,
+						   sprd_dump_mem[i].size);
+			sprd_dump_mem[i].type = SYSDUMP_IOMEM;
+			pr_emerg("sprd_dump_mem[%d].paddr is0x%lx\n", i,
+				 sprd_dump_mem[i].paddr);
+			pr_emerg("sprd_dump_mem[%d].vaddr is0x%lx\n", i,
+				 sprd_dump_mem[i].vaddr);
+			pr_emerg("sprd_dump_mem[%d].size  is0x%lx\n", i,
+				 sprd_dump_mem[i].size);
+			i++;
+		}
+	}
+	sprd_dump_mem_num = i;
+}
 
 static void sysdump_prepare_info(int enter_id, const char *reason,
 	struct pt_regs *regs)
@@ -628,13 +500,6 @@ static void sysdump_prepare_info(int enter_id, const char *reason,
 	strncpy(sprd_sysdump_extra.reason,
 		reason, sizeof(sprd_sysdump_extra.reason));
 	sprd_sysdump_extra.enter_id = enter_id;
-
-	/* sprd_sysdump_info = (struct sysdump_info *)phys_to_virt(SPRD_SYSDUMP_MAGIC);  */
-	if(sprd_sysdump_info == NULL){
-		printk(KERN_ERR"[ sysdump_prepare_info ] sprd_sysdump_info ioremap error!! \n");
-		return;
-	}
-	printk("vaddr is %p,paddr is %p\n",sprd_sysdump_info, (void *)SPRD_SYSDUMP_MAGIC);
 	memcpy(sprd_sysdump_info->magic, SYSDUMP_MAGIC,
 			sizeof(sprd_sysdump_info->magic));
 
@@ -658,16 +523,6 @@ static void sysdump_prepare_info(int enter_id, const char *reason,
 	sprd_sysdump_info->mem_num = sprd_dump_mem_num;
 	sprd_sysdump_info->elfhdr_size = get_elfhdr_size(sprd_sysdump_info->mem_num);
 
-	/* this must before sysdump_fill_core_hdr, it needs size */
-	for (i = 0; i < sprd_dump_mem_num; i++) {
-		if (SYSDUMP_RAM == sprd_dump_mem[i].type && 0 == sprd_dump_mem[i].size)
-			sprd_dump_mem[i].size = CONFIG_PHYS_OFFSET +
-						(num_physpages << PAGE_SHIFT) -
-						sprd_dump_mem[i].paddr;
-
-		if (!sysdump_conf.dump_modem && SYSDUMP_MODEM == sprd_dump_mem[i].type)
-			sprd_dump_mem[i].size = 0;
-	}
 
 	sysdump_fill_core_hdr(regs,
 		sprd_dump_mem,
@@ -681,11 +536,12 @@ static void sysdump_prepare_info(int enter_id, const char *reason,
 		/* save iomem(regiters) to ram, cause they will change while rebooting */
 		if (0xffffffff != sprd_dump_mem[i].soff) {
 			sprd_dump_mem[i].soff = iocnt;
-			iomem = (char *)sprd_sysdump_info + sizeof(*sprd_sysdump_info) +
-					sprd_sysdump_info->elfhdr_size + iocnt;
-			memcpy(iomem, 
-				(void const *)(sprd_dump_mem[i].vaddr), 
-				sprd_dump_mem[i].size);
+			iomem = (char *)sprd_sysdump_info +
+			    sizeof(*sprd_sysdump_info) +
+			    sprd_sysdump_info->elfhdr_size + iocnt;
+			memcpy_fromio(iomem,
+				      (void __iomem *)sprd_dump_mem[i].vaddr,
+				      sprd_dump_mem[i].size);
 			iocnt += sprd_dump_mem[i].size;
 		}
 	}
@@ -956,6 +812,8 @@ void sysdump_enter(int enter_id, const char *reason, struct pt_regs *regs)
 	crash_note_save_cpu(pregs, sprd_sysdump_extra.enter_cpu);
 	sprd_debug_save_context();
 
+	smsg_senddie(SIPC_ID_CPW);
+
 	smp_send_stop();
 	mdelay(1000);
 
@@ -1005,8 +863,7 @@ void sysdump_ipi(struct pt_regs *regs)
 	return;
 }
 
-
-static ctl_table sysdump_sysctl_table[] = {
+static struct ctl_table sysdump_sysctl_table[] = {
 	{
 		.procname       = "sysdump_enable",
 		.data           = &sysdump_conf.enable,
@@ -1045,7 +902,7 @@ static ctl_table sysdump_sysctl_table[] = {
 	{}
 };
 
-static ctl_table sysdump_sysctl_root[] = {
+static struct ctl_table sysdump_sysctl_root[] = {
 	{
 		.procname	= "kernel",
 		.mode		= 0555,
@@ -1059,15 +916,15 @@ static struct ctl_table_header *sysdump_sysctl_hdr = NULL;
 
 int sysdump_sysctl_init(void)
 {
-	char *phy_sprd_sysdump_magic;
+	get_sprd_sysdump_info_paddr();
+	sprd_sysdump_info = (struct sysdump_info *)
+	    phys_to_virt(sysdump_magic_paddr);
 
-	sysdump_sysctl_hdr = register_sysctl_table(sysdump_sysctl_root);
+	fill_sprd_sysdump_mem();
+	sysdump_sysctl_hdr =
+	    register_sysctl_table((struct ctl_table *)sysdump_sysctl_root);
 	if (!sysdump_sysctl_hdr)
 		return -ENOMEM;
-	phy_sprd_sysdump_magic =((SPRD_SYSDUMP_MAGIC & (~(SZ_256M - 1))) + SZ_256M - SZ_1M);
-	/* FIXME: replace ioremap with some other methods... */
-	sprd_sysdump_info = (struct sysdump_info *)ioremap(phy_sprd_sysdump_magic, SZ_1M);
-
 	crash_notes = alloc_percpu(note_buf_t);
 
 	return 0;

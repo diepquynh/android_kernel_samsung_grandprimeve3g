@@ -42,6 +42,7 @@
 		bat-polling-time-fast = <15>;
 		cap-one-per-time = <30>;
 		cap-valid-range-poweron = <0>;
+		chg-full-condition = <0>;	/*0 vol and cur,1 status and cur(need add),2 ext ic*/
 		temp-support = <0>;
 		temp-adc-ch = <3>;
 		temp-adc-scale = <1>;
@@ -55,6 +56,10 @@
 		temp-tab-temp = <750 800 850 900 950 1000	/* temperature + 1000,750 = 1000 + (-250)*/
 				1050 1100 1150 1200 1250 1300
 				1350 1400 1450 1500 1550 1600 1650>;
+		jeita-tab-size = <6>;
+		jeita-temp-tab = <900 1000 1100 1450 1500 3000>;
+		jeita-cur-tab = <0 100 500 1000 700 0>;
+		jeita-cccv-tab = <4200 4200 4350 4350 4350 4350>;
 		fgu-mode = <1>;
 		alm-soc = <5>;
 		alm-vol = <3600>;
@@ -65,6 +70,7 @@
 		rsense-spec = <200>;
 		relax-current = <50>;
 		fgu-cal-ajust = <0>;
+		ocv-type = <0>;		//0 for soft_ocv,1 for pocv
 		ocv-tab-size = <21>;
 		ocv-tab-vol = <4185 4113 4066 4022 3983 3949 3917 3889 3864 3835 3805 3787 3777 3773 3770 3765 3752 3724 3680 3605 3400>;
 		ocv-tab-cap = <100  95   90   85   80   75   70   65   60   55   50   45   40   35   30   25   20   15   10   5    0>;

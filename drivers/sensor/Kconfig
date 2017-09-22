@@ -49,6 +49,39 @@ config SENSORS_LEDA_EN_GPIO
 	help
 	  This option enables leda_en controlled by GPIO using optical sensor driver.
 
+config SENSORS_CM36672P_LDO_EN
+	depends on SENSORS
+	tristate "VDD_EN controlled by GPIO"
+	default n
+	help
+	  This option enables vdd_en controlled by GPIO using optical sensor driver.
+
+config SENSORS_CM36672P_SMART_PERS
+	depends on SENSORS_CM36672P
+	tristate "CM36672P proximity sensor PS smart persistence support"
+	default n
+	help
+	  This option enables smart persistence scheme to reduce PS response time.
+
+config SENSORS_BMA2X2
+	tristate "BMA255/BMA250E/BMA222E/BMA280 acceleration sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get support for Bosch Sensortec's
+	  acceleration sensors BMA255/BMA250E/BMA222E/BMA280.
+
+config SENSORS_BMA2X2_ENABLE_INT1
+	tristate "BMA2X2 acceleration sensor interrupt INT1 support"
+	depends on SENSORS_BMA2X2
+	help
+	 If you say yes here, you get INT1 support for Bosch Sensortec
+	 acceleration sensors BMA255/BMA254/BMA355/BMA250E/BMA222E/BMA280.
+
+config SENSORS_J3X3G
+	bool "J3X3G sensor support"
+	help
+	  This option is for J3X3G.
+
 config SENSORS_K2HH
 	depends on I2C
 	tristate "ST K2HH accelerometer"
@@ -76,6 +109,38 @@ config SENSORS_YAS537
 	default n
 	help
 	   This option enable YAS537 magnetic sensor driver.
+
+config SENSORS_SX9306
+	depends on I2C
+	tristate "SX9306 driver"
+	default n
+	help
+	  This option enables grip sensors using
+	  SemTech sx9306 device driver.
+
+config SENSORS_SX9306_NORMAL_TOUCH_THRESHOLD
+	int "SX9306 Grip sensor threshold for normal touch"
+	depends on SENSORS_SX9306
+	default "17"
+	help
+	  This value is the standard of normal touch using
+	  SemTech sx9306 device driver.
+
+config SENSORS_SX9306_WIFI
+	depends on I2C
+	tristate "SX9306 wifi driver"
+	default n
+	help
+	  This option enables grip sensors using
+	  SemTech sx9306 wifi device driver.
+
+config SENSORS_SX9306_WIFI_NORMAL_TOUCH_THRESHOLD
+	int "SX9306 Grip sensor wifi threshold for normal touch"
+	depends on SENSORS_SX9306_WIFI
+	default "17"
+	help
+	  This value is the standard of normal touch using
+	  SemTech sx9306 wifi device driver.
 
 endif
 endmenu

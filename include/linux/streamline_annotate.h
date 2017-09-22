@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2014, ARM Limited
+ * Copyright (c) 2014-2015, ARM Limited
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,11 +35,14 @@
 
 /*
  *  User-space only macros:
- *  ANNOTATE_DEFINE            You must put 'ANNOTATE_DEFINE;' one place in your program
+ *  ANNOTATE_DEFINE            Deprecated and no longer used
  *  ANNOTATE_SETUP             Execute at the start of the program before other ANNOTATE macros are called
  *  ANNOTATE_DELTA_COUNTER     Define a delta counter for use
  *  ANNOTATE_ABSOLUTE_COUNTER  Define an absolute counter for use
  *  ANNOTATE_COUNTER_VALUE     Emit a counter value
+ *  CAM_TRACK                  Create a new custom activity map track
+ *  CAM_JOB                    Add a new job to a CAM track, use gator_get_time() to obtain the time in nanoseconds
+ *  CAM_VIEW_NAME              Name the custom activity map view
  *  
  *  User-space and Kernel-space macros:
  *  ANNOTATE(str)                                String annotation
@@ -62,8 +65,6 @@
  *  channel 1 cannot be part of both group 1 and group 2 on the same thread.
  *
  *  NOTE: Kernel annotations are not supported in interrupt context.
- *  NOTE: When using threads, ensure you include the -pthread option when both
- *        compiling and linking. Using -lpthread when linking is not sufficient.
  */
 
 /* ESC character, hex RGB (little endian) */
@@ -199,7 +200,8 @@ enum gator_annotate_display {
 
 enum gator_annotate_series_composition {
   ANNOTATE_STACKED = 1,
-  ANNOTATE_OVERLAY
+  ANNOTATE_OVERLAY,
+  ANNOTATE_LOG10
 };
 
 enum gator_annotate_rendering_type {
@@ -220,6 +222,10 @@ void gator_annotate_marker(const char *const str);
 void gator_annotate_marker_color(const uint32_t color, const char *const str);
 void gator_annotate_counter(const uint32_t id, const char *const title, const char *const name, const int per_cpu, const enum gator_annotate_counter_class counter_class, const enum gator_annotate_display display, const char *const units, const uint32_t modifier, const enum gator_annotate_series_composition series_composition, const enum gator_annotate_rendering_type rendering_type, const int average_selection, const int average_cores, const int percentage, const size_t activity_count, const char *const *const activities, const uint32_t *const activity_colors, const uint32_t cores, const uint32_t color, const char *const description);
 void gator_annotate_counter_value(const uint32_t core, const uint32_t id, const uint32_t value);
+void gator_annotate_activity_switch(const uint32_t core, uint32_t id, uint32_t activity, uint32_t tid);
+void gator_cam_track(const uint32_t view_uid, const uint32_t track_uid, const uint32_t parent_track, const char *const name);
+void gator_cam_job(const uint32_t view_uid, const uint32_t job_uid, const char *const name, const uint32_t track, const uint64_t start_time, const uint64_t duration, const uint32_t color, const uint32_t primary_dependency, const size_t dependency_count, const uint32_t *const dependencies);
+void gator_cam_view_name(const uint32_t view_uid, const char *const name);
 
 #define ANNOTATE_DEFINE extern int gator_annotate_unused
 
@@ -241,6 +247,14 @@ void gator_annotate_counter_value(const uint32_t core, const uint32_t id, const 
 #define ANNOTATE_DELTA_COUNTER(id, title, name) gator_annotate_counter(id, title, name, 0, ANNOTATE_DELTA, ANNOTATE_ACCUMULATE, NULL, 1, ANNOTATE_STACKED, ANNOTATE_FILL, 0, 0, 0, 0, NULL, NULL, 0, ANNOTATE_COLOR_CYCLE, NULL)
 #define ANNOTATE_ABSOLUTE_COUNTER(id, title, name) gator_annotate_counter(id, title, name, 0, ANNOTATE_ABSOLUTE, ANNOTATE_MAXIMUM, NULL, 1, ANNOTATE_STACKED, ANNOTATE_FILL, 0, 0, 0, 0, NULL, NULL, 0, ANNOTATE_COLOR_CYCLE, NULL)
 #define ANNOTATE_COUNTER_VALUE(id, value) gator_annotate_counter_value(0, id, value)
+#define CAM_TRACK(view_uid, track_uid, parent_track, name) gator_cam_track(view_uid, track_uid, parent_track, name)
+#define CAM_JOB(view_uid, job_uid, name, track, start_time, duration, color) gator_cam_job(view_uid, job_uid, name, track, start_time, duration, color, -1, 0, 0)
+#define CAM_JOB_DEP(view_uid, job_uid, name, track, start_time, duration, color, dependency) { \
+	uint32_t __dependency = dependency; \
+	gator_cam_job(view_uid, job_uid, name, track, start_time, duration, color, -1, 1, &__dependency); \
+}
+#define CAM_JOB_DEPS(view_uid, job_uid, name, track, start_time, duration, color, dependency_count, dependencies) gator_cam_job(view_uid, job_uid, name, track, start_time, duration, color, -1, dependency_count, dependencies)
+#define CAM_VIEW_NAME(view_uid, name) gator_cam_view_name(view_uid, name)
 
 #ifdef __cplusplus
 }

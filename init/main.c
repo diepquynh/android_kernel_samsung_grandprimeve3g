@@ -706,18 +706,10 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	initcall_debug =1;
 #endif
 
-#ifdef CONFIG_ARCH_SCX20
-	printk("pike BU:do_one_initcall(in) = %x \n ",fn);
-#endif
-
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
 	else
 		ret = fn();
-
-#ifdef CONFIG_ARCH_SCX20
-	printk("pike BU:do_one_initcall(out) = %x \n ",fn);
-#endif
 
 	msgbuf[0] = 0;
 

@@ -36,8 +36,8 @@ int sprd_flash_on(void)
 {
 	if (init_flag && sci_efuse_ib_trim_get(&ib_trim_cal_data)) {
 	/*
-		1. set ib_trim_cal_data to WHTLED_CTRLçš„IB_TRIMï¼ˆ0x400388F0 [15:9]ï¼‰
-		2. set IB_TRIM_EM_SEL of RGB_CTRL to 0ï¼ˆ0x400388EC [11]ï¼‰
+		1. set ib_trim_cal_data to WHTLED_CTRL?„IB_TRIMï¼?x400388F0 [15:9]ï¼
+		2. set IB_TRIM_EM_SEL of RGB_CTRL to 0ï¼?x400388EC [11]ï¼
 	*/
 		sci_adi_clr(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, 0x7F << 9);
 		sci_adi_set(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, (ib_trim_cal_data & 0x7F) << 9);
@@ -99,5 +99,10 @@ int sprd_flash_close(void)
 
 	/*ENABLE PWM0 OUTPUT: PWM0_EN=0*/
 	sci_adi_clr(ANA_PWM_BASE, 0x100);
+	return 0;
+}
+
+int sprd_flash_cfg(struct sprd_flash_cfg_param *param, void *arg)
+{
 	return 0;
 }

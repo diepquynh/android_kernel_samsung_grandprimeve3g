@@ -29,9 +29,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/irq.h>
 
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-#include <soc/sprd/sec_debug.h>
-#endif
+#include <asm/sec/sec_debug.h>
 
 #include <asm/irq.h>
 /*
@@ -252,15 +250,9 @@ restart:
 			int prev_count = preempt_count();
 
 			kstat_incr_softirqs_this_cpu(vec_nr);
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-			sec_debug_softirq_log(9999, h->action, 4);
-#endif
 			trace_softirq_entry(vec_nr);
 			h->action(h);
 			trace_softirq_exit(vec_nr);
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-			sec_debug_softirq_log(9999, h->action, 5);
-#endif
 			if (unlikely(prev_count != preempt_count())) {
 				printk(KERN_ERR "huh, entered softirq %u %s %p"
 				       "with preempt_count %08x,"
@@ -498,13 +490,7 @@ static void tasklet_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-				sec_debug_softirq_log(9997, t->func, 4);
-#endif
 				t->func(t->data);
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-				sec_debug_softirq_log(9997, t->func, 5);
-#endif
 				tasklet_unlock(t);
 				continue;
 			}
@@ -539,13 +525,7 @@ static void tasklet_hi_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-				sec_debug_softirq_log(9998, t->func, 4);
-#endif
 				t->func(t->data);
-#ifdef CONFIG_SEC_DEBUG_SOFTIRQ_LOG
-				sec_debug_softirq_log(9998, t->func, 5);
-#endif
 				tasklet_unlock(t);
 				continue;
 			}

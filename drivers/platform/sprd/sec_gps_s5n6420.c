@@ -10,8 +10,9 @@
 #include <linux/clk.h>
 #include <linux/gpio.h>
 
+#include <asm/sec/sec_debug.h>
+
 static struct device *gps_dev;
-extern struct class *sec_class;
 
 static void gps_clk_init(void)
 {

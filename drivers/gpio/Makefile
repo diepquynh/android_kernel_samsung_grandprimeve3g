@@ -6,8 +6,8 @@ obj-$(CONFIG_GPIO_DEVRES)	+= devres.o
 obj-$(CONFIG_GPIOLIB)		+= gpiolib.o
 obj-$(CONFIG_OF_GPIO)		+= gpiolib-of.o
 obj-$(CONFIG_GPIO_ACPI)		+= gpiolib-acpi.o
-obj-$(CONFIG_SEC_GPIO_DVS)	+= secgpio_dvs.o
-obj-$(CONFIG_ARCH_SCX30G)	+= secgpio_dvs_sc77xx.o
+obj-$(CONFIG_SEC_GPIO_DVS)	+= secgpio_dvs.o \
+				   secgpio_dvs_sc77xx.o
 
 # Device drivers. Generally keep list sorted alphabetically
 obj-$(CONFIG_GPIO_GENERIC)	+= gpio-generic.o

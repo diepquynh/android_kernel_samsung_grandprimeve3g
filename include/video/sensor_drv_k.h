@@ -107,6 +107,7 @@ typedef struct _sensor_otp_param_tag {
 	struct _sensor_otp_data_info_tag lsc;
 } SENSOR_OTP_PARAM_T, *SENSOR_OTP_PARAM_T_PTR;
 
+
 #define SENSOR_IOC_MAGIC			'R'
 
 #define SENSOR_IO_PD                _IOW(SENSOR_IOC_MAGIC,  0,  uint8_t)
@@ -131,6 +132,7 @@ typedef struct _sensor_otp_param_tag {
 #define SENSOR_IO_IF_CFG            _IOW(SENSOR_IOC_MAGIC,  19, struct sensor_if_cfg_tag)
 #define SENSOR_IO_I2C_READ_EXT      _IOWR(SENSOR_IOC_MAGIC, 20, struct sensor_i2c_tag)
 #define SENSOR_IO_POWER_CFG         _IOWR(SENSOR_IOC_MAGIC, 21, struct sensor_power_info_tag)
+#define SENSOR_IO_SET_MIPI_SWITCH   _IOW(SENSOR_IOC_MAGIC,  22, uint32_t)
 #define SENSOR_IO_READ_OTPDATA      _IOWR(SENSOR_IOC_MAGIC, 254,struct _sensor_otp_param_tag)
 #define SENSOR_IO_GET_SOCID         _IOWR(SENSOR_IOC_MAGIC, 255,struct sensor_socid_tag)
 

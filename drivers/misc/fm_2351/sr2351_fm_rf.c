@@ -190,7 +190,7 @@ void sr2351_fm_config_xtl(void)
 
 int sr2351_fm_en(void)
 {
-#if defined(CONFIG_ARCH_SCX30G)	
+#if defined(CONFIG_ARCH_SCX30G)	|| defined(CONFIG_ARCH_SCX20)
 
 	//sci_glb_clr(SHARK_PMU_APB_PD_AP_SYS_CFG,BIT_24);
 	sci_glb_clr(SHARK_PIN_U0TXD,BIT_0|BIT_1);
@@ -209,7 +209,7 @@ int sr2351_fm_en(void)
 
 int sr2351_fm_dis(void)
 {
-#if defined(CONFIG_ARCH_SCX30G)	
+#if defined(CONFIG_ARCH_SCX30G)	|| defined(CONFIG_ARCH_SCX20) 
 
 	//sci_glb_set(SHARK_PMU_APB_PD_AP_SYS_CFG,BIT_24);
 
@@ -237,20 +237,20 @@ void sr2351_fm_enter_sleep(void)
 {
 	unsigned int chip_ver=0;
 
-	#ifdef CONFIG_ARCH_SCX30G
+	#if defined(CONFIG_ARCH_SCX30G)|| defined(CONFIG_ARCH_SCX20) 
 	sci_glb_clr(SHARK_PMU_APB_MEM_PD_CFG0,BIT_5|BIT_4|BIT_3|BIT_2|BIT_1|BIT_0);
 	#endif
 
 	if(fm_rf_ops != NULL)
 	{
-		#if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G)
+		#if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G)|| defined(CONFIG_ARCH_SCX20) 
 		
     /*Disable the RSSI AGC*/
 		sci_glb_clr(FM_REG_FM_EN, BIT_2 | BIT_3);
 		udelay(5);
 
 		/*Switch the mspi clock*/
-		#if defined(CONFIG_ARCH_SCX30G)
+		#if defined(CONFIG_ARCH_SCX30G)|| defined(CONFIG_ARCH_SCX20)
 		printk("2351 fm enter sleep switch clock\n");
 		sci_glb_clr(SHARK_MSPI_CLK_SWITCH, BIT_0);
 		#elif defined(CONFIG_ARCH_SCX15)
@@ -300,13 +300,13 @@ void sr2351_fm_exit_sleep(void)
 
 	if(fm_rf_ops != NULL)
 	{
-		#if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G)
+		#if defined(CONFIG_ARCH_SCX15) || defined(CONFIG_ARCH_SCX30G)|| defined(CONFIG_ARCH_SCX20)
 		/*Disable the RSSI AGC*/
 		sci_glb_clr(FM_REG_FM_EN, BIT_2 | BIT_3);
 		udelay(5);
 
 		/*Switch the mspi clock*/
-		#if defined(CONFIG_ARCH_SCX30G)
+		#if defined(CONFIG_ARCH_SCX30G)|| defined(CONFIG_ARCH_SCX20)
 		printk("2351 fm exit sleep switch clock\n");
 		sci_glb_set(SHARK_MSPI_CLK_SWITCH, BIT_0);
 		#elif defined(CONFIG_ARCH_SCX15)
@@ -346,7 +346,7 @@ void sr2351_fm_exit_sleep(void)
 		#endif
 	}
 
-	#ifdef CONFIG_ARCH_SCX30G
+	#if defined(CONFIG_ARCH_SCX30G) || defined(CONFIG_ARCH_SCX20)
 	sci_glb_set(SHARK_PMU_APB_MEM_PD_CFG0,BIT_5|BIT_3|BIT_1);
 	#endif
 }

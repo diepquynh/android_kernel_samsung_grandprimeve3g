@@ -81,7 +81,7 @@ struct sprdwl_vif {
 	u8 prwise_crypto;
 	u8 grp_crypto;
 	int ssid_len;
-	u8 ssid[IEEE80211_MAX_SSID_LEN];
+	u8 ssid[IEEE80211_MAX_SSID_LEN + 1];
 	u8 bssid[ETH_ALEN];
 	/* encryption stuff */
 	u8 key_index[2];

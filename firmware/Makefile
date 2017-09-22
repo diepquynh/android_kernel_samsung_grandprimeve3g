@@ -96,6 +96,7 @@ fw-shipped-$(CONFIG_SND_WAVEFRONT) += yamaha/yss225_registers.bin
 fw-shipped-$(CONFIG_TEHUTI) += tehuti/bdx.bin
 fw-shipped-$(CONFIG_TIGON3) += tigon/tg3.bin tigon/tg3_tso.bin \
 			       tigon/tg3_tso5.bin
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MCS8040L) += melfas/j1mini3g.fw
 fw-shipped-$(CONFIG_TYPHOON) += 3com/typhoon.bin
 fw-shipped-$(CONFIG_USB_EMI26) += emi26/loader.fw emi26/firmware.fw \
 				  emi26/bitstream.fw
@@ -135,6 +136,10 @@ fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM) += keyspan_pda/xircom_pgs.fw
 fw-shipped-$(CONFIG_USB_VICAM) += vicam/firmware.fw
 fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS438) += melfas/gtexswifi.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC350K) += coreriver/j3x3g.fw coreriver/j1x3g.fw \
+							coreriver/gtexswifi.fw
+fw-shipped-$(CONFIG_MACH_J1X3G) += zinitix/j1x3g.fw
 
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 

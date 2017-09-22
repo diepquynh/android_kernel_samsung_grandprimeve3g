@@ -26,7 +26,8 @@ struct isp_irq_param {
 	uint32_t isp_irq_val;
 	uint32_t dcam_irq_val;
 	uint32_t irq_val;
-	int32_t  ret_val;
+	int32_t ret_val;
+	uint64_t system_time;
 } ;
 struct isp_reg_bits {
 	unsigned long reg_addr;

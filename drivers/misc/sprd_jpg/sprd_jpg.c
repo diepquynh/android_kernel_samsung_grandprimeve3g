@@ -57,7 +57,7 @@
 static unsigned long sprd_jpg_virt;
 
 static unsigned long sprd_jpg_phys;
-static unsigned long sprd_jpg_size;
+
 #define GLB_CTRL_OFFSET		0x00
 #define MB_CFG_OFFSET		0x04
 
@@ -150,7 +150,11 @@ static int find_jpg_freq_level(unsigned long freq)
 
 static void disable_jpg (struct jpg_fh *jpg_fp)
 {
-    clk_disable(jpg_hw_dev.jpg_clk);
+    if(1 == jpg_fp->is_clock_enabled)
+    {
+        clk_disable(jpg_hw_dev.jpg_clk);
+    }
+
     jpg_fp->is_clock_enabled= 0;
     pr_debug("jpg ioctl JPG_DISABLE\n");
 
@@ -382,7 +386,7 @@ static irqreturn_t jpg_isr(int irq, void *data)
 {
     int int_status;
 
-    int_status   =__raw_readl((void *)(sprd_jpg_virt+GLB_INT_RAW_OFFSET));
+    int_status   =__raw_readl((void *)(sprd_jpg_virt+GLB_INT_STS_OFFSET));
     //printk(KERN_INFO "jpg_isr JPG_INT_STS %x\n",int_status);
     if((int_status) & 0xb) // JPEG ENC
     {
@@ -405,9 +409,6 @@ static irqreturn_t jpg_isr(int irq, void *data)
             jpg_hw_dev.condition_work_BSM= 1;
             wake_up_interruptible(&jpg_hw_dev.wait_queue_work_BSM);
             printk(KERN_ERR "jpg_isr BSM");
-
-            sci_glb_set((void *)(sprd_jpg_virt+0x4400), BIT(30));
-            sci_glb_clr((void *)(sprd_jpg_virt+0x4400), BIT(31));
         }
         if((int_status >> 1) & 0x1)  // JPEG ENC VLC DONE INIT
         {
@@ -447,8 +448,7 @@ static void jpg_parse_dt(struct device *dev)
     }
     sprd_jpg_phys = res.start;
     sprd_jpg_virt = (unsigned long)ioremap_nocache(res.start,
-        res.end - res.start);
-    sprd_jpg_size = res.end - res.start;
+                    res.end - res.start);
     if (!sprd_jpg_virt)
         panic("ioremap failed!\n");
 
@@ -471,10 +471,6 @@ static int jpg_nocache_mmap(struct file *filp, struct vm_area_struct *vma)
     printk(KERN_INFO "@jpg[%s]\n", __FUNCTION__);
     vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
     vma->vm_pgoff     = (sprd_jpg_phys>>PAGE_SHIFT);
-
-    if((vma->vm_end - vma->vm_start) > sprd_jpg_size)
-	return -EAGAIN;
-
     if (remap_pfn_range(vma,vma->vm_start, vma->vm_pgoff,
                         vma->vm_end - vma->vm_start, vma->vm_page_prot))
         return -EAGAIN;
@@ -527,8 +523,14 @@ static int jpg_open(struct inode *inode, struct file *filp)
 
 
     printk("JPEG mmi_clk open");
-    clk_enable(jpg_hw_dev.mm_clk);
+    ret = clk_enable(jpg_hw_dev.mm_clk);
 
+    if (ret) {
+        printk(KERN_ERR "###:jpg_hw_dev.mm_clk: clk_prepare_enable() failed!\n");
+        goto errout0;
+    } else {
+        pr_debug("###jpg_hw_dev.mm_clk: clk_prepare_enable() ok.\n");
+    }
 
 #ifdef CONFIG_OF
     clk_jpg= of_clk_get_by_name(jpg_hw_dev.dev_np, "clk_jpg");
@@ -540,7 +542,7 @@ static int jpg_open(struct inode *inode, struct file *filp)
                "clk_vsp");
         printk(KERN_ERR "###: jpg_clk =  %p\n", clk_jpg);
         ret = -EINVAL;
-        goto errout;
+        goto errout0;
     } else {
         jpg_hw_dev.jpg_clk = clk_jpg;
     }
@@ -551,7 +553,7 @@ static int jpg_open(struct inode *inode, struct file *filp)
         printk(KERN_ERR "clock[%s]: failed to get parent in probe[%s] \
 by clk_get()!\n", "clk_jpg", name_parent);
         ret = -EINVAL;
-        goto errout;
+        goto errout1;
     } else {
         jpg_hw_dev.jpg_parent_clk = clk_parent;
     }
@@ -561,7 +563,7 @@ by clk_get()!\n", "clk_jpg", name_parent);
         printk(KERN_ERR "clock[%s]: clk_set_parent() failed in probe!",
                "clk_jpg");
         ret = -EINVAL;
-        goto errout;
+        goto errout2;
     }
 
     printk("jpg parent clock name %s\n", name_parent);
@@ -577,19 +579,24 @@ by clk_get()!\n", "clk_jpg", name_parent);
     printk(KERN_INFO "jpg_open %p\n", jpg_fp);
     return 0;
 
-errout:
+errout2:
+
+    if (jpg_hw_dev.jpg_parent_clk) {
+        clk_put(jpg_hw_dev.jpg_parent_clk);
+    }
+errout1:
+    if (jpg_hw_dev.jpg_clk) {
+        clk_put(jpg_hw_dev.jpg_clk);
+    }
+errout0:
 #if defined(CONFIG_ARCH_SCX35)
     if (jpg_hw_dev.mm_clk) {
         clk_put(jpg_hw_dev.mm_clk);
     }
 #endif
-    if (jpg_hw_dev.jpg_clk) {
-        clk_put(jpg_hw_dev.jpg_clk);
-    }
 
-    if (jpg_hw_dev.jpg_parent_clk) {
-        clk_put(jpg_hw_dev.jpg_parent_clk);
-    }
+errout:
+
     return ret;
 }
 

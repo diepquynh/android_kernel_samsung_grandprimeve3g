@@ -20,6 +20,8 @@
 #include <soc/sprd/adc.h>
 #include <soc/sprd/adi.h>
 
+#include <asm/sec/sec_debug.h>
+
 #define ADC_SAMPLING_CNT	7
 
 enum {
@@ -28,7 +30,6 @@ enum {
 };
 
 static struct device *sec_thermistor_dev;
-extern struct class *sec_class;
 
 struct sec_therm_info {
 	struct device *dev;

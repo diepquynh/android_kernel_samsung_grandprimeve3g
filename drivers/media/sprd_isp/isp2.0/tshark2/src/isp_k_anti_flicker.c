@@ -35,8 +35,11 @@ static int32_t isp_k_afl_param_update(struct isp_k_private *isp_private)
 #endif
 		addr = (uint32_t)__pa(isp_private->yiq_antiflicker_buf_addr);
 
-		printk("$$LHC:addr %lp yiq_antiflicker_buf_addr %lp\n", addr, (int *)isp_private->yiq_antiflicker_buf_addr);
+#if defined(CONFIG_ARCH_SCX30G3)
+		REG_WR(ISP_ANTI_FLICKER_NEW_DDR_INIT_ADDR, addr);
+#else
 		REG_WR(ISP_ANTI_FLICKER_DDR_INIT_ADDR, addr);
+#endif
 	}
 
 	return ret;
@@ -45,22 +48,18 @@ static int32_t isp_k_afl_param_update(struct isp_k_private *isp_private)
 static int32_t isp_k_afl_statistic(struct isp_io_param *param, struct isp_k_private *isp_private)
 {
 	int32_t ret = 0;
-	int32_t i = 0;
-	int32_t *addr = NULL;
-	printk("$$LHC:isp_k_afl_statistic \n");
+
 	if((0x00 != isp_private->yiq_antiflicker_buf_addr) && (0x00 != param->property_param) \
 		&& (0x00 != isp_private->yiq_antiflicker_len) ) {
 
-		ret = copy_to_user(param->property_param, isp_private->yiq_antiflicker_buf_addr, isp_private->yiq_antiflicker_len);
+		ret = copy_to_user(param->property_param, (void *)isp_private->yiq_antiflicker_buf_addr, isp_private->yiq_antiflicker_len);
 		if (0 != ret) {
 			ret = -1;
 			printk("isp_k_afl_statistic: copy_to_user error, ret = 0x%x\n", (uint32_t)ret);
 		}
-		addr = isp_private->yiq_antiflicker_buf_addr;
-		for(i = 0;i < 20;i++) {
-			printk("$$LHC %p, 0x%x\n", addr, *addr++);
-		}
 	}
+
+	return ret;
 }
 
 static int32_t isp_k_afl_bypass(struct isp_io_param *param)
@@ -73,15 +72,24 @@ static int32_t isp_k_afl_bypass(struct isp_io_param *param)
 		printk("isp_k_afl_bypass: copy_from_user error, ret = 0x%x\n", (uint32_t)ret);
 		return -1;
 	}
-	printk("$$LHC:bypass %d \n", bypass);
+
+#if defined(CONFIG_ARCH_SCX30G3)
+	if (bypass) {
+		REG_OWR(ISP_ANTI_FLICKER_NEW_PARAM0, BIT_0);
+	} else {
+		REG_MWR(ISP_ANTI_FLICKER_NEW_PARAM0, BIT_0, 0);
+	}
+#else
 	if (bypass) {
 		REG_OWR(ISP_ANTI_FLICKER_PARAM0, BIT_0);
 	} else {
 		REG_MWR(ISP_ANTI_FLICKER_PARAM0, BIT_0, 0);
 	}
+#endif
 
 	return ret;
 }
+
 
 static int32_t isp_k_anti_flicker_block(struct isp_io_param *param, struct isp_k_private *isp_private)
 {
@@ -96,6 +104,24 @@ static int32_t isp_k_anti_flicker_block(struct isp_io_param *param, struct isp_k
 		return -1;
 	}
 
+#if defined(CONFIG_ARCH_SCX30G3)
+/* Tsahrk3 has 2 anti flicker moudle, only new anti flicker moudle is used.*/
+	REG_OWR(ISP_ANTI_FLICKER_PARAM0, BIT_0);/*disable old anti flicker moudle*/
+
+	REG_MWR(ISP_COMMON_3A_CTRL0, BIT_1, 1 << 1);/*enable new anti flicker moudle*/
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_PARAM0, BIT_0, afl_info.bypass);
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_PARAM0, BIT_1, afl_info.mode << 1);
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_PARAM0, 0xF << 2, afl_info.skip_frame_num << 2);
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_PARAM2, 0xFF << 24, afl_info.frame_num << 24);
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_COL_POS, 0xFFFF , afl_info.start_col);
+
+	REG_MWR(ISP_ANTI_FLICKER_NEW_COL_POS, 0xFFFF << 16, afl_info.end_col << 16);
+#else
 	REG_MWR(ISP_ANTI_FLICKER_PARAM0, BIT_0, afl_info.bypass);
 
 	REG_MWR(ISP_ANTI_FLICKER_PARAM0, BIT_1, afl_info.mode << 1);
@@ -110,12 +136,10 @@ static int32_t isp_k_anti_flicker_block(struct isp_io_param *param, struct isp_k
 
 	REG_MWR(ISP_ANTI_FLICKER_COL_POS, 0xFFFF , afl_info.start_col);
 
-	REG_MWR(ISP_ANTI_FLICKER_COL_POS,  0xFFFF << 16, afl_info.end_col << 16);
+	REG_MWR(ISP_ANTI_FLICKER_COL_POS, 0xFFFF << 16, afl_info.end_col << 16);
+#endif
 
-	//config afl DDR initial address
 	isp_k_afl_param_update(isp_private);
-
-	//REG_WR(ISP_ANTI_FLICKER_DDR_INIT_ADDR, afl_info.addr);
 
 	return ret;
 }

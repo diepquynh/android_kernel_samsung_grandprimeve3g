@@ -148,10 +148,17 @@ static inline unsigned long SPRD_DEV_V2P(vaddr)
 #else
 #include "./chip_x30g/__regs_ana_sc2713s_glb.h"
 #endif
+
 #if defined(CONFIG_ARCH_SCX30G2)
+#if defined(CONFIG_ARCH_SCX30G3)
+#include "./chip_x30g/__regs_aon_apb_tshark3.h"
+#include "./chip_x30g/__regs_pmu_apb_tshark3.h"
+#include "./chip_x30g/__regs_crypto_apb.h"
+#else
 #include "./chip_x30g/__regs_aon_apb_tshark2.h"
-#include "./chip_x30g/__regs_mm_ahb_rf_tshark2.h"
 #include "./chip_x30g/__regs_pmu_apb_tshark2.h"
+#endif 
+#include "./chip_x30g/__regs_mm_ahb_rf_tshark2.h"
 #include "./chip_x30g/__regs_codec_ahb.h"
 #else
 #include "./chip_x30g/__regs_aon_apb.h"

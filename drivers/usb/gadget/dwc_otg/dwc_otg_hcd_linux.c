@@ -57,6 +57,7 @@
 #endif
 #include <linux/platform_device.h>
 #include <linux/irq.h>
+#include <linux/wakelock.h>
 
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
@@ -81,6 +82,8 @@ static dwc_otg_device_t *_otg_dev = NULL;
 						     ((_bEndpointAddress_ & USB_DIR_IN) != 0) << 4)
 
 static const char dwc_otg_hcd_name[] = "dwc_otg_hcd";
+static struct wake_lock usb_host_wake_lock;
+
 
 /** @name Linux HC Driver API Functions */
 /** @{ */
@@ -388,31 +391,45 @@ static int32_t otg_cable_connect_fun(void *dev)
 }
 #endif
 
+static int start_otg_flag = 0;
+
 void usb_otg_cable_detect_work(void *p)
 {
 	dwc_otg_device_t *otg_dev = p;
-	 struct sprd_usb_platform_data *platform_data =&otg_dev->platform_data;
 	int value = 0;
 	int vbus_irq;
 	vbus_irq = usb_get_vbus_irq();
 	value = usb_get_id_state();
 	if (value){
-		pr_info("usb otg cable detect work plug out\n");
-
-		//otg_cable_disconnect(otg_dev->core_if);
-		charge_pump_set(platform_data->gpio_boost, 0);
-		udc_disable();
-		mdelay(10);//charge pump need time to turn off
-		enable_irq(vbus_irq);
+		if(start_otg_flag ==1){
+			pr_info("usb otg cable detect work plug out\n");
+#ifdef CONFIG_SPRD_EXT_IC_POWER
+			sprd_extic_otg_power(0);    //Turn off ext ic otg func
+#endif
+			wake_unlock(&usb_host_wake_lock);
+			//otg_cable_disconnect(otg_dev->core_if);
+			//charge_pump_set(platform_data->gpio_boost,0);This charge method is implemented by internal chip on ADIE,and that will not be used;
+			udc_disable();
+			mdelay(10);//charge pump need time to turn off
+			enable_irq(vbus_irq);
+			start_otg_flag = 0;
+		}
 	} else {
-		pr_info("usb otg cable detect work plug in\n");
-
-		charge_pump_set(platform_data->gpio_boost, 1);
-		udc_enable();
-		dwc_otg_core_fore_host(otg_dev->core_if );
-		dwc_otg_core_init(otg_dev->core_if);
-		_start(otg_dev->hcd);
-		dwc_otg_enable_global_interrupts(otg_dev->core_if);
+		if(start_otg_flag ==0){
+			pr_info("usb otg cable detect work plug in\n");
+			wake_lock(&usb_host_wake_lock);
+#ifdef CONFIG_SPRD_EXT_IC_POWER
+			sprd_extic_otg_power(1);    //Turn on ext ic otg func
+#endif
+			//charge_pump_set(platform_data->gpio_boost,1);This charge method is implemented by internal chip on ADIE,and that will not be used;
+			dwc_otg_set_param_dma_desc_enable(otg_dev->core_if,0);
+			udc_enable();
+			dwc_otg_core_fore_host(otg_dev->core_if);
+			dwc_otg_core_init(otg_dev->core_if);
+			_start(otg_dev->hcd);
+			dwc_otg_enable_global_interrupts(otg_dev->core_if);
+			start_otg_flag = 1;
+		}
 	}
 
 }
@@ -422,6 +439,7 @@ void usb_otg_cable_detect_event(bool is_otg_cable_in)
 		udc_disable();
 	} else {
 		if(_otg_dev!=NULL){
+			dwc_otg_set_param_dma_desc_enable(_otg_dev->core_if,0);
 			udc_enable();
 			dwc_otg_core_fore_host(_otg_dev->core_if);
 			dwc_otg_core_init(_otg_dev->core_if);
@@ -446,20 +464,14 @@ static irqreturn_t usb_otg_cable_detect_handler(int irq, void *dev)
 		pr_info("usb otg cable detect plug out\n");
 
 		usb_set_id_irq_type(irq, OTG_CABLE_PLUG_IN);
-#ifdef CONFIG_SPRD_EXT_IC_POWER
-		sprd_extic_otg_power(0);    //Turn off ext ic otg func
-#endif
 	} else {
 		pr_info("usb otg cable detect plug in\n");
 		disable_irq(vbus_irq);
 		usb_set_id_irq_type(irq, OTG_CABLE_PLUG_OUT);
-#ifdef CONFIG_SPRD_EXT_IC_POWER
-		sprd_extic_otg_power(1);    //Turn on ext ic otg func
-#endif
 	}
 	/*use DWC workqueue*/
-	DWC_WORKQ_SCHEDULE(otg_dev->core_if->wq_otg, usb_otg_cable_detect_work,
-			   otg_dev, "OTG cable connect state change");
+	DWC_WORKQ_SCHEDULE_DELAYED(otg_dev->core_if->wq_otg, usb_otg_cable_detect_work,
+			   otg_dev, 50, "OTG cable connect state change");
 
 	return IRQ_HANDLED;
 }
@@ -571,6 +583,7 @@ int hcd_init(
 	/* Don't support SG list at this point */
 	hcd->self.sg_tablesize = 0;
 #endif
+	hcd->self.sg_tablesize = 0;
 #ifdef CONFIG_USB_EXTERNAL_DETECT
 	hcd->irq = irq;
 	register_otg_func(dwc_otg_start, NULL, otg_dev);
@@ -612,6 +625,7 @@ int hcd_init(
 #endif
 	//save to global
 	_otg_dev = otg_dev;
+	wake_lock_init(&usb_host_wake_lock, WAKE_LOCK_SUSPEND, "usb_host_work");
 	dwc_otg_hcd_set_priv_data(dwc_otg_hcd, hcd);
 	return 0;
 
@@ -1013,16 +1027,7 @@ int hub_control(struct usb_hcd *hcd,
 struct device *get_hcd_device()
 {
 #ifdef CONFIG_ARM64
-if(NULL != device_hcd_dwc_otg)
-	{
 	return device_hcd_dwc_otg;
-	}
-else
-	{
-	gadget_wrapper->gadget.dev.dma_mask = &dwc_otg_dmamask;
-	gadget_wrapper->gadget.dev.coherent_dma_mask = dwc_otg_dmamask;
-	return &(gadget_wrapper->gadget.dev);
-	}
 #else
     return NULL;
 #endif

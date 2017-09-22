@@ -22,6 +22,7 @@
 #include <linux/kthread.h>
 #include <linux/usb_notify.h>
 #include "dock_notify.h"
+#include "usb_notify_sysfs.h"
 
 #define DEFAULT_OVC_POLL_SEC 3
 
@@ -60,6 +61,7 @@ struct usb_notify {
 	struct notifier_block extra_nb;
 	struct vbus_gpio v_gpio;
 	struct host_notify_dev ndev;
+	struct usb_notify_dev udev;
 	struct workqueue_struct *notifier_wq;
 	struct wake_lock wlock;
 	struct otg_booster *booster;
@@ -68,16 +70,22 @@ struct usb_notify {
 	int oc_noti;
 	int diable_v_drive;
 	unsigned long c_type;
+	int c_status;
 };
 
 static struct usb_notify *u_notify;
 
 /*
- *  There are two event types.
+ *  Define event types.
  *  NOTIFY_EVENT_STATE can be called in both interrupt context
  *		and process context. But it executes queue_work.
  *  NOTIFY_EVENT_EXTRA can be called directly without queue_work.
  *           But it must be called in process context.
+ *  NOTIFY_EVENT_DELAY events can not run inner booting delay.
+ *  NOTIFY_EVENT_NEED_VBUSDRIVE events need to drive 5v out
+ *           from phone charger ic
+ *  NOTIFY_EVENT_NOBLOCKING events are not blocked by disable sysfs.
+ *  NOTIFY_EVENT_NOSAVE events are not saved in cable type.
  */
 static int check_event_type(enum otg_notify_events event)
 {
@@ -95,15 +103,25 @@ static int check_event_type(enum otg_notify_events event)
 	case NOTIFY_EVENT_SMARTDOCK_USB:
 		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_DELAY);
 		break;
-	case NOTIFY_EVENT_NONE:
 	case NOTIFY_EVENT_HOST:
+	case NOTIFY_EVENT_HMT:
+		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NEED_VBUSDRIVE
+				| NOTIFY_EVENT_DELAY);
+		break;
+	case NOTIFY_EVENT_DISABLE_NOTIFY:
+		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NOBLOCKING
+				| NOTIFY_EVENT_NOSAVE);
+		break;
+	case NOTIFY_EVENT_DRIVE_VBUS:
+		ret |= (NOTIFY_EVENT_STATE | NOTIFY_EVENT_NOSAVE);
+		break;
+	case NOTIFY_EVENT_NONE:
 	case NOTIFY_EVENT_CHARGER:
 	case NOTIFY_EVENT_SMARTDOCK_TA:
 	case NOTIFY_EVENT_AUDIODOCK:
 	case NOTIFY_EVENT_LANHUB:
 	case NOTIFY_EVENT_LANHUB_TA:
 	case NOTIFY_EVENT_MMDOCK:
-	case NOTIFY_EVENT_DRIVE_VBUS:
 	default:
 		ret |= NOTIFY_EVENT_STATE;
 		break;
@@ -134,8 +152,12 @@ static const char *event_string(enum otg_notify_events event)
 		return "lanhub_ta";
 	case NOTIFY_EVENT_MMDOCK:
 		return "mmdock";
+	case NOTIFY_EVENT_HMT:
+		return "hmt";
 	case NOTIFY_EVENT_DRIVE_VBUS:
 		return "drive_vbus";
+	case NOTIFY_EVENT_DISABLE_NOTIFY:
+		return "disable_notify";
 	case NOTIFY_EVENT_OVERCURRENT:
 		return "overcurrent";
 	case NOTIFY_EVENT_VBUSPOWER:
@@ -396,9 +418,32 @@ err:
 	return ret;
 }
 
+void do_notify_blockstate(unsigned long event, int enable)
+{
+	if (!u_notify) {
+		pr_err("%s u_notify is NULL\n", __func__);
+		goto skip;
+	}
+
+	switch (event) {
+	case NOTIFY_EVENT_HMT:
+	case NOTIFY_EVENT_HOST:
+		if (enable)
+			host_state_notify(&u_notify->ndev, NOTIFY_HOST_BLOCK);
+		else
+			host_state_notify(&u_notify->ndev, NOTIFY_HOST_NONE);
+		break;
+	default:
+		break;
+	}
+skip:
+	return;
+}
+
 static void otg_notify_state(unsigned long event, int enable)
 {
 	struct otg_notify *notify = NULL;
+	int type = 0;
 
 	if (!u_notify) {
 		pr_err("u_notify is NULL\n");
@@ -409,6 +454,21 @@ static void otg_notify_state(unsigned long event, int enable)
 		event_string(event), event, enable == 0 ? "off" : "on");
 
 	notify = get_otg_notify();
+
+	type = check_event_type(event);
+
+	if (u_notify->udev.disable_state &&
+			!(type & NOTIFY_EVENT_NOBLOCKING)) {
+		pr_err("%s usb notify is blocked\n", __func__);
+		do_notify_blockstate(event, enable);
+		goto no_save_event;
+	}
+
+	if (!(type & NOTIFY_EVENT_NOSAVE)) {
+		u_notify->c_type = event;
+		u_notify->c_status = enable ?
+			NOTIFY_EVENT_ENBLING : NOTIFY_EVENT_DISABLING;
+	}
 
 	switch (event) {
 	case NOTIFY_EVENT_NONE:
@@ -471,6 +531,7 @@ static void otg_notify_state(unsigned long event, int enable)
 				wake_unlock(&u_notify->wlock);
 		}
 		break;
+	case NOTIFY_EVENT_HMT:
 	case NOTIFY_EVENT_HOST:
 		if (notify->unsupport_host) {
 			pr_err("This model doesn't support usb host\n");
@@ -485,13 +546,13 @@ static void otg_notify_state(unsigned long event, int enable)
 			if (gpio_is_valid(notify->redriver_en_gpio))
 				gpio_direction_output
 					(notify->redriver_en_gpio, 1);
+			if (notify->set_host)
+				notify->set_host(true);
 			if (notify->auto_drive_vbus) {
 				u_notify->oc_noti = 1;
 				if (notify->vbus_drive)
 					notify->vbus_drive(1);
 			}
-			if (notify->set_host)
-				notify->set_host(true);
 		} else {
 			u_notify->ndev.mode = NOTIFY_NONE_MODE;
 			if (notify->auto_drive_vbus) {
@@ -554,14 +615,21 @@ static void otg_notify_state(unsigned long event, int enable)
 		if (notify->vbus_drive)
 			notify->vbus_drive((bool)enable);
 		goto no_save_event;
+	case NOTIFY_EVENT_DISABLE_NOTIFY:
+		if (!notify->disable_control) {
+			pr_err("This model doesn't support disable_control\n");
+			goto no_save_event;
+		}
+		u_notify->udev.disable_state = enable;
+		goto no_save_event;
 	default:
 		break;
 	}
 err:
-	if (enable)
-		u_notify->c_type = event;
-	else
+	if (!enable)
 		u_notify->c_type = NOTIFY_EVENT_NONE;
+	u_notify->c_status = enable ?
+			NOTIFY_EVENT_ENBLED : NOTIFY_EVENT_DISABLED;
 
 no_save_event:
 	pr_info("%s- event=%s, cable=%s\n", __func__,
@@ -718,9 +786,16 @@ static int create_usb_notify(void)
 		ret = -ENOMEM;
 		goto err1;
 	 }
-
+	ret = usb_notify_class_init();
+	if (ret) {
+		pr_err("unable to do usb_notify_class_init\n");
+		goto err2;
+	}
 	ovc_init(u_notify);
 	return 0;
+err2:
+	flush_workqueue(u_notify->notifier_wq);
+	destroy_workqueue(u_notify->notifier_wq);
 err1:
 	kfree(u_notify);
 err:
@@ -752,6 +827,45 @@ static void reserve_state_check(struct work_struct *work)
 				(&u_noti->o_notify->otg_notifier,
 						state, &enable);
 	}
+}
+
+int set_notify_disable(bool disable)
+{
+	struct otg_notify *n = get_otg_notify();
+
+	if (!n) {
+		pr_err("%s otg_notify is null\n", __func__);
+		goto skip;
+	}
+
+	if (!n->disable_control) {
+		pr_err("%s disable_control is not supported\n", __func__);
+		goto skip;
+	}
+
+	pr_info("%s disable=%d\n", __func__, disable);
+
+	if (disable) {
+		if (u_notify->c_type != NOTIFY_EVENT_NONE &&
+			(u_notify->c_status == NOTIFY_EVENT_ENBLED ||
+				u_notify->c_status == NOTIFY_EVENT_ENBLING)) {
+
+			pr_info("%s event=%s(%lu) disable\n", __func__,
+				event_string(u_notify->c_type),
+							u_notify->c_type);
+
+			if (!n->auto_drive_vbus &&
+				check_event_type(u_notify->c_type)
+						& NOTIFY_EVENT_NEED_VBUSDRIVE)
+				send_otg_notify(n, NOTIFY_EVENT_DRIVE_VBUS, 0);
+
+			send_otg_notify(n, u_notify->c_type, 0);
+		}
+		send_otg_notify(n, NOTIFY_EVENT_DISABLE_NOTIFY, 1);
+	} else
+		send_otg_notify(n, NOTIFY_EVENT_DISABLE_NOTIFY, 0);
+skip:
+	return 0;
 }
 
 void send_otg_notify(struct otg_notify *n,
@@ -919,7 +1033,6 @@ int set_otg_notify(struct otg_notify *n)
 {
 	int ret = 0;
 
-    pr_info("%s\n",__func__);
 	if (!u_notify) {
 		ret = create_usb_notify();
 		if (ret) {
@@ -974,12 +1087,20 @@ int set_otg_notify(struct otg_notify *n)
 		}
 	}
 
+	u_notify->udev.name = "usb_control";
+	u_notify->udev.set_disable = set_notify_disable;
+	ret = usb_notify_dev_register(&u_notify->udev);
+	if (ret < 0) {
+		pr_err("usb_notify_dev_register is failed\n");
+		goto err4;
+	}
+
 	if (gpio_is_valid(n->vbus_detect_gpio) ||
 			gpio_is_valid(n->redriver_en_gpio)) {
 		ret = register_gpios(n);
 		if (ret < 0) {
 			pr_err("register_gpios is failed\n");
-			goto err4;
+			goto err5;
 		}
 	}
 
@@ -997,6 +1118,8 @@ int set_otg_notify(struct otg_notify *n)
 
 	pr_info("registered otg_notify -\n");
 	return 0;
+err5:
+	usb_notify_dev_unregister(&u_notify->udev);
 err4:
 	if (!n->unsupport_host)
 		host_notify_dev_unregister(&u_notify->ndev);
@@ -1039,6 +1162,7 @@ static void __exit usb_notify_exit(void)
 {
 	if (!u_notify)
 		return;
+	usb_notify_class_exit();
 	flush_workqueue(u_notify->notifier_wq);
 	destroy_workqueue(u_notify->notifier_wq);
 	kfree(u_notify);

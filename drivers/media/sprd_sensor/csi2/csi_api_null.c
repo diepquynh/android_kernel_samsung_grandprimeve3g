@@ -35,7 +35,7 @@ u8 csi_api_set_on_lanes(u8 no_of_lanes)
 	return ERR_NOT_COMPATIBLE;
 }
 
-u8 csi_api_get_on_lanes() 
+u8 csi_api_get_on_lanes()
 {
 	return ERR_NOT_COMPATIBLE;
 }

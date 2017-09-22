@@ -35,6 +35,7 @@
  * ENXIO  : 6 (No such device or address)
  * EINVAL : 22 (Invalid argument)
  *****************************************************************************/
+extern struct ist30xx_data *ts_data;
 
 int ist30xx_cmd_gesture(struct i2c_client *client, int value)
 {
@@ -87,10 +88,11 @@ int ist30xx_cmd_check_calib(struct i2c_client *client)
 
 int ist30xx_cmd_hold(struct i2c_client *client, int enable)
 {
+	if (!ts_data->initialized && (ts_data->status.update != 1))
+		return 0;
+		
 	int ret = ist30xx_write_cmd(client,
 			IST30XX_HIB_CMD, (eHCOM_FW_HOLD << 16) | (enable & 0xFFFF));
-
-	msleep(40);
 
 	if (enable)
 		ist30xx_tracking(TRACK_CMD_ENTER_REG);
@@ -292,7 +294,8 @@ int ist30xx_write_cmd(struct i2c_client *client, u32 cmd, u32 val)
 		return -EIO;
 	}
 
-	msleep(40);
+	if ((ts_data->initialized || (ts_data->status.update == 1)) && !ts_data->ignore_delay)
+		msleep(40);
 
 	return 0;
 }
@@ -361,7 +364,7 @@ static void ts_power_enable(struct ist30xx_data *data, int en)
 	tsp_info("%s %s\n", __func__, (en) ? "on" : "off");
 
 	if (touch_regulator == NULL) {
-		touch_regulator = regulator_get(&client->dev, data->pdata->pwr_src);
+		touch_regulator = regulator_get(&client->dev, "tsp_vdd");
 		if (IS_ERR(touch_regulator)) {
 			ret = PTR_ERR(touch_regulator);
 			dev_err(&client->dev,
@@ -369,7 +372,8 @@ static void ts_power_enable(struct ist30xx_data *data, int en)
 			return;
 		}
 
-		ret = regulator_set_voltage(touch_regulator, data->pdata->avdd_volt, data->pdata->avdd_volt);
+		ret = regulator_set_voltage(touch_regulator,
+				data->pdata->avdd_volt, data->pdata->avdd_volt);
 		if (ret < 0) {
 			dev_err(&client->dev,
 				"Failed to set vdd regulator(%d)\n", ret);
@@ -385,7 +389,7 @@ static void ts_power_enable(struct ist30xx_data *data, int en)
 		else
 			ret = regulator_enable(touch_regulator);
 	} else {
-		if (data->status.power)
+		if(data->status.power)
 			ret = regulator_disable(touch_regulator);
 		else
 			tsp_info("%s : already disabled\n", __func__);

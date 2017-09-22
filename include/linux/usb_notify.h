@@ -23,7 +23,9 @@ enum otg_notify_events {
 	NOTIFY_EVENT_LANHUB,
 	NOTIFY_EVENT_LANHUB_TA,
 	NOTIFY_EVENT_MMDOCK,
+	NOTIFY_EVENT_HMT,
 	NOTIFY_EVENT_DRIVE_VBUS,
+	NOTIFY_EVENT_DISABLE_NOTIFY,
 	NOTIFY_EVENT_OVERCURRENT,
 	NOTIFY_EVENT_SMSC_OVC,
 	NOTIFY_EVENT_SMTD_EXT_CURRENT,
@@ -31,10 +33,20 @@ enum otg_notify_events {
 	NOTIFY_EVENT_VBUSPOWER,
 };
 
+enum otg_notify_event_status {
+	NOTIFY_EVENT_DISABLED,
+	NOTIFY_EVENT_DISABLING,
+	NOTIFY_EVENT_ENBLED,
+	NOTIFY_EVENT_ENBLING,
+};
+
 enum otg_notify_evt_type {
 	NOTIFY_EVENT_EXTRA = (1 << 0),
 	NOTIFY_EVENT_STATE = (1 << 1),
 	NOTIFY_EVENT_DELAY = (1 << 2),
+	NOTIFY_EVENT_NEED_VBUSDRIVE = (1 << 3),
+	NOTIFY_EVENT_NOBLOCKING = (1 << 4),
+	NOTIFY_EVENT_NOSAVE = (1 << 5),
 };
 
 enum otg_notify_gpio {
@@ -58,6 +70,7 @@ struct otg_notify {
 	int smsc_ovc_poll_sec;
 	int auto_drive_vbus;
 	int booting_delay_sec;
+	int disable_control;
 	const char *muic_name;
 	int (*pre_gpio) (int gpio, int use);
 	int (*post_gpio) (int gpio, int use);
