@@ -78,7 +78,7 @@
 #define GOVERNOR_BOOT_TIME	(50*HZ)
 static unsigned long boot_done;
 
-unsigned int cpu_hotplug_disable_set = false;
+unsigned int cpu_hotplug_disable_set = true;
 static int g_is_suspend = false;
 
 #if 0
@@ -1370,9 +1370,10 @@ static int sd_init(struct dbs_data *dbs_data)
 	tuners->cpu_down_high_threshold = DEF_CPU_DOWN_HIGH_THRESHOLD;
 	tuners->window_size = LOAD_WINDOW_SIZE;
 	tuners->cpu_num_limit = nr_cpu_ids;
+#if 0
 	if (tuners->cpu_num_limit > 1)
 		tuners->cpu_hotplug_disable = false;
-
+#endif
 	memcpy(g_sd_tuners,tuners,sizeof(struct sd_dbs_tuners));
 
 	dbs_data->tuners = tuners;
@@ -1392,6 +1393,11 @@ static int sd_init(struct dbs_data *dbs_data)
 		INIT_DELAYED_WORK(&puwi->unplug_work, sprd_unplug_one_cpu);
 	}
 #endif
+
+	int i;
+	for_each_online_cpu(i) {
+		cpu_up(i);
+	}
 
 	return 0;
 }
