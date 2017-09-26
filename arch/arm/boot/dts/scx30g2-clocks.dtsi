@@ -61,6 +61,22 @@
 			clock-output-names = "clk_wifipll";
 		};
 
+		clk_gpll: clk_gpll {
+			compatible = "sprd,adjustable-pll-clock";
+			#clock-cells = <0>;
+			reg = <0x402e3084 0x7ff 0x402b00ac 0x1>;	/* mult reg and prepare reg */
+			clock-output-names = "clk_gpll";
+		};
+
+		clk_512m: clk_512m {
+			compatible = "sprd,fixed-factor-clock";
+			#clock-cells = <0>;
+			clock-mult = <1>;
+			clock-div = <2>;
+			clocks = <&clk_gpll>;
+			clock-output-names = "clk_512m";
+		};
+
 		clk_460m8: clk_460m8 {
 			compatible = "sprd,fixed-factor-clock";
 			#clock-cells = <0>;
@@ -815,7 +831,7 @@
 			compatible = "sprd,composite-dev-clock";
 			#clock-cells = <0>;
 			reg = <0x60100004 0x7 0x60100004 0x30>;	/* select reg and divider reg */
-			clocks = <&clk_153m6>, <&clk_208m>, <&clk_256m>, <&clk_300m>, <&clk_312m>, <&clk_384m>, <&clk_460m8>;
+			clocks = <&clk_153m6>, <&clk_208m>, <&clk_256m>, <&clk_300m>, <&clk_312m>, <&clk_384m>, <&clk_460m8>, <&clk_512m>;
 			clock-output-names = "clk_gpu";
 		};
 

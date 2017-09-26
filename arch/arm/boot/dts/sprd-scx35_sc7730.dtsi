@@ -46,17 +46,17 @@
 		pmu_domain_config = <0x1000 0x1000 0x1000 0x0 0x0 0x0 0x0 0x0 0x0 0x1000 0x0 0x0>;
 		pmu_switch_delay = <0xffff>;
 
-		clocks = <&clk_gpu_axi>,<&clk_gpu>,<&clk_153m6>,<&clk_208m>,<&clk_256m>,<&clk_312m>,<&clk_384m>,<&clk_460m8>;
-		clock-names = "clk_gpu_axi","clk_gpu","clk_153m6","clk_208m","clk_256m","clk_312m","clk_384m","clk_460m8";
+		clocks = <&clk_gpu_axi>,<&clk_gpu>,<&clk_153m6>,<&clk_208m>,<&clk_256m>,<&clk_312m>,<&clk_384m>,<&clk_460m8>,<&clk_512m>;
+		clock-names = "clk_gpu_axi","clk_gpu","clk_153m6","clk_208m","clk_256m","clk_312m","clk_384m","clk_460m8","clk_512m";
 
-		freq-list-len = <4>;
-		freq-lists = <153600 2 1>, <256000 4 1>, <384000 6 1>, <460800 7 1>;
+		freq-list-len = <5>;
+		freq-lists = <153600 2 1>, <256000 4 1>, <384000 6 1>, <460800 7 1>, <512000 8 1>;
 		freq-default = <1>;
 		freq-9 = <2>;
 		freq-8 = <1>;
 		freq-7 = <0>;
 		freq-5 = <0>;
-		freq-range-max = <3>;
+		freq-range-max = <4>;
 		freq-range-min = <0>;
 	};
 };
