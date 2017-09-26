@@ -38,7 +38,7 @@
 
 #include "mali_executor.h"
 
-#define UP_THRESHOLD			9/10
+//#define UP_THRESHOLD			97/100
 
 #define __SPRD_GPU_TIMEOUT      (3*1000)
 
@@ -83,6 +83,8 @@ static struct gpu_dfs_context gpu_dfs_ctx = {
 };
 
 extern int gpu_freq_cur;
+extern int gpu_freq_utilization;
+extern int up_threshold;
 extern int gpu_freq_min_limit;
 extern int gpu_freq_max_limit;
 extern char* gpu_freq_list;
@@ -265,7 +267,7 @@ int mali_platform_device_init(struct platform_device *pdev)
 		MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_list[i].clk_src);
 		of_property_read_u32_index(np, "freq-lists", 3*i,   &gpu_dfs_ctx.freq_list[i].freq);
 		of_property_read_u32_index(np, "freq-lists", 3*i+2, &gpu_dfs_ctx.freq_list[i].div);
-		gpu_dfs_ctx.freq_list[i].up_threshold =  gpu_dfs_ctx.freq_list[i].freq * UP_THRESHOLD;
+		gpu_dfs_ctx.freq_list[i].up_threshold =  gpu_dfs_ctx.freq_list[i].freq * up_threshold / 100;
 	}
 
 	of_property_read_u32(np, "freq-default", &i);
@@ -284,6 +286,9 @@ int mali_platform_device_init(struct platform_device *pdev)
 	gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_range_min;
 	gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_default;
 #endif
+
+	gpu_freq_max_limit = gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len - 1].freq;
+	gpu_freq_min_limit = gpu_dfs_ctx.freq_list[0].freq;
 
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_DLY(1),0xff0000);
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_SEQ_DLY(1),0xff00);
@@ -449,6 +454,10 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 
 	gpu_dfs_ctx.cur_load = data->utilization_gpu;
 
+	if (gpu_dfs_ctx.cur_load > 0) {
+		gpu_freq_utilization = (gpu_dfs_ctx.cur_load * 100) / 256;
+	}
+
 	MALI_DEBUG_PRINT(3,("GPU_DFS mali_utilization  gpu:%d  gp:%d pp:%d\n",data->utilization_gpu,data->utilization_gp,data->utilization_pp));
 	MALI_DEBUG_PRINT(3,("GPU_DFS gpu_boost_level:%d gpu_boost_sf_level:%d\n",gpu_boost_level,gpu_boost_sf_level));
 
@@ -476,8 +485,8 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 		}
 	}
 
-	// if the loading ratio is greater then 90%, switch the clock to the maximum
-	if(gpu_dfs_ctx.cur_load >= (256*UP_THRESHOLD))
+	// if the loading ratio is greater then up_threshold, switch the clock to the maximum
+	if(gpu_dfs_ctx.cur_load >= (256 * up_threshold / 100))
 	{
 		gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_max;
 

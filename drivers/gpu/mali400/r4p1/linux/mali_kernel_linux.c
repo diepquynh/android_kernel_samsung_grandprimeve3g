@@ -68,13 +68,21 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(mali_sw_counters);
 extern const char *__malidrv_build_info(void);
 
 /* Module parameter to control log level */
-int mali_debug_level = 2;
+int mali_debug_level = 0;
 module_param(mali_debug_level, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH); /* rw-rw-r-- */
 MODULE_PARM_DESC(mali_debug_level, "Higher number, more dmesg output");
 
 int gpu_freq_cur = 0;
 module_param(gpu_freq_cur, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
 MODULE_PARM_DESC(gpu_freq_cur, "GPU gpu_freq_cur");
+
+int up_threshold = 80;
+module_param(up_threshold, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH); /* rw-rw-r-- */
+MODULE_PARM_DESC(up_threshold, "GPU frequency threshold");
+
+int gpu_freq_utilization = -1;
+module_param(gpu_freq_utilization, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
+MODULE_PARM_DESC(gpu_freq_utilization, "GPU gpu_freq_last_utilization");
 
 int gpu_freq_min_limit = -1;
 module_param(gpu_freq_min_limit, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH); /* rw-rw-r-- */

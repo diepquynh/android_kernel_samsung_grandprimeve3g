@@ -425,6 +425,7 @@ u32 _mali_ukk_utilization_gp_pp(void)
 EXPORT_SYMBOL(_mali_ukk_utilization_gp_pp);
 #endif
 
+
 u32 _mali_ukk_utilization_gp(void)
 {
 	return last_utilization_gp;
