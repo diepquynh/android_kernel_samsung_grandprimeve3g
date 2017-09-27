@@ -463,8 +463,7 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 
 	//limit min freq
 	min_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_min_limit);
-	if ((0 <= min_index) &&
-		(gpu_dfs_ctx.freq_min->freq < gpu_dfs_ctx.freq_list[min_index].freq))
+	if (0 <= min_index)
 	{
 		gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[min_index];
 		if (gpu_dfs_ctx.freq_min->freq > gpu_dfs_ctx.freq_max->freq)
@@ -475,8 +474,7 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 
 	//limit max freq
 	max_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_max_limit);
-	if ((0 <= max_index) &&
-		(gpu_dfs_ctx.freq_max->freq > gpu_dfs_ctx.freq_list[max_index].freq))
+	if (0 <= max_index)
 	{
 		gpu_dfs_ctx.freq_max = &gpu_dfs_ctx.freq_list[max_index];
 		if (gpu_dfs_ctx.freq_max->freq < gpu_dfs_ctx.freq_min->freq)
