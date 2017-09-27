@@ -76,7 +76,7 @@ int gpu_freq_cur = 0;
 module_param(gpu_freq_cur, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
 MODULE_PARM_DESC(gpu_freq_cur, "GPU gpu_freq_cur");
 
-int up_threshold = 80;
+int up_threshold = 50;
 module_param(up_threshold, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH); /* rw-rw-r-- */
 MODULE_PARM_DESC(up_threshold, "GPU frequency threshold");
 
