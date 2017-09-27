@@ -447,6 +447,9 @@ static const struct gpu_freq_info* get_next_freq(const struct gpu_freq_info* min
 	return max_freq;
 }
 
+static int gpu_cores_enabled() {
+	return ((int) mali_executor_get_num_cores_enabled());
+}
 
 void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 {
@@ -497,6 +500,17 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 
 		MALI_DEBUG_PRINT(3,("GPU_DFS util %3d; target_freq %6d; cur_freq %6d -> next_freq %6d\n",
 			gpu_dfs_ctx.cur_load, target_freq, gpu_dfs_ctx.freq_cur->freq, gpu_dfs_ctx.freq_next->freq));
+	}
+
+	if (gpu_dfs_ctx.cur_load >= (256 * up_threshold / 100)) {
+		// Plug all cores
+		if (gpu_cores_enabled() < 2) {
+			mali_executor_set_perf_level(2, MALI_TRUE);
+		}
+	} else {
+		if (gpu_cores_enabled() > 1) {
+			mali_executor_set_perf_level(1, MALI_TRUE);
+		}
 	}
 
 	if(gpu_dfs_ctx.freq_next->freq != gpu_dfs_ctx.freq_cur->freq)
