@@ -20,16 +20,26 @@
 #include <linux/pm.h>
 #include <linux/vmalloc.h>
 #include <linux/dma-mapping.h>
+#ifdef CONFIG_PM_RUNTIME
 #include <linux/pm_runtime.h>
+#endif
+#ifdef CONFIG_MALI_DT
 #include <linux/of.h>
+#endif
 #include <asm/io.h>
 #include <linux/mali/mali_utgard.h>
 
 #include "mali_pm.h"
 #include "mali_kernel_linux.h"
 
+#ifdef CONFIG_64BIT
+#include <soc/sprd/irqs.h>
 #include <soc/sprd/sci.h>
 #include <soc/sprd/sci_glb_regs.h>
+#else
+#include <soc/sprd/sci.h>
+#include <soc/sprd/sci_glb_regs.h>
+#endif
 
 #include <linux/workqueue.h>
 #include <linux/semaphore.h>
@@ -37,6 +47,7 @@
 #include "base.h"
 
 #include "mali_executor.h"
+#define GPU_GLITCH_FREE_DFS		0
 
 #define UP_THRESHOLD			9/10
 
@@ -69,6 +80,10 @@ struct gpu_dfs_context {
 	const struct gpu_freq_info* freq_min;
 	const struct gpu_freq_info* freq_max;
 	const struct gpu_freq_info* freq_default;
+	const struct gpu_freq_info* freq_9;
+	const struct gpu_freq_info* freq_8;
+	const struct gpu_freq_info* freq_7;
+	const struct gpu_freq_info* freq_5;
 	const struct gpu_freq_info* freq_range_max;
 	const struct gpu_freq_info* freq_range_min;
 
@@ -81,6 +96,9 @@ DEFINE_SEMAPHORE(gpu_dfs_sem);
 static struct gpu_dfs_context gpu_dfs_ctx = {
 	.sem = &gpu_dfs_sem,
 };
+
+extern int gpu_boost_level;
+extern int gpu_boost_sf_level;
 
 extern int gpu_freq_cur;
 extern int gpu_freq_min_limit;
@@ -168,10 +186,18 @@ static inline void mali_clock_on(void)
 	int i;
 	for(i=0;i<gpu_dfs_ctx.gpu_clk_num;i++)
 	{
+#ifdef CONFIG_COMMON_CLK
 		clk_prepare_enable(gpu_dfs_ctx.gpu_clk_src[i]);
+#else
+		clk_enable(gpu_dfs_ctx.gpu_clk_src[i]);
+#endif
 	}
 
+#ifdef CONFIG_COMMON_CLK
 	clk_prepare_enable(gpu_dfs_ctx.gpu_clock_i);
+#else
+	clk_enable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 	sprd_gpu_domain_wait_for_ready();
 
 	clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_default->clk_src);
@@ -180,7 +206,11 @@ static inline void mali_clock_on(void)
 	clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_cur->clk_src);
 	mali_set_div(gpu_dfs_ctx.freq_cur->div);
 
+#ifdef CONFIG_COMMON_CLK
 	clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+	clk_enable(gpu_dfs_ctx.gpu_clock);
+#endif
 	udelay(100);
 
 	mali_executor_lock();
@@ -200,12 +230,21 @@ static inline void mali_clock_off(void)
 	gpu_dfs_ctx.gpu_clock_on = 0;
 	mali_executor_unlock();
 
+#ifdef CONFIG_COMMON_CLK
 	clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
 	clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
+#else
+	clk_disable(gpu_dfs_ctx.gpu_clock);
+	clk_disable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 
 	for(i=0;i<gpu_dfs_ctx.gpu_clk_num;i++)
 	{
+#ifdef CONFIG_COMMON_CLK
 		clk_disable_unprepare(gpu_dfs_ctx.gpu_clk_src[i]);
+#else
+		clk_disable(gpu_dfs_ctx.gpu_clk_src[i]);
+#endif
 	}
 }
 
@@ -225,6 +264,19 @@ int mali_platform_device_init(struct platform_device *pdev)
 {
 	int i;
 	int err = -1;
+
+#ifdef CONFIG_SCX35L64BIT_FPGA /* use fpga*/
+	struct device_node *np;
+
+	np = of_find_matching_node(NULL, gpu_ids);
+	if(!np) {
+		return -1;
+	}
+	sci_glb_clr(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+	mdelay(2);
+
+	return 0;
+#else /*not use fpga*/
 
 #ifdef CONFIG_MALI_DT
 	extern struct of_device_id base_dt_ids[];
@@ -272,6 +324,22 @@ int mali_platform_device_init(struct platform_device *pdev)
 	gpu_dfs_ctx.freq_default = &gpu_dfs_ctx.freq_list[i];
 	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_default);
 
+	of_property_read_u32(np, "freq-9", &i);
+	gpu_dfs_ctx.freq_9 = &gpu_dfs_ctx.freq_list[i];
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_9);
+
+	of_property_read_u32(np, "freq-8", &i);
+	gpu_dfs_ctx.freq_8 = &gpu_dfs_ctx.freq_list[i];
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_8);
+
+	of_property_read_u32(np, "freq-7", &i);
+	gpu_dfs_ctx.freq_7 = &gpu_dfs_ctx.freq_list[i];
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_7);
+
+	of_property_read_u32(np, "freq-5", &i);
+	gpu_dfs_ctx.freq_5 = &gpu_dfs_ctx.freq_list[i];
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_5);
+
 	of_property_read_u32(np, "freq-range-max", &i);
 	gpu_dfs_ctx.freq_range_max = &gpu_dfs_ctx.freq_list[i];
 	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_range_max);
@@ -298,17 +366,20 @@ int mali_platform_device_init(struct platform_device *pdev)
 	err = platform_device_add_data(pdev, &mali_gpu_data, sizeof(mali_gpu_data));
 
 	if (0 == err) {
+#ifdef CONFIG_PM_RUNTIME
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37))
 		pm_runtime_set_autosuspend_delay(&(pdev->dev), 50);
 		pm_runtime_use_autosuspend(&(pdev->dev));
 #endif
 		pm_runtime_enable(&(pdev->dev));
+#endif
 	}
 
 	gpu_freq_list = (char*)vmalloc(256*sizeof(char));
 	gpu_freq_list_show(gpu_freq_list);
 
 	return err;
+#endif /*not use fpga*/
 }
 
 int mali_platform_device_deinit(struct platform_device *device)
@@ -330,6 +401,7 @@ int mali_platform_device_deinit(struct platform_device *device)
 
 void mali_platform_power_mode_change(int power_mode)
 {
+#if 1
 	down(gpu_dfs_ctx.sem);
 	MALI_DEBUG_PRINT(3,("Mali power mode change %d, gpu_power_on=%d gpu_clock_on=%d\n",
 	    power_mode,gpu_dfs_ctx.gpu_power_on,gpu_dfs_ctx.gpu_clock_on));
@@ -379,6 +451,7 @@ void mali_platform_power_mode_change(int power_mode)
 		break;
 	};
 	up(gpu_dfs_ctx.sem);
+#endif
 }
 
 
@@ -387,6 +460,7 @@ static void gpu_dfs_func(struct work_struct *work)
 	down(gpu_dfs_ctx.sem);
 	if(gpu_dfs_ctx.gpu_power_on && gpu_dfs_ctx.gpu_clock_on)
 	{
+#if GPU_GLITCH_FREE_DFS
 		if(gpu_dfs_ctx.freq_next != gpu_dfs_ctx.freq_cur)
 		{
 			if(gpu_dfs_ctx.freq_next->clk_src != gpu_dfs_ctx.freq_cur->clk_src)
@@ -399,13 +473,48 @@ static void gpu_dfs_func(struct work_struct *work)
 			}
 
 			gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_next;
+
 			gpu_freq_cur = gpu_dfs_ctx.freq_cur->freq;
+
 		}
+#else
+		mali_dev_pause();
+		if(gpu_dfs_ctx.freq_next != gpu_dfs_ctx.freq_cur)
+		{
+#ifdef CONFIG_COMMON_CLK
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_disable(gpu_dfs_ctx.gpu_clock);
+#endif
+			if(gpu_dfs_ctx.freq_next->clk_src != gpu_dfs_ctx.freq_cur->clk_src)
+			{
+				clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_next->clk_src);
+			}
+			if(gpu_dfs_ctx.freq_next->div != gpu_dfs_ctx.freq_cur->div)
+			{
+				mali_set_div(gpu_dfs_ctx.freq_next->div);
+			}
+
+			gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_next;
+
+			gpu_freq_cur = gpu_dfs_ctx.freq_cur->freq;
+
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock);
+#endif
+			udelay(100);
+		}
+		mali_dev_resume();
+#endif
 	}
 	up(gpu_dfs_ctx.sem);
 }
 
 static DECLARE_WORK(gpu_dfs_work, &gpu_dfs_func);
+
+
 
 //
 // DVFS of SPRD implementation
@@ -445,12 +554,51 @@ static const struct gpu_freq_info* get_next_freq(const struct gpu_freq_info* min
 
 void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 {
+#ifndef CONFIG_SCX35L64BIT_FPGA
 	int max_index = -1, min_index = -1;
 
 	gpu_dfs_ctx.cur_load = data->utilization_gpu;
 
 	MALI_DEBUG_PRINT(3,("GPU_DFS mali_utilization  gpu:%d  gp:%d pp:%d\n",data->utilization_gpu,data->utilization_gp,data->utilization_pp));
 	MALI_DEBUG_PRINT(3,("GPU_DFS gpu_boost_level:%d gpu_boost_sf_level:%d\n",gpu_boost_level,gpu_boost_sf_level));
+
+	switch(gpu_boost_level)
+	{
+	case 10:
+		gpu_dfs_ctx.freq_max =
+		gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len-1];
+		break;
+
+	case 9:
+		gpu_dfs_ctx.freq_max =
+		gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_9;
+		break;
+
+	case 7:
+		gpu_dfs_ctx.freq_max =
+		gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_7;
+		break;
+
+	case 5:
+		gpu_dfs_ctx.freq_max =
+		gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_5;
+		break;
+
+	case 0:
+	default:
+		gpu_dfs_ctx.freq_max = gpu_dfs_ctx.freq_range_max;
+		gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_range_min;
+		break;
+	}
+
+	if ((0 == gpu_boost_level) && (0 < gpu_boost_sf_level))
+	{
+		gpu_dfs_ctx.freq_max =
+		gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len-1];
+	}
+
+	gpu_boost_level = 0;
+	gpu_boost_sf_level = 0;
 
 	//limit min freq
 	min_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_min_limit);
@@ -496,6 +644,7 @@ void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 	{
 		queue_work(gpu_dfs_ctx.gpu_dfs_workqueue, &gpu_dfs_work);
 	}
+#endif
 }
 
 bool mali_is_on(void)

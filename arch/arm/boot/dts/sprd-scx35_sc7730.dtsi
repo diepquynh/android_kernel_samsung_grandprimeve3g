@@ -52,6 +52,10 @@
 		freq-list-len = <4>;
 		freq-lists = <153600 2 1>, <256000 4 1>, <384000 6 1>, <460800 7 1>;
 		freq-default = <1>;
+		freq-9 = <2>;
+		freq-8 = <1>;
+		freq-7 = <0>;
+		freq-5 = <0>;
 		freq-range-max = <3>;
 		freq-range-min = <0>;
 	};
