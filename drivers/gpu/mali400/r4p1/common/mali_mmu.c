@@ -107,7 +107,7 @@ struct mali_mmu_core *mali_mmu_create(_mali_osk_resource_t *resource, struct mal
 
 	MALI_DEBUG_ASSERT_POINTER(resource);
 
-	MALI_DEBUG_PRINT(2, ("Mali MMU: Creating Mali MMU: %s\n", resource->description));
+	MALI_DEBUG_PRINT(4, ("Mali MMU: Creating Mali MMU: %s\n", resource->description));
 
 	mmu = _mali_osk_calloc(1, sizeof(struct mali_mmu_core));
 	if (NULL != mmu) {
@@ -235,7 +235,7 @@ static void mali_mmu_disable_stall(struct mali_mmu_core *mmu)
 		return;
 	}
 	if (mmu_status & MALI_MMU_STATUS_BIT_PAGE_FAULT_ACTIVE) {
-		MALI_DEBUG_PRINT(2, ("Aborting MMU disable stall request since it is in pagefault state.\n"));
+		MALI_DEBUG_PRINT(4, ("Aborting MMU disable stall request since it is in pagefault state.\n"));
 		return;
 	}
 
@@ -402,16 +402,16 @@ static _mali_osk_errcode_t mali_mmu_probe_ack(void *data)
 
 	int_stat = mali_hw_core_register_read(&mmu->hw_core, MALI_MMU_REGISTER_INT_STATUS);
 
-	MALI_DEBUG_PRINT(2, ("mali_mmu_probe_irq_acknowledge: intstat 0x%x\n", int_stat));
+	MALI_DEBUG_PRINT(4, ("mali_mmu_probe_irq_acknowledge: intstat 0x%x\n", int_stat));
 	if (int_stat & MALI_MMU_INTERRUPT_PAGE_FAULT) {
-		MALI_DEBUG_PRINT(2, ("Probe: Page fault detect: PASSED\n"));
+		MALI_DEBUG_PRINT(4, ("Probe: Page fault detect: PASSED\n"));
 		mali_hw_core_register_write(&mmu->hw_core, MALI_MMU_REGISTER_INT_CLEAR, MALI_MMU_INTERRUPT_PAGE_FAULT);
 	} else {
 		MALI_DEBUG_PRINT(1, ("Probe: Page fault detect: FAILED\n"));
 	}
 
 	if (int_stat & MALI_MMU_INTERRUPT_READ_BUS_ERROR) {
-		MALI_DEBUG_PRINT(2, ("Probe: Bus read error detect: PASSED\n"));
+		MALI_DEBUG_PRINT(4, ("Probe: Bus read error detect: PASSED\n"));
 		mali_hw_core_register_write(&mmu->hw_core, MALI_MMU_REGISTER_INT_CLEAR, MALI_MMU_INTERRUPT_READ_BUS_ERROR);
 	} else {
 		MALI_DEBUG_PRINT(1, ("Probe: Bus read error detect: FAILED\n"));

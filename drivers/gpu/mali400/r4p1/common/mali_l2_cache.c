@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2015 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -65,10 +65,10 @@ typedef enum mali_l2_cache_status {
 	MALI400_L2_CACHE_STATUS_DATA_BUSY    = 0x02,
 } mali_l2_cache_status;
 
-#define MALI400_L2_MAX_READS_NOT_SET 0x30
+#define MALI400_L2_MAX_READS_NOT_SET -1
 
 static struct mali_l2_cache_core *
-		mali_global_l2s[MALI_MAX_NUMBER_OF_L2_CACHE_CORES] = { NULL, };
+	mali_global_l2s[MALI_MAX_NUMBER_OF_L2_CACHE_CORES] = { NULL, };
 static u32 mali_global_num_l2s = 0;
 
 int mali_l2_max_reads = MALI400_L2_MAX_READS_NOT_SET;
@@ -135,7 +135,7 @@ struct mali_l2_cache_core *mali_l2_cache_create(
 #if defined(DEBUG)
 	cache_size = mali_hw_core_register_read(&cache->hw_core,
 						MALI400_L2_CACHE_REGISTER_SIZE);
-	MALI_DEBUG_PRINT(2, ("Mali L2 cache: Created %s: % 3uK, %u-way, % 2ubyte cache line, % 3ubit external bus\n",
+	MALI_DEBUG_PRINT(4, ("Mali L2 cache: Created %s: % 3uK, %u-way, % 2ubyte cache line, % 3ubit external bus\n",
 			     resource->description,
 			     1 << (((cache_size >> 16) & 0xff) - 10),
 			     1 << ((cache_size >> 8) & 0xff),
@@ -203,7 +203,8 @@ void mali_l2_cache_power_up(struct mali_l2_cache_core *cache)
 
 	mali_l2_cache_reset(cache);
 
-	MALI_DEBUG_ASSERT(MALI_FALSE == cache->power_is_on);
+	if ((1 << MALI_DOMAIN_INDEX_DUMMY) != cache->pm_domain->pmu_mask)
+		MALI_DEBUG_ASSERT(MALI_FALSE == cache->power_is_on);
 	cache->power_is_on = MALI_TRUE;
 
 	mali_l2_cache_unlock(cache);

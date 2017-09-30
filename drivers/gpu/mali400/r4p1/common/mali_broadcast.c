@@ -26,7 +26,7 @@ struct mali_bcast_unit *mali_bcast_unit_create(const _mali_osk_resource_t *resou
 	struct mali_bcast_unit *bcast_unit = NULL;
 
 	MALI_DEBUG_ASSERT_POINTER(resource);
-	MALI_DEBUG_PRINT(2, ("Broadcast: Creating Mali Broadcast unit: %s\n",
+	MALI_DEBUG_PRINT(4, ("Broadcast: Creating Mali Broadcast unit: %s\n",
 			     resource->description));
 
 	bcast_unit = _mali_osk_malloc(sizeof(struct mali_bcast_unit));
