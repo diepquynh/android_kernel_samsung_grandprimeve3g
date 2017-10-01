@@ -130,6 +130,7 @@ struct sprd_img_parm {
 	uint32_t                  need_isp;
 #endif
 	uint32_t                  is_reserved_buf;
+	uint32_t		  buf_flag;
 	struct sprd_img_rect      crop_rect;
 	struct sprd_img_size      dst_size;
 	struct sprd_img_frm_addr  frame_addr;

@@ -46,8 +46,17 @@ enum get_regu_type_e {
 	REGU_MAX
 };
 enum get_gpio_type_e {
-	GPIO_CAMDVDD = 0,
-	GPIO_CAMMAX
+    GPIO_MAINDVDD = 0,
+    GPIO_SUBDVDD,
+    GPIO_FLASH_EN,
+    GPIO_SWITCH_MODE,
+    GPIO_MIPI_SWITCH_EN,
+    GPIO_MIPI_SWITCH_MODE,
+    GPIO_MAINCAM_ID,
+    GPIO_MAINAVDD,
+    GPIO_SUBAVDD,
+    GPIO_SUB2DVDD,
+    GPIO_CAMMAX
 };
 #ifdef CONFIG_64BIT
 //#define SPRD_ISP_SIZE			SZ_32K

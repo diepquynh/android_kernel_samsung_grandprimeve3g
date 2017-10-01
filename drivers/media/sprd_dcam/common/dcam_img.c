@@ -2890,9 +2890,10 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 					parm.frame_addr.u,
 					parm.frame_addr.v);
 
-				if (unlikely(1 == atomic_read(&dev->stream_on)) && path->status == PATH_RUN) {
+				if (unlikely(1 == atomic_read(&dev->stream_on)) && path->status == PATH_RUN && IMG_BUF_FLAG_RUNNING == parm.buf_flag) {
 					ret = path_cfg(DCAM_PATH_OUTPUT_ADDR, &frame_addr);
 				} else {
+					if (IMG_BUF_FLAG_INIT == parm.buf_flag) {
 					buf_addr.frm_addr.yaddr = parm.frame_addr.y;
 					buf_addr.frm_addr.uaddr = parm.frame_addr.u;
 					buf_addr.frm_addr.vaddr = parm.frame_addr.v;
@@ -2900,6 +2901,9 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 					buf_addr.frm_addr_vir.uaddr = parm.frame_addr_vir.u;
 					buf_addr.frm_addr_vir.vaddr = parm.frame_addr_vir.v;
 					ret = sprd_img_buf_queue_write(&path->buf_queue, &buf_addr);
+					} else {
+						printk("sprd_img_k_ioctl: no need to SET_FRAME_ADDR \n");
+					}
 				}
 			} 
 		}

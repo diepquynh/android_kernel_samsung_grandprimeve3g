@@ -216,13 +216,39 @@ int get_gpio_id_ex(struct device_node *dn, int type, int *id, uint32_t sensor_id
 
 #ifdef CONFIG_OF
 	switch (type) {
-	case GPIO_CAMDVDD:
-		*id = of_get_gpio(dn, 4);
-		break;
-
-	default:
-		*id = 0;
-		break;
+		case GPIO_MAINDVDD:
+			*id = of_get_gpio(dn, 4);
+			break;
+		case GPIO_SUBDVDD:
+			*id = of_get_gpio(dn, 5);
+			break;
+		case GPIO_FLASH_EN:
+			*id = of_get_gpio(dn, 6);
+			break;
+		case GPIO_SWITCH_MODE:
+			*id = of_get_gpio(dn, 7);
+			break;
+		case GPIO_MIPI_SWITCH_EN:
+			*id = of_get_gpio(dn, 10);
+			break;
+		case GPIO_MIPI_SWITCH_MODE:
+			*id = of_get_gpio(dn, 11);
+			break;
+		case GPIO_MAINCAM_ID:
+			*id = of_get_gpio(dn, 12);
+			break;
+		case GPIO_MAINAVDD:
+			*id = of_get_gpio(dn, 13);
+			break;
+		case GPIO_SUBAVDD:
+			*id = of_get_gpio(dn, 14);
+			break;
+		case GPIO_SUB2DVDD:
+			*id = of_get_gpio(dn, 15);
+			break;
+		default:
+			*id = 0;
+			break;
 	}
 #else
 	*id = 0;

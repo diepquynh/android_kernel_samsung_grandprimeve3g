@@ -491,7 +491,7 @@ int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val)
 	p_mod = fd->module_data;
 	SENSOR_CHECK_ZERO(p_mod);
 
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, fd->sensor_id);
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINDVDD, &gpio_id, fd->sensor_id);
 	if ((SENSOR_DEV_0 == fd->sensor_id) && (0 != gpio_id)) {
 		SENSOR_PRINT_HIGH("sensor set DVDD gpio=%d, level=%d\n", gpio_id, dvdd_val);
 		if (SENSOR_VDD_CLOSED == dvdd_val) {
@@ -804,6 +804,23 @@ int sensor_k_set_rst_level(uint32_t *fd_handle, uint32_t plus_level)
 	REG_MWR(CAP_SENSOR_CTRL,0xf0,plus_level!=0?0xf0:0x0);
 	SENSOR_PRINT_HIGH("CAP_SENSOR_CTRL val=0x%x\n", REG_RD(CAP_SENSOR_CTRL));
 #endif
+	return SENSOR_K_SUCCESS;
+}
+
+int sensor_k_set_mipi_level(uint32_t *fd_handle, uint32_t plus_level)
+{
+	struct sensor_module_tab_tag    *p_mod;
+	struct sensor_file_tag          *fd = (struct sensor_file_tag *)fd_handle;
+	int gpio_mipi_mode = 0;
+
+	SENSOR_CHECK_ZERO(fd);
+	p_mod = fd->module_data;
+	SENSOR_CHECK_ZERO(p_mod);
+
+	get_gpio_id_ex(p_mod->of_node, GPIO_MIPI_SWITCH_MODE, &gpio_mipi_mode, fd->sensor_id);
+	gpio_direction_output(gpio_mipi_mode, plus_level);
+	gpio_set_value(gpio_mipi_mode, plus_level);
+
 	return SENSOR_K_SUCCESS;
 }
 
@@ -1669,6 +1686,16 @@ LOCAL long sensor_k_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 
+	case SENSOR_IO_SET_MIPI_SWITCH:
+		{
+			uint32_t level;
+			SENSOR_PRINT("SENSOR: ioctl SENSOR_IO_SET_MIPI_SWITCH \n");
+			ret = copy_from_user(&level, (uint32_t *) arg, sizeof(uint32_t));
+			if (0 == ret)
+				ret = sensor_k_set_mipi_level((uint32_t *)p_file, level);
+		}
+		break;
+
 	case SENSOR_IO_I2C_ADDR:
 		{
 			uint16_t i2c_addr;
@@ -2030,11 +2057,11 @@ int sensor_k_probe(struct platform_device *pdev)
 		}
 	}
 
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, 0);
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINDVDD, &gpio_id, 0);
 	ret = gpio_request(gpio_id, NULL);
 	if (ret) {
 		tmp = 1;
-		printk("sensor: gpio already request GPIO_CAMDVDD %d.\n", gpio_id);
+		printk("sensor: gpio already request GPIO_MAINDVDD %d.\n", gpio_id);
 	}
 #endif
 
@@ -2099,7 +2126,7 @@ LOCAL int sensor_k_remove(struct platform_device *dev)
 		gpio_free(gpio_tab.reset);
 	}
 
-	get_gpio_id_ex(p_mod->of_node, GPIO_CAMDVDD, &gpio_id, 0);
+	get_gpio_id_ex(p_mod->of_node, GPIO_MAINDVDD, &gpio_id, 0);
 	gpio_free(gpio_id);
 #endif
 
