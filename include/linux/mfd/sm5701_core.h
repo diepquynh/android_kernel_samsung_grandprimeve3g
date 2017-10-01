@@ -181,6 +181,12 @@ extern void SM5701_set_lowbatt(int lowbatt_v);
 extern void SM5701_set_lbdhys(int lbdhys_mv);
 extern void SM5701_set_bstout(int bstout_mv);
 extern void sm5701_set_fleden(int fled_enable);
+extern void sm5701_set_ifled(int ifled_ma);
+extern void sm5701_set_imled(int imled_ma);
+extern void sm5701_set_noneshot(int noneshot_enable);
+extern void sm5701_set_onetimer(int onetimer_ms);
+extern void sm5701_get_imled(int *imled_ma);
+extern void sm5701_get_ifled(int *ifled_ma);
 
 //sm5701_irq
 extern int SM5701_irq_init(struct SM5701_dev *sm5701);

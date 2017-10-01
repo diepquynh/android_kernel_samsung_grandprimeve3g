@@ -19,4 +19,5 @@
 int sprd_flash_on(void);
 int sprd_flash_high_light(void);
 int sprd_flash_close(void);
+int sprd_flash_cfg(void *param, void *arg);
 #endif

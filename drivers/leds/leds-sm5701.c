@@ -243,6 +243,23 @@ void sm5701_set_ifled(int ifled_ma)
 }
 EXPORT_SYMBOL(sm5701_set_ifled);
 
+void sm5701_get_ifled(int *ifled_ma)
+{
+    struct i2c_client * client;
+    u8 data = 0;
+
+    client = leds_sm5701_client;
+
+    if( !client) return;
+
+    SM5701_reg_read(client, SM5701_FLEDCNTL3, &data);
+
+    pr_info("%s data = 0x%x\n",__func__,data);
+
+    *ifled_ma = (data & 0x1f);
+}
+EXPORT_SYMBOL(sm5701_get_ifled);
+
 #define IMLED_MAX   0x1F
 #define IMLED_MIN   0x0
 void sm5701_set_imled(int imled_ma)
@@ -271,6 +288,22 @@ void sm5701_set_imled(int imled_ma)
     
 }
 EXPORT_SYMBOL(sm5701_set_imled);
+
+void sm5701_get_imled(int *imled_ma)
+{
+    struct i2c_client * client;
+    u8 data = 0;
+
+    client = leds_sm5701_client;
+
+    if( !client) return;
+
+    SM5701_reg_read(client, SM5701_FLEDCNTL4, &data);
+    pr_info("%s data = 0x%x\n",__func__,data);
+
+    *imled_ma = (data & 0x1f);
+}
+EXPORT_SYMBOL(sm5701_get_imled);
 
 #define ENLOWBATT_SHIFT  7
 void sm5701_set_enlowbatt(int enlowbatt_enable)

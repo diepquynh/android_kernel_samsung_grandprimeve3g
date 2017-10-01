@@ -3326,6 +3326,22 @@ static long sprd_img_k_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		break;
 	}
 
+	case SPRD_IMG_IO_CFG_FLASH: {
+		struct sprd_flash_cfg_param	 cfg_param;
+
+		mutex_lock(&dev->dcam_mutex);
+		ret = copy_from_user(&cfg_param, (void *)arg, sizeof(cfg_param));
+		if (ret) {
+			printk("sprd_img_k_ioctl: CFG FLASH fail to get user info \n");
+			mutex_unlock(&dev->dcam_mutex);
+			goto exit;
+		}
+		ret = sprd_flash_cfg(&cfg_param, arg);
+		mutex_unlock(&dev->dcam_mutex);
+		DCAM_TRACE("SPRD_IMG: SPRD_IMG_IO_CFG_FLASH, ret=%d\n", ret);
+	}
+		break;
+
 	default:
 		printk("sprd_img_k_ioctl: invalid cmd %d \n", cmd);
 		break;
