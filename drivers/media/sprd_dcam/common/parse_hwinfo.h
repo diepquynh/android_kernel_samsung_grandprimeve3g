@@ -10,6 +10,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+#ifndef _PARSE_HWINFO_H_
+#define _PARSE_HWINFO_H_
+
 #include <linux/types.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
@@ -79,3 +82,5 @@ struct clk * parse_clk(struct device_node *dn, char *clkname);
 int get_gpio_id(struct device_node *dn, int *pwn, int *reset, uint32_t sensor_id);
 int get_gpio_id_ex(struct device_node *dn, int type, int *id, uint32_t sensor_id);
 int get_regulator_name(struct device_node *dn, int *type, uint32_t sensor_id, char **name);
+
+#endif /* _PARSE_HWINFO_H_ */
