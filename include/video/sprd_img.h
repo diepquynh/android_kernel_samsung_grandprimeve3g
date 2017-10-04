@@ -122,13 +122,9 @@ struct sprd_img_parm {
 	uint32_t                  need_isp_tool;
 	uint32_t                  deci;
 	uint32_t                  shrink;
-#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t                  camera_id;
-#endif
 	uint32_t                  index;
-#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t                  need_isp;
-#endif
 	uint32_t                  is_reserved_buf;
 	uint32_t		  buf_flag;
 	struct sprd_img_rect      crop_rect;
@@ -191,9 +187,7 @@ struct sprd_img_path_info {
 	uint32_t               support_raw;
 	uint32_t               support_jpeg;
 	uint32_t               support_scaling;
-#ifdef CONFIG_MACH_GRANDPRIMEVE3G
 	uint32_t               support_trim;
-#endif
 	uint32_t               is_scaleing_path;;
 };
 
