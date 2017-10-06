@@ -12,7 +12,7 @@
 /memreserve/ 0x87800000 0x240000; /* 2M+256K */
 
 /* memory reserved for CPW modem */
-/memreserve/ 0x88000000 0x1c00000; /* 28M */
+/memreserve/ 0x88000000 0x2000000; /* 28M */
 
 /* memory reserved for fb */
 /memreserve/ 0x9F00D000 0x5EF000; /* 6M */
@@ -545,11 +545,11 @@ sprd_fgu: sprd_fgu{
 /* sipc initializer */
 &sipc {
 	reg = <0x87800000 0x240000>; /* <SMEM SIZE>*/
-	ranges = <0x8000000 0x88000000 0x1c00000>,
+	ranges = <0x8000000 0x88000000 0x2000000>,
 		   <0x07800000 0x87800000 0x180000>,
 		   <0x9bff000 0x89bff000 0x1000>;
 	sipc_cpw {
-		reg = <0x8000000 0x1c00000> , /* <CP_start_addr size> */
+		reg = <0x8000000 0x2000000> , /* <CP_start_addr size> */
 			<0x07800000 0x180000>, /* <SMEM_phy_addr total_size> */
 			<0x9bff000 0x1000>; /* smsg ring buffer <base size> */
 	};
@@ -559,7 +559,7 @@ sprd_fgu: sprd_fgu{
     sprd,iram-data = <0xe59f0000 0xe12fff10 0x88300000>; /* 3rd param equals modem_addr*/
         sprd,ctrl-reg = <0x44 0x44 0xb0 0xff>; /* <shut_down deep_sleep reset get_status> */
         sprd,ctrl-mask = <0x02000000 0x10000000 0x01 0xf0000>; /* masks <> */
-    reg = <0x88000000 0x1c00000>, /* <CP_start_addr total_size> = <+128M 28M> */
+    reg = <0x88000000 0x2000000>, /* <CP_start_addr total_size> = <+128M 28M> */
         <0x50000000 0x0c>, /* <iram1_base size> */
         <0x402b0000 0x10000>, /* <pmu_base size> */
         <0x402b0000 0x10000>, /* <pmu_base size> */
