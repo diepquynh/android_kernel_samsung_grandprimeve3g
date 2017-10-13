@@ -227,7 +227,6 @@ FEXPORT(__kvm_mips_load_k0k1)
     /* Jump to guest */
 	eret
 	.set	pop
-EXPORT(__kvm_mips_vcpu_run_end)
 
 VECTOR(MIPSX(exception), unknown)
 /*
