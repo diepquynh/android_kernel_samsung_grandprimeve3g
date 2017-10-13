@@ -942,15 +942,11 @@ void symbol_put_addr(void *addr)
 	if (core_kernel_text(a))
 		return;
 
-	/*
-	 * Even though we hold a reference on the module; we still need to
-	 * disable preemption in order to safely traverse the data structure.
-	 */
-	preempt_disable();
+	/* module_text_address is safe here: we're supposed to have reference
+	 * to module from symbol_get, so it can't go away. */
 	modaddr = __module_text_address(a);
 	BUG_ON(!modaddr);
 	module_put(modaddr);
-	preempt_enable();
 }
 EXPORT_SYMBOL_GPL(symbol_put_addr);
 
@@ -3398,11 +3394,6 @@ static inline int is_arm_mapping_symbol(const char *str)
 	       && (str[2] == '\0' || str[2] == '.');
 }
 
-static const char *symname(struct module *mod, unsigned int symnum)
-{
-	return mod->strtab + mod->symtab[symnum].st_name;
-}
-
 static const char *get_ksymbol(struct module *mod,
 			       unsigned long addr,
 			       unsigned long *size,
@@ -3425,15 +3416,15 @@ static const char *get_ksymbol(struct module *mod,
 
 		/* We ignore unnamed symbols: they're uninformative
 		 * and inserted at a whim. */
-		if (*symname(mod, i) == '\0'
-		    || is_arm_mapping_symbol(symname(mod, i)))
-			continue;
-
 		if (mod->symtab[i].st_value <= addr
-		    && mod->symtab[i].st_value > mod->symtab[best].st_value)
+		    && mod->symtab[i].st_value > mod->symtab[best].st_value
+		    && *(mod->strtab + mod->symtab[i].st_name) != '\0'
+		    && !is_arm_mapping_symbol(mod->strtab + mod->symtab[i].st_name))
 			best = i;
 		if (mod->symtab[i].st_value > addr
-		    && mod->symtab[i].st_value < nextval)
+		    && mod->symtab[i].st_value < nextval
+		    && *(mod->strtab + mod->symtab[i].st_name) != '\0'
+		    && !is_arm_mapping_symbol(mod->strtab + mod->symtab[i].st_name))
 			nextval = mod->symtab[i].st_value;
 	}
 
@@ -3444,7 +3435,7 @@ static const char *get_ksymbol(struct module *mod,
 		*size = nextval - mod->symtab[best].st_value;
 	if (offset)
 		*offset = addr - mod->symtab[best].st_value;
-	return symname(mod, best);
+	return mod->strtab + mod->symtab[best].st_name;
 }
 
 /* For kallsyms to ask for address resolution.  NULL means not found.  Careful
@@ -3545,7 +3536,8 @@ int module_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
 		if (symnum < mod->num_symtab) {
 			*value = mod->symtab[symnum].st_value;
 			*type = mod->symtab[symnum].st_info;
-			strlcpy(name, symname(mod, symnum), KSYM_NAME_LEN);
+			strlcpy(name, mod->strtab + mod->symtab[symnum].st_name,
+				KSYM_NAME_LEN);
 			strlcpy(module_name, mod->name, MODULE_NAME_LEN);
 			*exported = is_exported(name, *value, mod);
 			preempt_enable();
@@ -3562,7 +3554,7 @@ static unsigned long mod_find_symname(struct module *mod, const char *name)
 	unsigned int i;
 
 	for (i = 0; i < mod->num_symtab; i++)
-		if (strcmp(name, symname(mod, i)) == 0 &&
+		if (strcmp(name, mod->strtab+mod->symtab[i].st_name) == 0 &&
 		    mod->symtab[i].st_info != 'U')
 			return mod->symtab[i].st_value;
 	return 0;
@@ -3606,7 +3598,7 @@ int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 		if (mod->state == MODULE_STATE_UNFORMED)
 			continue;
 		for (i = 0; i < mod->num_symtab; i++) {
-			ret = fn(data, symname(mod, i),
+			ret = fn(data, mod->strtab + mod->symtab[i].st_name,
 				 mod, mod->symtab[i].st_value);
 			if (ret != 0)
 				return ret;
