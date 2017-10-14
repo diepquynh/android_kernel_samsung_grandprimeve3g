@@ -19,6 +19,8 @@
 //#include "__sprd_vsp_sc8830.h"
 /*40k vsp address space size*/
 #define SPRD_VSP_MAP_SIZE 0xA000
+#define SPRD_VSP_CLK_LEVEL_NUM 4 //depend on chip design
+#define SPRD_VSP_CLK_LEVEL_NUM_PIKE 3 //depend on chip design
 
 #define SPRD_VSP_IOCTL_MAGIC 'm'
 #define VSP_CONFIG_FREQ _IOW(SPRD_VSP_IOCTL_MAGIC, 1, unsigned int)
@@ -38,6 +40,20 @@ enum sprd_vsp_frequency_e {
     VSP_FREQENCY_LEVEL_2 = 2,
     VSP_FREQENCY_LEVEL_3 = 3
 };
+
+typedef enum
+{
+    SHARK = 0,
+    DOLPHIN = 1,
+    TSHARK = 2,
+    SHARKL = 3,
+    PIKE = 4,
+    PIKEL = 5,
+    SHARKL64 = 6,
+    SHARKLT8 = 7,
+    MAX_VERSIONS,
+}
+VSP_VERSION_E;
 
 /*
 ioctl command description
