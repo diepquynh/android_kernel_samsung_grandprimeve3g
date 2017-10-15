@@ -220,7 +220,6 @@ PUBLIC int GSP_ClocksCheckPhase1(void)
     return (ret>0)?GSP_KERNEL_CLOCK_ERR:GSP_NO_ERR;
 }
 
-
 PUBLIC int GSP_Init(gsp_context_t *gspCtx)
 {
     int ret = 0;
