@@ -171,11 +171,7 @@ GSP_CORE_GREQ;
 #define GSP_CLOCK_PARENT1		("clk_153m6")
 #define GSP_CLOCK_PARENT0		("clk_96m")
 #endif
-#ifdef CONFIG_ARCH_SCX35LT8
-#define GSP_CLOCK_NAME			("clk_gsp0")
-#else
 #define GSP_CLOCK_NAME			("clk_gsp")
-#endif
 #define GSP_EMC_CLOCK_PARENT_NAME		("clk_aon_apb")
 #define GSP_EMC_CLOCK_NAME				("clk_gsp_emc")
 
