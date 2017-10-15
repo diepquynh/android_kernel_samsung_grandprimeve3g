@@ -3,21 +3,15 @@ include drivers/media/sprd_dcam/common/Makefile.inc
 
 obj-y += sprd_dcam.o
 #ccflags-y += -Idrivers/media/sprd_dcam/common
-common-file := common/parse_hwinfo.o common/gen_scale_coef.o common/sin_cos.o common/flash_test.o
+common-file := common/dcam_img.o common/parse_hwinfo.o common/gen_scale_coef.o common/sin_cos.o common/flash_test.o
 
 
 ifeq ($(CONFIG_ARCH_SCX30G),y)
 
 ifeq ($(CONFIG_ARCH_SCX20),y)
 sprd_dcam-objs := pike/dcam_drv.o $(common-file)
-else ifeq ($(CONFIG_MACH_COREPRIMEVE3G),y)
-sprd_dcam-objs := tshark/dcam_drv_coreprimeve3g.o \
-		  common/dcam_img_coreprimeve3g.o \
-		  $(common-file)
 else
-sprd_dcam-objs := tshark/dcam_drv.o \
-		  common/dcam_img.o \
-                  $(common-file)
+sprd_dcam-objs := tshark/dcam_drv.o $(common-file)
 endif
 
 else ifeq ($(CONFIG_ARCH_SCX35L),y)
