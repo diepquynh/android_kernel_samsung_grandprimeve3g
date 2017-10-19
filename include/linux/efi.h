@@ -1047,10 +1047,8 @@ struct efivars {
  * and we use a page for reading/writing.
  */
 
-#define EFI_VAR_NAME_LEN	1024
-
 struct efi_variable {
-	efi_char16_t  VariableName[EFI_VAR_NAME_LEN/sizeof(efi_char16_t)];
+	efi_char16_t  VariableName[1024/sizeof(efi_char16_t)];
 	efi_guid_t    VendorGuid;
 	unsigned long DataSize;
 	__u8          Data[1024];

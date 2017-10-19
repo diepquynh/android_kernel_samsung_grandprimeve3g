@@ -42,7 +42,7 @@ DECLARE_WORK(efivar_work, NULL);
 EXPORT_SYMBOL_GPL(efivar_work);
 
 static bool
-validate_device_path(efi_char16_t *var_name, int match, u8 *buffer,
+validate_device_path(struct efi_variable *var, int match, u8 *buffer,
 		     unsigned long len)
 {
 	struct efi_generic_dev_path *node;
@@ -75,7 +75,7 @@ validate_device_path(efi_char16_t *var_name, int match, u8 *buffer,
 }
 
 static bool
-validate_boot_order(efi_char16_t *var_name, int match, u8 *buffer,
+validate_boot_order(struct efi_variable *var, int match, u8 *buffer,
 		    unsigned long len)
 {
 	/* An array of 16-bit integers */
@@ -86,18 +86,18 @@ validate_boot_order(efi_char16_t *var_name, int match, u8 *buffer,
 }
 
 static bool
-validate_load_option(efi_char16_t *var_name, int match, u8 *buffer,
+validate_load_option(struct efi_variable *var, int match, u8 *buffer,
 		     unsigned long len)
 {
 	u16 filepathlength;
 	int i, desclength = 0, namelen;
 
-	namelen = ucs2_strnlen(var_name, EFI_VAR_NAME_LEN);
+	namelen = ucs2_strnlen(var->VariableName, sizeof(var->VariableName));
 
 	/* Either "Boot" or "Driver" followed by four digits of hex */
 	for (i = match; i < match+4; i++) {
-		if (var_name[i] > 127 ||
-		    hex_to_bin(var_name[i] & 0xff) < 0)
+		if (var->VariableName[i] > 127 ||
+		    hex_to_bin(var->VariableName[i] & 0xff) < 0)
 			return true;
 	}
 
@@ -132,12 +132,12 @@ validate_load_option(efi_char16_t *var_name, int match, u8 *buffer,
 	/*
 	 * And, finally, check the filepath
 	 */
-	return validate_device_path(var_name, match, buffer + desclength + 6,
+	return validate_device_path(var, match, buffer + desclength + 6,
 				    filepathlength);
 }
 
 static bool
-validate_uint16(efi_char16_t *var_name, int match, u8 *buffer,
+validate_uint16(struct efi_variable *var, int match, u8 *buffer,
 		unsigned long len)
 {
 	/* A single 16-bit integer */
@@ -148,7 +148,7 @@ validate_uint16(efi_char16_t *var_name, int match, u8 *buffer,
 }
 
 static bool
-validate_ascii_string(efi_char16_t *var_name, int match, u8 *buffer,
+validate_ascii_string(struct efi_variable *var, int match, u8 *buffer,
 		      unsigned long len)
 {
 	int i;
