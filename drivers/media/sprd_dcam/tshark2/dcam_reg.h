@@ -60,7 +60,7 @@
 #define DCAM_AHB_BASE                                  SPRD_MMAHB_BASE
 #define DCAM_AHB_CTL0                                  (DCAM_AHB_BASE + 0x0000UL)
 #define DCAM_EB                                        (DCAM_AHB_CTL0 + 0x0000UL)
-//#define CSI2_DPHY_EB                                   (DCAM_AHB_CTL0 + 0x0000UL)
+#define CSI2_DPHY_EB                                   (DCAM_AHB_CTL0 + 0x0000UL)
 #define DCAM_RST                                       (DCAM_AHB_CTL0 + 0x0004UL)
 #define DCAM_MATRIX_EB                                 (DCAM_AHB_CTL0 + 0x0008UL)
 #define DCAM_CCIR_PCLK_EB                              (SPRD_MMCKG_BASE + 0x0028UL)
@@ -111,9 +111,11 @@
 #define PATH1_SLICE_O_VCNT                             (DCAM_BASE + 0x00A8UL)
 #define PATH2_SLICE_O_VCNT                             (DCAM_BASE + 0x00ACUL)
 
+#define YUV_SHRINK_CFG                                 (DCAM_BASE + 0x00B0UL)
 #define DCAM_PATH0_TRIM_START                          (DCAM_BASE + 0x00B8UL)
 #define DCAM_PATH0_TRIM_SIZE                           (DCAM_BASE + 0x00BCUL)
 #define DCAM_FRM_ADDR12                                (DCAM_BASE + 0x00C0UL)
+#define YUV_REGULATE_CFG                               (DCAM_BASE + 0x00C4UL)
 
 #define CAP_CCIR_CTRL                                  (DCAM_BASE + 0x0100UL)
 #define CAP_CCIR_FRM_CTRL                              (DCAM_BASE + 0x0104UL)
@@ -176,19 +178,24 @@
 #endif
 #define DCAM_CAP_X_DECI_FAC_MAX                        4 // cap deci: 0 - 1/8
 #define DCAM_CAP_Y_DECI_FAC_MAX                        4 // cap deci: 0 - 1/8
+#define DCAM_PATH_FRAME_ROT_MAX			               4
 #define DCAM_JPG_BUF_UNIT                              (1 << 15)
 #define DCAM_JPG_UNITS                                 (1 << 10)
 #define DCAM_SC_COEFF_UP_MAX                           4 // path scaling: 1/8 - 4
 #define DCAM_SC_COEFF_DOWN_MAX                         7 // path scaling: 1/8 - 4
 #define DCAM_PATH_DECI_FAC_MAX                         4 // path deci: 1/2 - 1/16
 #define DCAM_PATH1_LINE_BUF_LENGTH                     2048
-#define DCAM_PATH2_LINE_BUF_LENGTH                     4416
+
 #if defined(CONFIG_ARCH_SCX35LT8)
+#define DCAM_PATH2_LINE_BUF_LENGTH                     4416
 #define DCAM_ISP_LINE_BUF_LENGTH                       4416
-#else
-#define DCAM_ISP_LINE_BUF_LENGTH                       3280
-#endif
 #define DCAM_SCALING_THRESHOLD                         2600
+#else
+#define DCAM_PATH2_LINE_BUF_LENGTH                     4096
+#define DCAM_ISP_LINE_BUF_LENGTH                       3280
+#define DCAM_SCALING_THRESHOLD                         1900
+#endif
+
 #define DCAM_IRQ                                       IRQ_DCAM_INT
 
 #define DCAM_PIXEL_ALIGN_WIDTH                         4

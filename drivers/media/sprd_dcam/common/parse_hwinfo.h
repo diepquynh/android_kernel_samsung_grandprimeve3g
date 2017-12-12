@@ -10,8 +10,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef _PARSE_HWINFO_H_
-#define _PARSE_HWINFO_H_
+#ifndef PARSE_HWINFO_H
+#define PARSE_HWINFO_H
 
 #include <linux/types.h>
 #include <linux/of.h>
@@ -27,6 +27,7 @@
 extern unsigned long  dcam_regbase;
 extern unsigned long  isp_regbase;
 extern unsigned long  csi_regbase;
+extern unsigned long  isp_phybase;
 
 #ifndef CONFIG_OF
 #define DCAM_BASE       SPRD_DEV_P2V(dcam_regbase)
@@ -65,7 +66,7 @@ enum get_gpio_type_e {
 //#define SPRD_ISP_SIZE			SZ_32K
 //#define SPRD_MMAHB_BASE	SPRD_DEV_P2V(REGS_MM_AHB_BASE)
 //#define SPRD_MMCKG_BASE	SPRD_DEV_P2V(REGS_MM_CLK_BASE)
-//#define SPRD_PIN_BASE   SPRD_DEV_P2V(0x60a00000) 
+//#define SPRD_PIN_BASE   SPRD_DEV_P2V(0x60a00000)
 
 //#define SPRD_ADISLAVE_BASE SPRD_DEV_P2V(REGS_ADI_BASE)
 #define SPRD_FLASH_OFST          0x890
@@ -82,5 +83,4 @@ struct clk * parse_clk(struct device_node *dn, char *clkname);
 int get_gpio_id(struct device_node *dn, int *pwn, int *reset, uint32_t sensor_id);
 int get_gpio_id_ex(struct device_node *dn, int type, int *id, uint32_t sensor_id);
 int get_regulator_name(struct device_node *dn, int *type, uint32_t sensor_id, char **name);
-
-#endif /* _PARSE_HWINFO_H_ */
+#endif

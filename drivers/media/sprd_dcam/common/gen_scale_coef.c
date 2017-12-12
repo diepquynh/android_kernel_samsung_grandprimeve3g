@@ -368,14 +368,14 @@ static void SetHorRegisterCoef(uint32_t * reg_coef_ptr, int16_t * y_coef_ptr,
 static void SetVerRegisterCoef(uint32_t * reg_coef_lum_ptr,
 				uint32_t *reg_coef_ch_ptr,
 				int16_t * y_coef_ptr,
-			       	int16_t * uv_coef_ptr, 
+			       	int16_t * uv_coef_ptr,
 				int16_t  i_h,//decimition at horizontal
 				int16_t o_h,//interpolation at horizontal
 			       	uint8_t is_scaling2yuv420)
 {
 	uint32_t cnts = 0;
 	uint32_t i = 0, j = 0;
-		
+
 	if(2 * o_h <= i_h)
 	{
 		for(i = 0; i < 9; i++)
@@ -389,17 +389,17 @@ static void SetVerRegisterCoef(uint32_t * reg_coef_lum_ptr,
 				}
 			}
 		}
-		
+
 		cnts = 0;
 		for(i = 0; i < 9; i++)
 		{
 			for(j = 0; j < 16; j++)
 			{
-				reg_coef_ch_ptr[cnts++] = *(uv_coef_ptr + i * 16 +j);	
+				reg_coef_ch_ptr[cnts++] = *(uv_coef_ptr + i * 16 +j);
 				if(SCALER_COEF_TAB_LEN_VER == cnts)
 				{
 					break;
-				}			
+				}
 			}
 
 		}
@@ -414,7 +414,7 @@ static void SetVerRegisterCoef(uint32_t * reg_coef_lum_ptr,
 
 			}
 		}
-		
+
 		cnts = 0;
 		if((o_h <= i_h) && is_scaling2yuv420)
 		{
@@ -426,12 +426,12 @@ static void SetVerRegisterCoef(uint32_t * reg_coef_lum_ptr,
 					if(SCALER_COEF_TAB_LEN_VER == cnts)
 					{
 						break;
-					}				
+					}
 				}
-	
+
 			}
 		}
-		else 
+		else
 		{
 			for(i = 0; i < 8; i++)
 			{
@@ -495,7 +495,7 @@ static void CalcVerEdgeCoef(int16_t * coeff_ptr, int16_t D, int16_t I,
 	}
 	for (j = 0; j <= 8; j++)
 		phase_temp[j] = j * I / 8;
-	
+
 	for (i = 0; i < I; i++) {
 		spec_tap = i & 1;
 		while (acc >= I) {
@@ -557,17 +557,17 @@ static void CalcVerEdgeCoef(int16_t * coeff_ptr, int16_t D, int16_t I,
 /* Return:					                    							*/
 /* Note:                                                                    */
 /****************************************************************************/
-uint8_t Dcam_GenScaleCoeff(int16_t i_w, 
-			int16_t i_h, 
-			int16_t o_w, 
+uint8_t Dcam_GenScaleCoeff(int16_t i_w,
+			int16_t i_h,
+			int16_t o_w,
 			int16_t o_h,
-		      	uint32_t *coeff_h_ptr, 
+		      	uint32_t *coeff_h_ptr,
 		      	uint32_t *coeff_v_lum_ptr,
-		      	uint32_t *coeff_v_ch_ptr, 
+		      	uint32_t *coeff_v_ch_ptr,
 			uint8_t scaling2yuv420,
 			uint8_t *scaler_tap,
 			uint8_t *chrome_tap,
-		      	void *temp_buf_ptr, 
+		      	void *temp_buf_ptr,
 		      	uint32_t temp_buf_size
 		      	)
 {
@@ -580,11 +580,11 @@ uint8_t Dcam_GenScaleCoeff(int16_t i_w,
 	int16_t *cong_Ycom_hor = 0;
 	int16_t *cong_UVcom_hor = 0;
 	int16_t *cong_Ycom_ver = 0;
-	int16_t *cong_UVcom_ver = 0;	
-	
+	int16_t *cong_UVcom_ver = 0;
+
 	uint16_t luma_ver_tap, chrome_ver_tap;
 	uint16_t luma_ver_maxtap = 16, chrome_ver_maxtap = 16;
-	
+
 	uint32_t coef_buf_size = 0;
 	int16_t *temp_filter_ptr = NULL;
 	int16_t *filter_ptr = NULL;
@@ -610,54 +610,54 @@ uint8_t Dcam_GenScaleCoeff(int16_t i_w,
 	if (!_InitPool(temp_buf_ptr, temp_buf_size, &pool)) {
 		return FALSE;
 	}
-	
-	coef_buf_size = COEF_ARR_ROWS * COEF_ARR_COL_MAX * sizeof(int16_t);	
+
+	coef_buf_size = COEF_ARR_ROWS * COEF_ARR_COL_MAX * sizeof(int16_t);
 	cong_Ycom_hor = (int16_t*)_Allocate(coef_buf_size, 2, &pool);
 	cong_UVcom_hor = (int16_t*)_Allocate(coef_buf_size, 2, &pool);
 	cong_Ycom_ver = (int16_t*)_Allocate(coef_buf_size, 2, &pool);
-	cong_UVcom_ver =  (int16_t*)_Allocate(coef_buf_size, 2, &pool);	
-	
-	if (NULL == cong_Ycom_hor 
-	|| NULL == cong_UVcom_hor 
+	cong_UVcom_ver =  (int16_t*)_Allocate(coef_buf_size, 2, &pool);
+
+	if (NULL == cong_Ycom_hor
+	|| NULL == cong_UVcom_hor
 	||(NULL == cong_Ycom_ver)
 	||(NULL == cong_UVcom_ver)) {
 		return FALSE;
 	}
-	
+
 	temp_filter_ptr = _Allocate(filter_buf_size, 2, &pool);
 	filter_ptr = _Allocate(filter_buf_size, 2, &pool);
 	if (NULL == temp_filter_ptr || NULL == filter_ptr) {
 		return FALSE;
 	}
-	
+
 	/* calculate coefficients of Y component in horizontal direction */
 	coef_len = CalY_ScalingCoef(8, D_hor, I_hor, temp_filter_ptr, 1, &pool);
 	GetFilter(temp_filter_ptr, filter_ptr, 8, coef_len, filter_len);
 	WriteScalarCoef(cong_Ycom_hor, filter_ptr, 8, 8);
 	CheckCoefRange(cong_Ycom_hor, 8, 8, 8);
-	
+
 	/* calculate coefficients of UV component in horizontal direction */
 	coef_len = CalUV_ScalingCoef(4, D_hor, I_hor, temp_filter_ptr, 1, &pool);
 	GetFilter(temp_filter_ptr, filter_ptr, 8, coef_len, filter_len);
 	WriteScalarCoef(cong_UVcom_hor, filter_ptr, 8, 4);
-	CheckCoefRange(cong_UVcom_hor, 8, 4, 8);	
+	CheckCoefRange(cong_UVcom_hor, 8, 4, 8);
 	/* write the coefficient to register format */
 	SetHorRegisterCoef(coeff_h_ptr, cong_Ycom_hor, cong_UVcom_hor);
-	
+
 	luma_ver_tap = ((uint8_t)(D_ver / I_ver)) * 2;
 	chrome_ver_tap = luma_ver_tap;
-	
+
 	if ( luma_ver_tap > luma_ver_maxtap)
-		luma_ver_tap = luma_ver_maxtap;//modified by Hongbo, max_tap 8-->16			
-	if(luma_ver_tap <= 2) 
+		luma_ver_tap = luma_ver_maxtap;//modified by Hongbo, max_tap 8-->16
+	if(luma_ver_tap <= 2)
 		luma_ver_tap = 4;
-	
+
 	*scaler_tap = (uint8_t)luma_ver_tap;
-	
+
 	//------------------------------------------------------//
-	//////////////////////////////////////////////////////////	
+	//////////////////////////////////////////////////////////
 	/* calculate coefficients of Y component in vertical direction*/
-    	coef_len = CalY_ScalingCoef(luma_ver_tap, D_ver, I_ver, temp_filter_ptr, 0, &pool);	
+    	coef_len = CalY_ScalingCoef(luma_ver_tap, D_ver, I_ver, temp_filter_ptr, 0, &pool);
 	GetFilter(temp_filter_ptr, filter_ptr, 8, coef_len, filter_len);
 	WriteScalarCoef(cong_Ycom_ver, filter_ptr, 16, filter_len[0]);
 	CheckCoefRange(cong_Ycom_ver, 8, luma_ver_tap, 16);
@@ -665,22 +665,22 @@ uint8_t Dcam_GenScaleCoeff(int16_t i_w,
 	if (scaling2yuv420) {
 		I_ver_bak_uv /= 2;
 		chrome_ver_tap *= 2;
-		chrome_ver_maxtap = 16;		
+		chrome_ver_maxtap = 16;
 	}
-	
+
 	if ( chrome_ver_tap > chrome_ver_maxtap)
-		chrome_ver_tap = chrome_ver_maxtap;//modified by Hongbo, max_tap 8-->16			
-	if(chrome_ver_tap <= 2) 
-		chrome_ver_tap = 4;	
-	*chrome_tap = (uint8_t)chrome_ver_tap;	
-	
-	coef_len = CalUV_ScalingCoef((int16_t) (chrome_ver_tap), 
-				     D_ver, I_ver_bak_uv, temp_filter_ptr, 
-				     0, &pool);	
+		chrome_ver_tap = chrome_ver_maxtap;//modified by Hongbo, max_tap 8-->16
+	if(chrome_ver_tap <= 2)
+		chrome_ver_tap = 4;
+	*chrome_tap = (uint8_t)chrome_ver_tap;
+
+	coef_len = CalUV_ScalingCoef((int16_t) (chrome_ver_tap),
+				     D_ver, I_ver_bak_uv, temp_filter_ptr,
+				     0, &pool);
 	GetFilter(temp_filter_ptr, filter_ptr, 8, coef_len, filter_len);
 	WriteScalarCoef(cong_UVcom_ver, filter_ptr, 16, filter_len[0]);
 	CheckCoefRange(cong_UVcom_ver, 8, chrome_ver_tap, 16);
-	
+
 	/* calculate edge coefficients of Y component in vertical direction */
 	if(2 * I_ver_bak_y <= D_ver) { 	//only scale down
 		CalcVerEdgeCoef(cong_Ycom_ver, D_ver, I_ver_bak_y, luma_ver_tap, 16);
@@ -690,10 +690,10 @@ uint8_t Dcam_GenScaleCoeff(int16_t i_w,
 		CalcVerEdgeCoef(cong_UVcom_ver, D_ver, I_ver_bak_uv, chrome_ver_tap, 16);
 	}
 	/* write the coefficient to register format */
-	SetVerRegisterCoef(coeff_v_lum_ptr, coeff_v_ch_ptr, 
-			cong_Ycom_ver, cong_UVcom_ver, 
+	SetVerRegisterCoef(coeff_v_lum_ptr, coeff_v_ch_ptr,
+			cong_Ycom_ver, cong_UVcom_ver,
 			D_ver, I_ver, scaling2yuv420);
-	
+
 
 	return TRUE;
 }

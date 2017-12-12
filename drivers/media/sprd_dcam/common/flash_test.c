@@ -16,39 +16,39 @@
  */
 #include "flash_test.h"
 #include "parse_hwinfo.h"
+#include <../flash/flash.h>
 
 #define SENSOR_K_SUCCESS                  0
 #define SENSOR_K_FAIL                     (-1)
 #define SENSOR_K_FALSE                    0
 #define SENSOR_K_TRUE                     1
 
+#if defined CONFIG_MACH_SP9830AEA_5M_H100
+#define SPRD_PWM0_CTRL_OFST                       0xEC
+#define SPRD_PWM0_PATTERN_HIGHT_OFST              0x10
+#define SPRD_PWM0_PATTERT_LOW_OFST                0xC
+#define SPRD_PWM0_TONE_OFST                       0x8
+#define SPRD_PWM0_RATION_OFST                     0x4
+#define SPRD_WHTLED_CTRL_OFST                     0xF0
+#endif
 
 static struct class* flash_test_class = NULL;
 static int g_flash_mode=0;
 
-#if 1
 int setflash(uint32_t flash_mode)
 {
 	switch (flash_mode) {
 	case FLASH_OPEN:        /*flash on */
 	case FLASH_TORCH:        /*for torch low light */
-		#ifdef CONFIG_64BIT
-		sci_adi_set(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT | SPRD_FLASH_LOW_VAL); // 0x3 = 110ma
-		#endif
-
+		sprd_flash_on();
 		break;
 	case FLASH_HIGH_LIGHT: /*high light */
-		#ifdef CONFIG_64BIT
-		sci_adi_set(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT | SPRD_FLASH_HIGH_VAL); // 0xf = 470ma
-		#endif
+		sprd_flash_on();
 		break;
 	case FLASH_CLOSE_AFTER_OPEN:     /*close flash */
 	case FLASH_CLOSE_AFTER_AUTOFOCUS:
 	case FLASH_CLOSE:
-		#ifdef CONFIG_64BIT
-		sci_adi_clr(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT);
-		#endif
-
+		sprd_flash_close();
 		break;
 	default:
 		printk("sprd_v4l2_setflash unknow mode:flash_mode 0x%x \n", flash_mode);
@@ -56,39 +56,7 @@ int setflash(uint32_t flash_mode)
 	}
 	return 0;
 }
-#else
- int setflash(uint32_t flash_mode)
-{
-	switch (flash_mode) {
-	case FLASH_OPEN:                 /*flash on */
-	case FLASH_TORCH:                 /*for torch  low light */
-		gpio_direction_output(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_ON);
-		gpio_set_value(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_ON);
-		gpio_direction_output(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_OFF);
-		gpio_set_value(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_OFF);
-		break;
-	case FLASH_HIGH_LIGHT: /*high light */
-		gpio_direction_output(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_ON);
-		gpio_set_value(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_ON);
-		gpio_direction_output(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_ON);
-		gpio_set_value(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_ON);
-		break;
-	case FLASH_CLOSE_AFTER_OPEN:              /*close flash */
-	case FLASH_CLOSE_AFTER_AUTOFOCUS:
-	case FLASH_CLOSE: /*close the light */
-		gpio_direction_output(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_OFF);
-		gpio_set_value(GPIO_SPRD_FLASH_LOW, SPRD_FLASH_OFF);
-		gpio_direction_output(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_OFF);
-		gpio_set_value(GPIO_SPRD_FLASH_HIGH, SPRD_FLASH_OFF);
-		break;
-	default:
-		printk("sensor set flash unknown mode:%d \n", flash_mode);
-		return SENSOR_K_FALSE;
-	}
 
-	return SENSOR_K_SUCCESS;
-}
-#endif
 static ssize_t flash_test_show(struct device* dev,
 			   struct device_attribute* attr,  char* buf)
 {

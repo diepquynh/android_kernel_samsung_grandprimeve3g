@@ -101,3 +101,8 @@ int sprd_flash_close(void)
 	sci_adi_clr(ANA_PWM_BASE, 0x100);
 	return 0;
 }
+
+int sprd_flash_cfg(struct sprd_flash_cfg_param *param, void *arg)
+{
+	return 0;
+}

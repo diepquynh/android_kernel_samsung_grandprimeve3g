@@ -97,6 +97,7 @@ enum sprd_buf_flag {
 	IMG_BUF_FLAG_MAX
 };
 
+
 struct sprd_img_size {
 	uint32_t w;
 	uint32_t h;
@@ -122,11 +123,11 @@ struct sprd_img_parm {
 	uint32_t                  need_isp_tool;
 	uint32_t                  deci;
 	uint32_t                  shrink;
-	uint32_t                  camera_id;
 	uint32_t                  index;
 	uint32_t                  need_isp;
+	uint32_t                  camera_id;
 	uint32_t                  is_reserved_buf;
-	uint32_t		  buf_flag;
+	uint32_t                  buf_flag;
 	struct sprd_img_rect      crop_rect;
 	struct sprd_img_size      dst_size;
 	struct sprd_img_frm_addr  frame_addr;
@@ -164,6 +165,7 @@ struct sprd_img_sensor_if {
 
 struct sprd_img_frm_info {
 	uint32_t channel_id;
+	uint32_t width;
 	uint32_t height;
 	uint32_t length;
 	uint32_t sec;
@@ -257,6 +259,7 @@ struct sprd_flash_cfg_param {
 	void *data;
 };
 
+
 #define SPRD_IMG_IO_MAGIC            'Z'
 #define SPRD_IMG_IO_SET_MODE          _IOW(SPRD_IMG_IO_MAGIC, 0, uint32_t)
 #define SPRD_IMG_IO_SET_SKIP_NUM      _IOW(SPRD_IMG_IO_MAGIC, 1, uint32_t)
@@ -281,4 +284,11 @@ struct sprd_flash_cfg_param {
 #define SPRD_IMG_IO_SET_SHRINK        _IOW(SPRD_IMG_IO_MAGIC, 20, uint32_t)
 #define SPRD_IMG_IO_CFG_FLASH         _IOW(SPRD_IMG_IO_MAGIC, 22, struct sprd_flash_cfg_param)
 
+/*
+Dump dcam register.
+buf:      input dump buffer addr
+buf_len:  input dump buffer size(>=0x400), and buf_len=0x400 is ok
+return    real dump size
+*/
+int32_t sprd_dcam_registers_dump(void *buf, uint32_t buf_len);
 #endif //_SPRD_V4L2_H_

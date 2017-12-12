@@ -146,6 +146,10 @@ enum dcam_irq_id {
 	DCAM_RAW_SLICE_DONE,
 	DCAM_PATH1_SOF,
 	DCAM_PATH2_SOF,
+	DCAM_PATH0_END,
+	DCAM_PATH1_END,
+	DCAM_PATH2_END,
+	DCAM_PATH0_SOF,
 	DCAM_IRQ_NUMBER
 };
 
@@ -220,7 +224,8 @@ enum iram_owner {
 };
 
 enum dcam_clk_sel {
-	DCAM_CLK_312M = 0,
+	DCAM_CLK_384M = 0,
+	DCAM_CLK_312M,
 	DCAM_CLK_256M,
 	DCAM_CLK_128M,
 	DCAM_CLK_76M8,
@@ -436,9 +441,9 @@ int32_t    dcam_read_registers(uint32_t* reg_buf, uint32_t *buf_len);
 int32_t    dcam_resize_start(void);
 int32_t    dcam_resize_end(void);
 int32_t    dcam_stop_cap(void);
-void       dcam_glb_reg_awr(uint32_t addr, uint32_t val, uint32_t reg_id);
-void       dcam_glb_reg_owr(uint32_t addr, uint32_t val, uint32_t reg_id);
-void       dcam_glb_reg_mwr(uint32_t addr, uint32_t mask, uint32_t val, uint32_t reg_id);
+void       dcam_glb_reg_awr(unsigned long addr, uint32_t val, uint32_t reg_id);
+void       dcam_glb_reg_owr(unsigned long addr, uint32_t val, uint32_t reg_id);
+void       dcam_glb_reg_mwr(unsigned long addr, uint32_t mask, uint32_t val, uint32_t reg_id);
 int        dcam_scale_coeff_alloc(void);
 void       dcam_scale_coeff_free(void);
 int32_t    dcam_rotation_start(void);
