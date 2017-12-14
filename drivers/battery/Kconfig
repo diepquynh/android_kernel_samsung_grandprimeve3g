@@ -21,6 +21,12 @@ config VBAT_CHECK
 	 Vendor PMIC or battery drivers
 	 should implement their own vbat_check_cb.
 
+config FORCE_FAST_CHARGE
+	bool "Force faster charge rate for AC/USB"
+	default n
+	help
+	  This allows users to override default charge rate for AC/USB
+
 config SAMSUNG_LPM_MODE
 	bool "Off charging mode support in sec battery driver"
 	default n

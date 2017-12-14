@@ -38,6 +38,10 @@
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
 
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fast_charging.h>
+#endif
+
 #ifdef CONFIG_USB_HOST_NOTIFY
 #include <linux/usb_notify.h>
 #endif
@@ -739,7 +743,7 @@ static int sec_chg_set_property(struct power_supply *psy,
 			charger->nchgen = false;
 			charger->charging_current_max =
 					charger->pdata->charging_current
-					[charger->cable_type].input_current_limit;
+					[charger->cable_type].fast_charging_current;
 			charger->charging_current =
 					charger->pdata->charging_current
 					[charger->cable_type].fast_charging_current;
@@ -781,27 +785,41 @@ static int sec_chg_set_property(struct power_supply *psy,
 			    (value.intval == POWER_SUPPLY_HEALTH_OVERHEATLIMIT))
 				SM5701_set_vbuslimit_current(charger, 100, true);
 			else {
+#ifdef CONFIG_FORCE_FAST_CHARGE
 				/* Set input current limit */
-				pr_info("%s : vbus current limit (%dmA)\n",
-					__func__, charger->pdata->charging_current
-					[charger->cable_type].input_current_limit);
+				if (force_fast_charge > 0) {
+					pr_info("%s : vbus current limit (%dmA)\n",
+						__func__, charger->pdata->charging_current
+						[charger->cable_type].fast_charging_current, true);
+
+					SM5701_set_vbuslimit_current(
+						charger, charger->pdata->charging_current
+						[charger->cable_type].fast_charging_current, true);
+				} else if (force_fast_charge == 0) {
+#endif /* CONFIG_FORCE_FAST_CHARGE */
+					pr_info("%s : vbus current limit (%dmA)\n",
+						__func__, charger->pdata->charging_current
+						[charger->cable_type].input_current_limit);
 #if defined(CONFIG_MACH_J13G) || defined(CONFIG_MACH_YOUNG2VE3G) || \
 	defined(CONFIG_MACH_GRANDPRIMEVE3G)
-				if (charger->siop_level == 50) {
-					SM5701_set_vbuslimit_current(charger,
-						SIOP_INPUT_LIMIT_CURRENT, true);
-					pr_info("%s : siop enable - current limit (%dmA)\n",
-					__func__, SIOP_INPUT_LIMIT_CURRENT);
+					if (charger->siop_level == 50) {
+						SM5701_set_vbuslimit_current(charger,
+							SIOP_INPUT_LIMIT_CURRENT, true);
+						pr_info("%s : siop enable - current limit (%dmA)\n",
+						__func__, SIOP_INPUT_LIMIT_CURRENT);
 
-				} else {
+					} else {
+						SM5701_set_vbuslimit_current(
+							charger, charger->pdata->charging_current
+							[charger->cable_type].input_current_limit, true);
+					}
+#else
 					SM5701_set_vbuslimit_current(
 						charger, charger->pdata->charging_current
 						[charger->cable_type].input_current_limit, true);
+#endif
+#ifdef CONFIG_FORCE_FAST_CHARGE
 				}
-#else
-				SM5701_set_vbuslimit_current(
-					charger, charger->pdata->charging_current
-					[charger->cable_type].input_current_limit, true);
 #endif
 			}
 
