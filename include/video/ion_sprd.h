@@ -82,8 +82,6 @@ struct ion_addr_data {
 	unsigned long iova_addr;
 	unsigned long phys_addr;
 	size_t size;
-	struct dma_buf *dmabuf;
-	bool is_need_iova;
 };
 
 struct ion_msync_data {
@@ -93,9 +91,18 @@ struct ion_msync_data {
 	size_t size;
 };
 
+struct ion_map_data {
+	int fd_buffer;
+	unsigned long dev_addr;
+};
+
+struct ion_unmap_data {
+	int fd_buffer;
+};
+
 struct ion_kmap_data {
 	int fd_buffer;
-	uint64_t kaddr;
+	unsigned long kaddr;
 	size_t size;
 };
 
@@ -110,11 +117,9 @@ struct ion_fence_data {
 	int retired_fence_fd;
 };
 
-struct ion_client *sprd_ion_client_create(const char *name);
+int sprd_ion_get_gsp_addr(struct ion_addr_data *data);
 
-int sprd_ion_get_addr(int master_id, struct ion_addr_data *data);
-
-int sprd_ion_free_addr(int master_id, struct ion_addr_data *data);
+int sprd_ion_free_gsp_addr(int fd);
 
 long sprd_ion_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg);
