@@ -1,3 +1,4 @@
+
 ifeq ($(CONFIG_MACH_VIVALTO),y)
 obj-y += flash_vivalto.o
 else
@@ -22,12 +23,6 @@ else
 ifeq ($(CONFIG_MACH_SP9838AEA_FHD),y)
 obj-y += flash_gpio.o
 else
-ifeq ($(CONFIG_MACH_SP9838AEA_AUTO_SLT),y)
-obj-y += flash_gpio.o
-else
-ifeq ($(CONFIG_MACH_SP9838AEA_2342A),y)
-obj-y += flash_gpio.o
-else
 ifeq ($(CONFIG_MACH_SP9630EA4MN),y)
 obj-y += flash_parallel_connect_bg.o
 else
@@ -37,25 +32,10 @@ else
 ifeq ($(CONFIG_MACH_SP9830AEA_5M_H100), y)
 obj-y += flash_parallel_connect_bg.o
 else
-ifeq ($(CONFIG_MACH_SP9830AEA_5M_VOLTE), y)
-obj-y += flash_parallel_connect_bg.o
-else
-ifeq ($(CONFIG_MACH_SP9830AEA_PAD_H100), y)
-obj-y += flash_sgm3140.o
-else
-ifeq ($(CONFIG_MACH_SP9830AED_5M_H100), y)
-obj-y += flash_parallel_connect_bg.o
-else
-ifeq ($(CONFIG_MACH_SP9830AEF_5M_VOLTE), y)
-obj-y += flash_parallel_connect_bg.o
-else
 ifeq ($(CONFIG_MACH_SP9830IEB_5M_H100), y)
 obj-y += flash_parallel_connect_bg.o
 else
 ifeq ($(CONFIG_MACH_SP7720EA), y)
-obj-y += flash_parallel_connect_bg.o
-else
-ifeq ($(CONFIG_MACH_SP7720EB), y)
 obj-y += flash_parallel_connect_bg.o
 else
 ifeq ($(CONFIG_MACH_COREPRIMELITE),y)
@@ -70,69 +50,10 @@ else
 ifeq ($(CONFIG_MACH_GRANDPRIMEVE3G),y)
 obj-y += flash_sm5701.o
 else
-ifeq ($(CONFIG_MACH_GRANDPRIME_DTV),y)
-obj-y += flash_sm5701.o
-else
 ifeq ($(CONFIG_MACH_COREPRIMEVE3G),y)
 obj-y += flash_sm5701.o
 else
-ifeq ($(CONFIG_MACH_SP9830IEC_4M_H100),y)
-obj-y += flash_sgm3140.o
-else
-ifeq ($(CONFIG_MACH_SP9830IEE_4M_H100),y)
-obj-y += flash_sgm3140.o
-else
-ifeq ($(CONFIG_MACH_SP9830AEC_4M_H100),y)
-obj-y += flash_sgm3140.o
-else
-ifeq ($(CONFIG_MACH_SHARKL_J1POPLTE),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_SHARKLS_J1MINI),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_J1MINILTE),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_J3XLTE),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_J3XNLTE),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_SHARKLS_J3VLT),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_SS_SHARKLT8),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_J1ACEVELTE),y)
-obj-y += flash_sm5701.o
-else
-ifeq ($(CONFIG_MACH_GTEXSLTE),y)
-obj-y += flash_no.o
-else
 obj-y += flash_common.o
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
-endif
 endif
 endif
 endif

@@ -46,7 +46,3 @@ int sprd_flash_close(void)
 	return 0;
 }
 
-int sprd_flash_cfg(struct sprd_flash_cfg_param *param, void *arg)
-{
-	return 0;
-}
