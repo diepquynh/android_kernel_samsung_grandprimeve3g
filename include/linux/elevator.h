@@ -24,9 +24,6 @@ typedef void (elevator_bio_merged_fn) (struct request_queue *,
 typedef int (elevator_dispatch_fn) (struct request_queue *, int);
 
 typedef void (elevator_add_req_fn) (struct request_queue *, struct request *);
-typedef int (elevator_reinsert_req_fn) (struct request_queue *,
-					struct request *);
-typedef bool (elevator_is_urgent_fn) (struct request_queue *);
 typedef struct request *(elevator_request_list_fn) (struct request_queue *, struct request *);
 typedef void (elevator_completed_req_fn) (struct request_queue *, struct request *);
 typedef int (elevator_may_queue_fn) (struct request_queue *, int);
@@ -42,7 +39,6 @@ typedef void (elevator_deactivate_req_fn) (struct request_queue *, struct reques
 typedef int (elevator_init_fn) (struct request_queue *,
 				struct elevator_type *e);
 typedef void (elevator_exit_fn) (struct elevator_queue *);
-typedef void (elevator_registered_fn) (struct request_queue *);
 
 struct elevator_ops
 {
@@ -54,9 +50,6 @@ struct elevator_ops
 
 	elevator_dispatch_fn *elevator_dispatch_fn;
 	elevator_add_req_fn *elevator_add_req_fn;
-	elevator_reinsert_req_fn *elevator_reinsert_req_fn;
-	elevator_is_urgent_fn *elevator_is_urgent_fn;
-
 	elevator_activate_req_fn *elevator_activate_req_fn;
 	elevator_deactivate_req_fn *elevator_deactivate_req_fn;
 
@@ -75,7 +68,6 @@ struct elevator_ops
 
 	elevator_init_fn *elevator_init_fn;
 	elevator_exit_fn *elevator_exit_fn;
-	elevator_registered_fn *elevator_registered_fn;
 };
 
 #define ELV_NAME_MAX	(16)
@@ -136,7 +128,6 @@ extern void elv_merged_request(struct request_queue *, struct request *, int);
 extern void elv_bio_merged(struct request_queue *q, struct request *,
 				struct bio *);
 extern void elv_requeue_request(struct request_queue *, struct request *);
-extern int elv_reinsert_request(struct request_queue *, struct request *);
 extern struct request *elv_former_request(struct request_queue *, struct request *);
 extern struct request *elv_latter_request(struct request_queue *, struct request *);
 extern int elv_register_queue(struct request_queue *q);

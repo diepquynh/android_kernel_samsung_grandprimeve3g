@@ -265,8 +265,6 @@ source "drivers/net/fddi/Kconfig"
 
 source "drivers/net/hippi/Kconfig"
 
-source "drivers/net/bih/Kconfig"
-
 config NET_SB1000
 	tristate "General Instruments Surfboard 1000"
 	depends on PNP

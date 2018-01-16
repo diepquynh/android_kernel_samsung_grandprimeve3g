@@ -19,13 +19,6 @@ ifeq ($(CONFIG_MEDIA_CONTROLLER),y)
 endif
 
 obj-$(CONFIG_VIDEO_DEV) += v4l2-core/
-obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_dcam/
-obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_scale/
-obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_rotation/
-obj-$(CONFIG_VIDEO_GSP_SPRD)  += sprd_gsp/
-obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_sensor/
-obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_isp/
-#obj-$(CONFIG_VIDEO_DCAM_SPRD) += sprd_dma_copy/
 obj-$(CONFIG_DVB_CORE)  += dvb-core/
 
 # There are both core and drivers at RC subtree - merge before drivers
@@ -37,4 +30,4 @@ obj-y += rc/
 
 obj-y += common/ platform/ pci/ usb/ mmc/ firewire/ parport/
 obj-$(CONFIG_VIDEO_DEV) += radio/
-obj-$(CONFIG_MTV) += mtv/
+

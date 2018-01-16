@@ -33,13 +33,6 @@
 
 #include <asm/ioctls.h>
 
-#if defined(CONFIG_SEC_DEBUG)
-#include <soc/sprd/sec_debug.h>
-#endif
-#if defined(CONFIG_SEC_BSP)
-#include <soc/sprd/sec_bsp.h>
-#endif
-
 /**
  * struct logger_log - represents a specific log, such as 'main' or 'radio'
  * @buffer:	The actual ring buffer
@@ -462,28 +455,6 @@ static ssize_t do_write_log_from_user(struct logger_log *log,
 			 */
 			return -EFAULT;
 
-#if defined(CONFIG_SEC_DEBUG)
-	/* print as kernel log if the log string starts with "!@" */
-	if (count >= 2) {
-		if (log->buffer[log->w_off] == '!'
-		    && log->buffer[logger_offset(log, log->w_off + 1)] == '@') {
-			char tmp[256];
-			int i;
-			for (i = 0; i < min(count, sizeof(tmp) - 1); i++)
-				tmp[i] =
-				    log->buffer[logger_offset \
-						(log, log->w_off + i)];
-			tmp[i] = '\0';
-			printk(KERN_INFO"%s\n", tmp);
-#if defined(CONFIG_SEC_BSP)
-			if (strncmp(tmp, "!@Boot", 6) == 0) {
-				sec_boot_stat_add(tmp);
-			}
-#endif
-		}
-	}
-#endif
-
 	log->w_off = logger_offset(log, log->w_off + count);
 
 	return count;
@@ -781,11 +752,7 @@ static int __init create_log(char *log_name, int size)
 	struct logger_log *log;
 	unsigned char *buffer;
 
-#if defined(CONFIG_SEC_DEBUG)
-	buffer = kmalloc(size, GFP_KERNEL);
-#else
 	buffer = vmalloc(size);
-#endif
 	if (buffer == NULL)
 		return -ENOMEM;
 
@@ -837,75 +804,25 @@ out_free_buffer:
 	return ret;
 }
 
-#if defined(CONFIG_SEC_DEBUG)
-unsigned char *get_main_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_MAIN))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_radio_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_RADIO))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_events_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_EVENTS))
-		return log->buffer;
-	return NULL;
-}
-
-unsigned char *get_system_log_buf_addr(void)
-{
-	struct logger_log *log;
-
-	list_for_each_entry(log, &log_list, logs)
-	if (!strcmp(log->misc.name, LOGGER_LOG_SYSTEM))
-		return log->buffer;
-	return NULL;
-}
-#endif
-
 static int __init logger_init(void)
 {
 	int ret;
 
-	ret = create_log(LOGGER_LOG_MAIN, 512*1024);
+	ret = create_log(LOGGER_LOG_MAIN, 256*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_EVENTS, 512*1024);
+	ret = create_log(LOGGER_LOG_EVENTS, 256*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_RADIO, 512*1024);
+	ret = create_log(LOGGER_LOG_RADIO, 256*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_SYSTEM, 512*1024);
+	ret = create_log(LOGGER_LOG_SYSTEM, 256*1024);
 	if (unlikely(ret))
 		goto out;
-
-#if defined(CONFIG_SEC_DEBUG)
-    /*{{ Mark for GetLog*/
-	sec_getlog_supply_loggerinfo(get_main_log_buf_addr(),
-					get_radio_log_buf_addr(),
-					get_events_log_buf_addr(),
-					get_system_log_buf_addr());
-#endif
 
 out:
 	return ret;

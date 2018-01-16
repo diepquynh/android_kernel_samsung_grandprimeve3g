@@ -958,7 +958,7 @@ static struct sk_buff *tun_alloc_skb(struct tun_file *tfile,
 }
 
 /* set skb frags from iovec, this can move to core network code for reuse */
-int zerocopy_sg_from_iovec(struct sk_buff *skb, const struct iovec *from,
+static int zerocopy_sg_from_iovec(struct sk_buff *skb, const struct iovec *from,
 				  int offset, size_t count)
 {
 	int len = iov_length(from, count) - offset;
@@ -1897,12 +1897,6 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 	int sndbuf;
 	int vnet_hdr_sz;
 	int ret;
-
-#ifdef CONFIG_ANDROID_PARANOID_NETWORK
-	if (cmd != TUNGETIFF && !capable(CAP_NET_ADMIN)) {
-		return -EPERM;
-	}
-#endif
 
 	if (cmd == TUNSETIFF || cmd == TUNSETQUEUE || _IOC_TYPE(cmd) == 0x89) {
 		if (copy_from_user(&ifr, argp, ifreq_len))

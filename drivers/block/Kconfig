@@ -104,8 +104,6 @@ config PARIDE
 source "drivers/block/paride/Kconfig"
 
 source "drivers/block/mtip32xx/Kconfig"
-# update zram code to 4.0.0.rc5 kernel
-source "drivers/block/zram/Kconfig"
 
 config BLK_CPQ_DA
 	tristate "Compaq SMART2 support"

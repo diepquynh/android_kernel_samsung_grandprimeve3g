@@ -27,11 +27,3 @@ config PAGE_POISONING
 config PAGE_GUARD
 	bool
 	select WANT_PAGE_DEBUG_FLAGS
-
-config SPRD_PAGERECORDER
-	bool "record page alloc and free"
-	default n
-	depends on DEBUG_KERNEL
-	help
-		Record page alloc and free in linux kernel space.
-		Support page allocation tracer

@@ -1749,8 +1749,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum);
 /* recovery.c */
 int ubifs_recover_master_node(struct ubifs_info *c);
 int ubifs_write_rcvrd_mst_node(struct ubifs_info *c);
-int ubifs_fix_unclean_leb(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
-			   int start);
 struct ubifs_scan_leb *ubifs_recover_leb(struct ubifs_info *c, int lnum,
 					 int offs, void *sbuf, int jhead);
 struct ubifs_scan_leb *ubifs_recover_log_leb(struct ubifs_info *c, int lnum,

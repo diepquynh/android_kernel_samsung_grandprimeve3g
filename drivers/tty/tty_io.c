@@ -629,11 +629,6 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 
 	tty_lock(tty);
 
-	if (test_bit(TTY_HUPPED, &tty->flags)) {
-		tty_unlock(tty);
-		return;
-	}
-
 	/* some functions below drop BTM, so we need this bit */
 	set_bit(TTY_HUPPING, &tty->flags);
 
@@ -669,6 +664,7 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 
 	spin_lock_irq(&tty->ctrl_lock);
 	clear_bit(TTY_THROTTLED, &tty->flags);
+	clear_bit(TTY_PUSH, &tty->flags);
 	clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
 	put_pid(tty->session);
 	put_pid(tty->pgrp);
@@ -1394,7 +1390,8 @@ static int tty_reopen(struct tty_struct *tty)
 	struct tty_driver *driver = tty->driver;
 
 	if (test_bit(TTY_CLOSING, &tty->flags) ||
-			test_bit(TTY_HUPPING, &tty->flags))
+			test_bit(TTY_HUPPING, &tty->flags) ||
+			test_bit(TTY_LDISC_CHANGING, &tty->flags))
 		return -EIO;
 
 	if (driver->type == TTY_DRIVER_TYPE_PTY &&
@@ -1410,7 +1407,7 @@ static int tty_reopen(struct tty_struct *tty)
 	}
 	tty->count++;
 
-	WARN_ON(!tty->ldisc);
+	WARN_ON(!test_bit(TTY_LDISC, &tty->flags));
 
 	return 0;
 }
@@ -2092,7 +2089,6 @@ retry_open:
 			filp->f_op = &tty_fops;
 		goto retry_open;
 	}
-	clear_bit(TTY_HUPPED, &tty->flags);
 	tty_unlock(tty);
 
 
@@ -2141,8 +2137,6 @@ static unsigned int tty_poll(struct file *filp, poll_table *wait)
 	if (tty_paranoia_check(tty, file_inode(filp), "tty_poll"))
 		return 0;
 
-	pr_debug("[TTY_DEBUG tty_poll]pid %d\n",current->pid);
-
 	ld = tty_ldisc_ref_wait(tty);
 	if (ld->ops->poll)
 		ret = (ld->ops->poll)(tty, filp, wait);
@@ -2153,7 +2147,6 @@ static unsigned int tty_poll(struct file *filp, poll_table *wait)
 static int __tty_fasync(int fd, struct file *filp, int on)
 {
 	struct tty_struct *tty = file_tty(filp);
-	struct tty_ldisc *ldisc;
 	unsigned long flags;
 	int retval = 0;
 
@@ -2164,17 +2157,11 @@ static int __tty_fasync(int fd, struct file *filp, int on)
 	if (retval <= 0)
 		goto out;
 
-	ldisc = tty_ldisc_ref(tty);
-	if (ldisc) {
-		if (ldisc->ops->fasync)
-			ldisc->ops->fasync(tty, on);
-		tty_ldisc_deref(ldisc);
-	}
-
 	if (on) {
 		enum pid_type type;
 		struct pid *pid;
-
+		if (!waitqueue_active(&tty->read_wait))
+			tty->minimum_to_wake = 1;
 		spin_lock_irqsave(&tty->ctrl_lock, flags);
 		if (tty->pgrp) {
 			pid = tty->pgrp;
@@ -2187,7 +2174,13 @@ static int __tty_fasync(int fd, struct file *filp, int on)
 		spin_unlock_irqrestore(&tty->ctrl_lock, flags);
 		retval = __f_setown(filp, pid, type, 0);
 		put_pid(pid);
+		if (retval)
+			goto out;
+	} else {
+		if (!tty->fasync && !waitqueue_active(&tty->read_wait))
+			tty->minimum_to_wake = N_TTY_BUF_SIZE;
 	}
+	retval = 0;
 out:
 	return retval;
 }
@@ -2252,9 +2245,9 @@ static int tiocgwinsz(struct tty_struct *tty, struct winsize __user *arg)
 {
 	int err;
 
-	mutex_lock(&tty->winsize_mutex);
+	mutex_lock(&tty->termios_mutex);
 	err = copy_to_user(arg, &tty->winsize, sizeof(*arg));
-	mutex_unlock(&tty->winsize_mutex);
+	mutex_unlock(&tty->termios_mutex);
 
 	return err ? -EFAULT: 0;
 }
@@ -2275,7 +2268,7 @@ int tty_do_resize(struct tty_struct *tty, struct winsize *ws)
 	unsigned long flags;
 
 	/* Lock the tty */
-	mutex_lock(&tty->winsize_mutex);
+	mutex_lock(&tty->termios_mutex);
 	if (!memcmp(ws, &tty->winsize, sizeof(*ws)))
 		goto done;
 	/* Get the PID values and reference them so we can
@@ -2290,7 +2283,7 @@ int tty_do_resize(struct tty_struct *tty, struct winsize *ws)
 
 	tty->winsize = *ws;
 done:
-	mutex_unlock(&tty->winsize_mutex);
+	mutex_unlock(&tty->termios_mutex);
 	return 0;
 }
 EXPORT_SYMBOL(tty_do_resize);
@@ -3051,10 +3044,8 @@ void initialize_tty_struct(struct tty_struct *tty,
 	tty->session = NULL;
 	tty->pgrp = NULL;
 	mutex_init(&tty->legacy_mutex);
-	mutex_init(&tty->throttle_mutex);
-	init_rwsem(&tty->termios_rwsem);
-	mutex_init(&tty->winsize_mutex);
-	init_ldsem(&tty->ldisc_sem);
+	mutex_init(&tty->termios_mutex);
+	mutex_init(&tty->ldisc_mutex);
 	init_waitqueue_head(&tty->write_wait);
 	init_waitqueue_head(&tty->read_wait);
 	INIT_WORK(&tty->hangup_work, do_tty_hangup);

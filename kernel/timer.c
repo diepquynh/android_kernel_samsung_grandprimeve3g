@@ -52,10 +52,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/timer.h>
 
-#ifdef CONFIG_SEC_DEBUG_TIMER_LOG
-#include <soc/sprd/sec_debug.h>
-#endif
-
 u64 jiffies_64 __cacheline_aligned_in_smp = INITIAL_JIFFIES;
 
 EXPORT_SYMBOL(jiffies_64);
@@ -1130,15 +1126,9 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 	 */
 	lock_map_acquire(&lockdep_map);
 
-#ifdef CONFIG_SEC_DEBUG_TIMER_LOG
-	sec_debug_timer_log(5555, (void*)fn);
-#endif
 	trace_timer_expire_entry(timer);
 	fn(data);
 	trace_timer_expire_exit(timer);
-#ifdef CONFIG_SEC_DEBUG_TIMER_LOG
-	sec_debug_timer_log(6666, (void*)fn);
-#endif
 
 	lock_map_release(&lockdep_map);
 

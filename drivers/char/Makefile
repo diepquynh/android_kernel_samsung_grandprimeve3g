@@ -17,8 +17,6 @@ obj-$(CONFIG_VIOTAPE)		+= viotape.o
 obj-$(CONFIG_IBM_BSR)		+= bsr.o
 obj-$(CONFIG_SGI_MBCS)		+= mbcs.o
 obj-$(CONFIG_BFIN_OTP)		+= bfin-otp.o
-obj-$(CONFIG_TS0710_MUX_ENABLE)+= ts0710_mux.o
-obj-$(CONFIG_TS0710_MUX_ENABLE)+= mux.o
 
 obj-$(CONFIG_PRINTER)		+= lp.o
 
@@ -58,16 +56,9 @@ obj-$(CONFIG_PCMCIA)		+= pcmcia/
 obj-$(CONFIG_HANGCHECK_TIMER)	+= hangcheck-timer.o
 obj-$(CONFIG_TCG_TPM)		+= tpm/
 
-obj-$(CONFIG_MODEM_INTF)	+= modem_interface/
-
-obj-$(CONFIG_MUX_SDIO_OPT1_HAL)	+= mux_sdio_opt1_hal/
-
-obj-$(CONFIG_DCC_TTY)		+= dcc_tty.o
 obj-$(CONFIG_PS3_FLASH)		+= ps3flash.o
 
-obj-$(CONFIG_MUX_SPI_HAL)	+= mux_spi_hal/
 obj-$(CONFIG_JS_RTC)		+= js-rtc.o
 js-rtc-y = rtc.o
 
 obj-$(CONFIG_TILE_SROM)		+= tile-srom.o
-obj-$(CONFIG_FRANDOM)	+= frandom.o

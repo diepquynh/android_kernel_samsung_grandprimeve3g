@@ -82,9 +82,6 @@ config EVENT_TRACING
 	select CONTEXT_SWITCH_TRACER
 	bool
 
-config GPU_TRACEPOINTS
-	bool
-
 config CONTEXT_SWITCH_TRACER
 	bool
 
@@ -146,7 +143,6 @@ config FUNCTION_TRACER
 	select KALLSYMS
 	select GENERIC_TRACER
 	select CONTEXT_SWITCH_TRACER
-	default n
 	help
 	  Enable the kernel to trace every kernel function. This is done
 	  by using a compiler feature to insert a small, 5-byte No-Operation
@@ -363,7 +359,6 @@ config STACK_TRACER
 	select FUNCTION_TRACER
 	select STACKTRACE
 	select KALLSYMS
-	default n
 	help
 	  This special tracer records the maximum stack footprint of the
 	  kernel and displays it in /sys/kernel/debug/tracing/stack_trace.
@@ -448,7 +443,7 @@ config DYNAMIC_FTRACE
 	bool "enable/disable function tracing dynamically"
 	depends on FUNCTION_TRACER
 	depends on HAVE_DYNAMIC_FTRACE
-	default n
+	default y
 	help
 	  This option will modify all the calls to function tracing
 	  dynamically (will patch them out of the binary image and

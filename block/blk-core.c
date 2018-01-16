@@ -309,15 +309,7 @@ inline void __blk_run_queue_uncond(struct request_queue *q)
 	 * can wait until all these request_fn calls have finished.
 	 */
 	q->request_fn_active++;
-	if (!q->notified_urgent &&
-		q->elevator->type->ops.elevator_is_urgent_fn &&
-		q->urgent_request_fn &&
-		q->elevator->type->ops.elevator_is_urgent_fn(q) &&
-		list_empty(&q->flush_data_in_flight)) {
-		q->notified_urgent = true;
-		q->urgent_request_fn(q);
-	} else
-		q->request_fn(q);
+	q->request_fn(q);
 	q->request_fn_active--;
 }
 
@@ -328,12 +320,6 @@ inline void __blk_run_queue_uncond(struct request_queue *q)
  * Description:
  *    See @blk_run_queue. This variant must be called with the queue lock
  *    held and interrupts disabled.
- *    Device driver will be notified of an urgent request
- *    pending under the following conditions:
- *    1. The driver and the current scheduler support urgent reques handling
- *    2. There is an urgent request pending in the scheduler
- *    3. There isn't already an urgent request in flight, meaning previously
- *       notified urgent request completed (!q->notified_urgent)
  */
 void __blk_run_queue(struct request_queue *q)
 {
@@ -1228,73 +1214,9 @@ void blk_requeue_request(struct request_queue *q, struct request *rq)
 
 	BUG_ON(blk_queued_rq(rq));
 
-	if (rq->cmd_flags & REQ_URGENT) {
-		/*
-		 * It's not compliant with the design to re-insert
-		 * urgent requests. We want to be able to track this
-		 * down.
-		 */
-		pr_debug("%s(): reinserting an URGENT request", __func__);
-		WARN_ON(!q->dispatched_urgent);
-		q->dispatched_urgent = false;
-	}
 	elv_requeue_request(q, rq);
 }
 EXPORT_SYMBOL(blk_requeue_request);
-
-/**
- * blk_reinsert_request() - Insert a request back to the scheduler
- * @q:		request queue
- * @rq:		request to be inserted
- *
- * This function inserts the request back to the scheduler as if
- * it was never dispatched.
- *
- * Return: 0 on success, error code on fail
- */
-int blk_reinsert_request(struct request_queue *q, struct request *rq)
-{
-	if (unlikely(!rq) || unlikely(!q))
-		return -EIO;
-
-	blk_delete_timer(rq);
-	blk_clear_rq_complete(rq);
-	trace_block_rq_requeue(q, rq);
-
-	if (blk_rq_tagged(rq))
-		blk_queue_end_tag(q, rq);
-
-	BUG_ON(blk_queued_rq(rq));
-	if (rq->cmd_flags & REQ_URGENT) {
-		/*
-		 * It's not compliant with the design to re-insert
-		 * urgent requests. We want to be able to track this
-		 * down.
-		 */
-		pr_debug("%s(): requeueing an URGENT request", __func__);
-		WARN_ON(!q->dispatched_urgent);
-		q->dispatched_urgent = false;
-	}
-
-	return elv_reinsert_request(q, rq);
-}
-EXPORT_SYMBOL(blk_reinsert_request);
-
-/**
- * blk_reinsert_req_sup() - check whether the scheduler supports
- *          reinsertion of requests
- * @q:		request queue
- *
- * Returns true if the current scheduler supports reinserting
- * request. False otherwise
- */
-bool blk_reinsert_req_sup(struct request_queue *q)
-{
-	if (unlikely(!q))
-		return false;
-	return q->elevator->type->ops.elevator_reinsert_req_fn ? true : false;
-}
-EXPORT_SYMBOL(blk_reinsert_req_sup);
 
 static void add_acct_request(struct request_queue *q, struct request *rq,
 			     int where)
@@ -2152,7 +2074,8 @@ static void blk_account_io_done(struct request *req)
 static struct request *blk_pm_peek_request(struct request_queue *q,
 					   struct request *rq)
 {
-	if (q->dev && q->rpm_status != RPM_ACTIVE && !(rq->cmd_flags & REQ_PM))
+	if (q->dev && (q->rpm_status == RPM_SUSPENDED ||
+	    (q->rpm_status != RPM_ACTIVE && !(rq->cmd_flags & REQ_PM))))
 		return NULL;
 	else
 		return rq;
@@ -2207,10 +2130,6 @@ struct request *blk_peek_request(struct request_queue *q)
 			 * not be passed by new incoming requests
 			 */
 			rq->cmd_flags |= REQ_STARTED;
-			if (rq->cmd_flags & REQ_URGENT) {
-				WARN_ON(q->dispatched_urgent);
-				q->dispatched_urgent = true;
-			}
 			trace_block_rq_issue(q, rq);
 		}
 
@@ -3284,8 +3203,7 @@ int __init blk_dev_init(void)
 
 	/* used for unplugging and affects IO latency/throughput - HIGHPRI */
 	kblockd_workqueue = alloc_workqueue("kblockd",
-					    WQ_MEM_RECLAIM | WQ_HIGHPRI |
-					    WQ_POWER_EFFICIENT, 0);
+					    WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
 	if (!kblockd_workqueue)
 		panic("Failed to create kblockd\n");
 

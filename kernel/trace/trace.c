@@ -39,7 +39,6 @@
 #include <linux/nmi.h>
 #include <linux/fs.h>
 #include <linux/sched/rt.h>
-#include <linux/streamline_annotate.h>
 
 #include "trace.h"
 #include "trace_output.h"
@@ -431,9 +430,6 @@ int __trace_puts(unsigned long ip, const char *str, int size)
 	if (unlikely(tracing_selftest_running || tracing_disabled))
 		return 0;
 
-	if (unlikely(tracing_selftest_running || tracing_disabled))
-		return 0;
-
 	alloc = sizeof(*entry) + size + 2; /* possible \n added */
 
 	local_save_flags(irq_flags);
@@ -477,9 +473,6 @@ int __trace_bputs(unsigned long ip, const char *str)
 	int pc;
 
 	pc = preempt_count();
-
-	if (unlikely(tracing_selftest_running || tracing_disabled))
-		return 0;
 
 	if (unlikely(tracing_selftest_running || tracing_disabled))
 		return 0;
@@ -737,7 +730,6 @@ static const char *trace_options[] = {
 	"irq-info",
 	"markers",
 	"function-trace",
-	"print-tgid",
 	NULL
 };
 
@@ -1250,7 +1242,6 @@ void tracing_reset_all_online_cpus(void)
 static unsigned map_pid_to_cmdline[PID_MAX_DEFAULT+1];
 static unsigned map_cmdline_to_pid[SAVED_CMDLINES];
 static char saved_cmdlines[SAVED_CMDLINES][TASK_COMM_LEN];
-static unsigned saved_tgids[SAVED_CMDLINES];
 static int cmdline_idx;
 static arch_spinlock_t trace_cmdline_lock = __ARCH_SPIN_LOCK_UNLOCKED;
 
@@ -1452,7 +1443,6 @@ static int trace_save_cmdline(struct task_struct *tsk)
 	}
 
 	memcpy(&saved_cmdlines[idx], tsk->comm, TASK_COMM_LEN);
-	saved_tgids[idx] = tsk->tgid;
 
 	arch_spin_unlock(&trace_cmdline_lock);
 
@@ -1488,25 +1478,6 @@ void trace_find_cmdline(int pid, char comm[])
 
 	arch_spin_unlock(&trace_cmdline_lock);
 	preempt_enable();
-}
-
-int trace_find_tgid(int pid)
-{
-	unsigned map;
-	int tgid;
-
-	preempt_disable();
-	arch_spin_lock(&trace_cmdline_lock);
-	map = map_pid_to_cmdline[pid];
-	if (map != NO_CMDLINE_MAP)
-		tgid = saved_tgids[map];
-	else
-		tgid = -1;
-
-	arch_spin_unlock(&trace_cmdline_lock);
-	preempt_enable();
-
-	return tgid;
 }
 
 void tracing_record_cmdline(struct task_struct *tsk)
@@ -2464,13 +2435,6 @@ static void print_func_help_header(struct trace_buffer *buf, struct seq_file *m)
 	seq_puts(m, "#              | |       |          |         |\n");
 }
 
-static void print_func_help_header_tgid(struct trace_buffer *buf, struct seq_file *m)
-{
-	print_event_info(buf, m);
-	seq_puts(m, "#           TASK-PID    TGID   CPU#      TIMESTAMP  FUNCTION\n");
-	seq_puts(m, "#              | |        |      |          |         |\n");
-}
-
 static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file *m)
 {
 	print_event_info(buf, m);
@@ -2481,18 +2445,6 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
 	seq_puts(m, "#                            ||| /     delay\n");
 	seq_puts(m, "#           TASK-PID   CPU#  ||||    TIMESTAMP  FUNCTION\n");
 	seq_puts(m, "#              | |       |   ||||       |         |\n");
-}
-
-static void print_func_help_header_irq_tgid(struct trace_buffer *buf, struct seq_file *m)
-{
-	print_event_info(buf, m);
-	seq_puts(m, "#                                      _-----=> irqs-off\n");
-	seq_puts(m, "#                                     / _----=> need-resched\n");
-	seq_puts(m, "#                                    | / _---=> hardirq/softirq\n");
-	seq_puts(m, "#                                    || / _--=> preempt-depth\n");
-	seq_puts(m, "#                                    ||| /     delay\n");
-	seq_puts(m, "#           TASK-PID    TGID   CPU#  ||||    TIMESTAMP  FUNCTION\n");
-	seq_puts(m, "#              | |        |      |   ||||       |         |\n");
 }
 
 void
@@ -2795,15 +2747,9 @@ void trace_default_header(struct seq_file *m)
 	} else {
 		if (!(trace_flags & TRACE_ITER_VERBOSE)) {
 			if (trace_flags & TRACE_ITER_IRQ_INFO)
-				if (trace_flags & TRACE_ITER_TGID)
-					print_func_help_header_irq_tgid(iter->trace_buffer, m);
-				else
-					print_func_help_header_irq(iter->trace_buffer, m);
+				print_func_help_header_irq(iter->trace_buffer, m);
 			else
-				if (trace_flags & TRACE_ITER_TGID)
-					print_func_help_header_tgid(iter->trace_buffer, m);
-				else
-					print_func_help_header(iter->trace_buffer, m);
+				print_func_help_header(iter->trace_buffer, m);
 		}
 	}
 }
@@ -3655,53 +3601,9 @@ tracing_saved_cmdlines_read(struct file *file, char __user *ubuf,
 }
 
 static const struct file_operations tracing_saved_cmdlines_fops = {
-	.open	= tracing_open_generic,
-	.read	= tracing_saved_cmdlines_read,
-	.llseek	= generic_file_llseek,
-};
-
-static ssize_t
-tracing_saved_tgids_read(struct file *file, char __user *ubuf,
-				size_t cnt, loff_t *ppos)
-{
-	char *file_buf;
-	char *buf;
-	int len = 0;
-	int pid;
-	int i;
-
-	file_buf = kmalloc(SAVED_CMDLINES*(16+1+16), GFP_KERNEL);
-	if (!file_buf)
-		return -ENOMEM;
-
-	buf = file_buf;
-
-	for (i = 0; i < SAVED_CMDLINES; i++) {
-		int tgid;
-		int r;
-
-		pid = map_cmdline_to_pid[i];
-		if (pid == -1 || pid == NO_CMDLINE_MAP)
-			continue;
-
-		tgid = trace_find_tgid(pid);
-		r = sprintf(buf, "%d %d\n", pid, tgid);
-		buf += r;
-		len += r;
-	}
-
-	len = simple_read_from_buffer(ubuf, cnt, ppos,
-				      file_buf, len);
-
-	kfree(file_buf);
-
-	return len;
-}
-
-static const struct file_operations tracing_saved_tgids_fops = {
-	.open	= tracing_open_generic,
-	.read	= tracing_saved_tgids_read,
-	.llseek	= generic_file_llseek,
+    .open       = tracing_open_generic,
+    .read       = tracing_saved_cmdlines_read,
+    .llseek	= generic_file_llseek,
 };
 
 static ssize_t
@@ -4593,191 +4495,6 @@ tracing_free_buffer_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-#ifdef CONFIG_GATOR
-#define NUMBER_OF_ATRACE_INT    3
-#define NUM_COLOR       8
-const char * gator_enabled_atrace_int[NUMBER_OF_ATRACE_INT+1] =
-{ 
-  "FramebufferSurface",
-  "SurfaceView", 
-  "HW_VSYNC_0",
-  "END_OF_TAG"   // Must be last!!!
-};
-unsigned char channels[32768];  //max pid
-unsigned int gator_atrace_enabled;
-unsigned int color_table[NUM_COLOR]= {
-        ANNOTATE_LTGRAY,
-        ANNOTATE_DKGRAY,
-        ANNOTATE_RED,
-        ANNOTATE_BLUE,
-        ANNOTATE_GREEN,
-        ANNOTATE_PURPLE,
-        ANNOTATE_YELLOW,
-        ANNOTATE_CYAN
-};
-
-static inline int atoi(const char *str)
-{
-	int result = 0;
-	int count = 0;
-	while (str[count] != 0	/* NULL */
-		&& str[count] >= '0' && str[count] <= '9')	{
-		result = result * 10 + str[count] - '0';
-		++count;
-	}
-	return result;
-}
-
-static inline char * parse_atrace(char *buf)
-{
-        int count=0;
-        while ((buf[count]) && (buf[count] != '|'))
-                count++;
-
-        return &buf[count+1];
-}
-
-static unsigned int get_color(char * buf)
-{
-        int sum = buf[0]+buf[1]+buf[2]+buf[3];
-        return color_table[sum % NUM_COLOR ];
-}
-
-static void gator_begin(char * buf)
-{
-        int pid;
-        pid = current->pid;
-        ANNOTATE_CHANNEL_COLOR(channels[pid]++,get_color(buf), buf); 
-        return;
-}
-
-static void gator_end(void)
-{
-        int  pid = current->pid;
-        if(channels[pid] >0)
-                ANNOTATE_CHANNEL_END(--channels[pid]);
-        return;
-}
-
-static void gator_async_begin(char * buf)
-{
-        int cookie;
-        char * p1;
-
-        p1 = parse_atrace(buf);
-        cookie = atoi(p1);
-        cookie = cookie+256;    //256 is base channel for async gator
-        ANNOTATE_CHANNEL_COLOR(cookie ,get_color(buf), buf); 
-        return;
-}
-
-static void gator_async_end(char * buf)
-{
-        int cookie;
-        char * p1;
-
-        p1 = parse_atrace(buf);
-        cookie = atoi(p1);
-        cookie = cookie+256;   //256 is base channel for async gator
-        ANNOTATE_CHANNEL_END(cookie); 
-        return;
-}
-
-static void gator_counter(char * buf)
-{
-        int channel, count, index;
-        char * p1;
-
-        buf[0] = '@';
-        p1 = parse_atrace(buf);   
-
-        for(index=0; index < NUMBER_OF_ATRACE_INT; index++)
-                if(!strncmp(gator_enabled_atrace_int[index], buf+1 , 10))
-                        break;
-
-        if(index < NUMBER_OF_ATRACE_INT)
-                channel = 4000+index;  // atrace int start channel
-        else 
-                return;
-
-        count = atoi(p1);
-
-        ANNOTATE_CHANNEL_COLOR(channel, color_table[count%NUM_COLOR ], buf); 
-        return;
-}
-
-static void gator_hub(const char __user *ubuf, size_t cnt)
-{
-        char buf[80];
-        char trace_ops;
-        unsigned int pid_offset, pid;
-        if(cnt>=80)
-                cnt=79;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return ;
-       
-        trace_ops = buf[0];
-        buf[cnt]=NULL;
-        pid = current -> pid;
-
-        if(pid >= 10000)
-                pid_offset = 8;
-        else if(pid >= 1000)
-                pid_offset = 7;
-        else if (pid >= 100)
-                pid_offset = 6;
-        else
-                pid_offset = 5;
-
-        switch(trace_ops) {
-                case 'B' :
-                        gator_begin(&buf[pid_offset]);
-                        break;
-                case 'E' :
-                        gator_end();
-                        break;
-                case 'C' :
-                        gator_counter(&buf[pid_offset-1]);
-                        break;
-                case 'S' :
-                        gator_async_begin(&buf[pid_offset]);
-                        break;
-                case 'F' :
-                        gator_async_end(&buf[pid_offset]);
-                        break;
-                default :
-                        return ;
-        }
-}
-
-static ssize_t
-tracing_atrace_gator_write(struct file *filp, const char __user *ubuf, size_t cnt,
-			 loff_t *ppos)
-{
-	unsigned long val;
-	int ret;
-
-	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
-	if (ret)
-		return ret;
-
-	if (val != 0 && val != 1)
-		return -EINVAL;
-        
-        gator_atrace_enabled = val;
-        
-
-	return cnt;
-}
-
-static const struct file_operations tracing_atrace_gator = {
-	.open		= tracing_open_generic_tr,
-	.write		=  tracing_atrace_gator_write,
-	.release	= tracing_release_generic_tr,
-};
-#endif
-
 static ssize_t
 tracing_mark_write(struct file *filp, const char __user *ubuf,
 					size_t cnt, loff_t *fpos)
@@ -4798,12 +4515,6 @@ tracing_mark_write(struct file *filp, const char __user *ubuf,
 	int ret;
 	int i;
 
-#ifdef CONFIG_GATOR
-        if(gator_atrace_enabled) {    // atrace_gator
-                gator_hub(ubuf, cnt);
-                goto out;
-        }
-#endif
 	if (tracing_disabled)
 		return -EINVAL;
 
@@ -6451,18 +6162,11 @@ init_tracer_debugfs(struct trace_array *tr, struct dentry *d_tracer)
 	trace_create_file("trace_marker", 0220, d_tracer,
 			  tr, &tracing_mark_fops);
 
-	trace_create_file("saved_tgids", 0444, d_tracer,
-			  tr, &tracing_saved_tgids_fops);
-
 	trace_create_file("trace_clock", 0644, d_tracer, tr,
 			  &trace_clock_fops);
 
 	trace_create_file("tracing_on", 0644, d_tracer,
 			  tr, &rb_simple_fops);
-#ifdef CONFIG_GATOR
-	trace_create_file("atrace_gator", 0777, d_tracer,
-			  tr, &tracing_atrace_gator);
-#endif
 
 #ifdef CONFIG_TRACER_SNAPSHOT
 	trace_create_file("snapshot", 0644, d_tracer,

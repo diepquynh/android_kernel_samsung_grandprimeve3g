@@ -188,21 +188,6 @@ config KEYBOARD_GPIO
 	  To compile this driver as a module, choose M here: the
 	  module will be called gpio_keys.
 
-config KEYBOARD_GPIO_SPRD
-	tristate "GPIO Buttons SPREADTRUM"
-	depends on GPIOLIB
-	help
-	  This driver implements support for buttons connected
-	  to GPIO pins of various CPUs (and some other chips).
-
-	  Say Y here if your device has buttons connected
-	  directly to such GPIO pins.  Your board-specific
-	  setup logic must also provide a platform device,
-	  with configuration data saying which GPIOs are used.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called gpio_keys_sprd.
-
 config KEYBOARD_GPIO_POLLED
 	tristate "Polled GPIO buttons"
 	depends on GPIOLIB
@@ -655,29 +640,5 @@ config KEYBOARD_CROS_EC
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called cros_ec_keyb.
-
-config KEYBOARD_SC
-        tristate "Spreadtrum keypad support"
-        depends on ARCH_SC8825 || ARCH_SCX35
-        help
-          Say Y here if you want to use the sprd keypad.
-
-          To compile this driver as a module, choose M here: the 
-          module will be called tiger_keypad.
-
-config KEYBOARD_SPRD_EIC
-        tristate "Spreadtrum eic keyboard support"
-        default n
-        help
-          Say Y here if you want to use the sprd eic keyboard.
-
-          To compile this driver as a module, choose M here: the
-          module will be called sprd_eic_keys.
-
-config SUPPORT_TWOKEY_RESET
-	tristate "Keypad Support for Two Key Reset."
-	depends on INPUT
-	help
-	  Keypad Support for Two Key Reset. Volume Down + power Key, Which is connected to PMIC.
 
 endif

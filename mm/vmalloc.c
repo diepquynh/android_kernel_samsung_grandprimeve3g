@@ -1282,15 +1282,19 @@ void unmap_kernel_range(unsigned long addr, unsigned long size)
 	flush_tlb_kernel_range(addr, end);
 }
 
-int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page **pages)
+int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page ***pages)
 {
 	unsigned long addr = (unsigned long)area->addr;
 	unsigned long end = addr + area->size - PAGE_SIZE;
 	int err;
 
-	err = vmap_page_range(addr, end, prot, pages);
+	err = vmap_page_range(addr, end, prot, *pages);
+	if (err > 0) {
+		*pages += err;
+		err = 0;
+	}
 
-	return err > 0 ? 0 : err;
+	return err;
 }
 EXPORT_SYMBOL_GPL(map_vm_area);
 
@@ -1494,11 +1498,7 @@ static void __vunmap(const void *addr, int deallocate_pages)
 			struct page *page = area->pages[i];
 
 			BUG_ON(!page);
-#ifndef CONFIG_SPRD_PAGERECORDER
 			__free_page(page);
-#else
-			__free_page_nopagedebug(page);
-#endif
 		}
 
 		if (area->flags & VM_VPAGES)
@@ -1586,7 +1586,7 @@ void *vmap(struct page **pages, unsigned int count,
 	if (!area)
 		return NULL;
 
-	if (map_vm_area(area, prot, pages)) {
+	if (map_vm_area(area, prot, &pages)) {
 		vunmap(area->addr);
 		return NULL;
 	}
@@ -1631,11 +1631,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		gfp_t tmp_mask = gfp_mask | __GFP_NOWARN;
 
 		if (node < 0)
-#ifndef CONFIG_SPRD_PAGERECORDER
 			page = alloc_page(tmp_mask);
-#else
-			page = alloc_page_nopagedebug(tmp_mask);
-#endif
 		else
 			page = alloc_pages_node(node, tmp_mask, order);
 
@@ -1647,7 +1643,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		area->pages[i] = page;
 	}
 
-	if (map_vm_area(area, prot, pages))
+	if (map_vm_area(area, prot, &pages))
 		goto fail;
 	return area->addr;
 
@@ -2629,7 +2625,7 @@ static int s_show(struct seq_file *m, void *p)
 
 	v = va->vm;
 
-	seq_printf(m, "0x%lxK-0x%lxK %7ld",
+	seq_printf(m, "0x%pK-0x%pK %7ld",
 		v->addr, v->addr + v->size, v->size);
 
 	if (v->caller)

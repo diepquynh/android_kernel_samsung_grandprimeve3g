@@ -381,28 +381,6 @@ config HMC6352
 	  This driver provides support for the Honeywell HMC6352 compass,
 	  providing configuration and heading data via sysfs.
 
-config SENSORS_ST480
-	tristate "ST480 compass support"
-	default n
-	depends on I2C
-	help
-	  If you say yes here you get support for Senodia's
-	  orientation sensor ST480.
-
-config SENSORS_AK8963
-	tristate "AKM8963C compass support"
-	default n
-	depends on I2C
-	help
-	  If you say yes here you get support for Msensor AKM8963C.
-
-config AK8963_BYPASS_MODE
-	tristate "AKM8963C support bypass mode"
-	default n
-	depends on SENSORS_AK8963
-	help
-	  If you say yes here you will get support for bypass mode.
-
 config EP93XX_PWM
 	tristate "EP93xx PWM support"
 	depends on ARCH_EP93XX
@@ -445,10 +423,6 @@ config TI_DAC7512
 
 	  This driver can also be built as a module. If so, the module
 	  will be called ti_dac7512.
-
-config UID_STAT
-	bool "UID based statistics tracking exported to /proc/uid_stat"
-	default n
 
 config VMWARE_BALLOON
 	tristate "VMware Balloon Driver"
@@ -553,53 +527,6 @@ config SRAM
 	  the genalloc API. It is supposed to be used for small on-chip SRAM
 	  areas found on many SoCs.
 
-config SPRD_BOARD_TYPE
-	tristate "sprd board type support"
-	depends on ARM
-	default y
-	help
-	  If you say yes here you get support for get board type
-
-config SPRD_BOARD_TYPE_GPIO
-	tristate "sprd board type support GPIO"
-	depends on SPRD_BOARD_TYPE
-	default n
-	help
-	  If you say yes here you get support for get board type by gpio
-
-config SPRD_TKS_DRIVER
-        tristate "sprd ali tks driver"
-        depends on ARM64
-        default n
-        help
-          this driver is for ali secure payment alg.it communicate with secure world
-
-config CHECK_SIMSLOT_COUNT
-	bool "Dual/Single sim support"
-
-config CHECK_SIMSLOT_COUNT_GPIO
-	int "Number simslot count gpio"
-	depends on CHECK_SIMSLOT_COUNT
-	help
-		Provides Number of SS/DS detect GPIO value.
-
-source "drivers/misc/sprd_otp/Kconfig"
-source "drivers/misc/sprd_vsp/Kconfig"
-source "drivers/misc/sprd_jpg/Kconfig"
-source "drivers/misc/sprd_vpp/Kconfig"
-source "drivers/misc/sprd_coda7l/Kconfig"
-source "drivers/misc/sprd_cproc/Kconfig"
-source "drivers/misc/sprd_2351/Kconfig"
-source "drivers/misc/sprd_simdet/Kconfig"
-source "drivers/misc/gpsip/Kconfig"
-source "drivers/misc/fm_2351/Kconfig"
-
-config UID_CPUTIME
-	tristate "Per-UID cpu time statistics"
-	depends on PROFILING
-	help
-	  Per UID based cpu time statistics exported to /proc/uid_cputime
-
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -609,14 +536,4 @@ source "drivers/misc/carma/Kconfig"
 source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/mei/Kconfig"
 source "drivers/misc/vmw_vmci/Kconfig"
-source "drivers/misc/benchmark/Kconfig"
-source "drivers/misc/bootperf/Kconfig"
-source "drivers/misc/sdiodev/Kconfig"
-source "drivers/misc/mdbg/Kconfig"
-source "drivers/misc/sprd_dwnload/Kconfig"
-config SPRD_SRT_KO
-	tristate "sprd srt kernel module support"
-	depends on SPRD_SRT
-	default m
-
 endmenu

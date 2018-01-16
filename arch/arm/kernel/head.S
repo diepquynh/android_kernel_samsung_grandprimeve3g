@@ -77,7 +77,6 @@
 
 	__HEAD
 ENTRY(stext)
- ARM_BE8(setend	be )			@ ensure we are in BE8 mode
 
  THUMB(	adr	r9, BSYM(1f)	)	@ Kernel is always entered in ARM.
  THUMB(	bx	r9		)	@ If this is a Thumb-2 kernel,
@@ -139,7 +138,7 @@ ENTRY(stext)
 	mov	r8, r4				@ set TTBR1 to swapper_pg_dir
  ARM(	add	pc, r10, #PROCINFO_INITFUNC	)
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
- THUMB(	ret	r12				)
+ THUMB(	mov	pc, r12				)
 1:	b	__enable_mmu
 ENDPROC(stext)
 	.ltorg
@@ -333,7 +332,7 @@ __create_page_tables:
 #ifdef CONFIG_ARM_LPAE
 	sub	r4, r4, #0x1000		@ point to the PGD table
 #endif
-	ret	lr
+	mov	pc, lr
 ENDPROC(__create_page_tables)
 	.ltorg
 	.align
@@ -352,9 +351,6 @@ ENTRY(secondary_startup)
 	 * the processor type - there is no need to check the machine type
 	 * as it has already been validated by the primary processor.
 	 */
-
- ARM_BE8(setend	be)				@ ensure we are in BE8 mode
-
 #ifdef CONFIG_ARM_VIRT_EXT
 	bl	__hyp_stub_install_secondary
 #endif
@@ -381,7 +377,7 @@ ENTRY(secondary_startup)
  ARM(	add	pc, r10, #PROCINFO_INITFUNC	) @ initialise processor
 						  @ (return control reg)
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
- THUMB(	ret	r12				)
+ THUMB(	mov	pc, r12				)
 ENDPROC(secondary_startup)
 
 	/*
@@ -417,10 +413,10 @@ __secondary_data:
  *  r13 = *virtual* address to jump to upon completion
  */
 __enable_mmu:
-#ifdef CONFIG_ALLOW_CPU_ALIGNMENT
-	bic	r0, r0, #CR_A
+#if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
+	orr	r0, r0, #CR_A
 #else
-	orr  r0, r0, #CR_A
+	bic	r0, r0, #CR_A
 #endif
 #ifdef CONFIG_CPU_DCACHE_DISABLE
 	bic	r0, r0, #CR_C
@@ -469,7 +465,7 @@ ENTRY(__turn_mmu_on)
 	instr_sync
 	mov	r3, r3
 	mov	r3, r13
-	ret	r3
+	mov	pc, r3
 __turn_mmu_on_end:
 ENDPROC(__turn_mmu_on)
 	.popsection
@@ -488,12 +484,12 @@ __fixup_smp:
 	orr	r4, r4, #0x0000b000
 	orr	r4, r4, #0x00000020	@ val 0x4100b020
 	teq	r3, r4			@ ARM 11MPCore?
-	reteq	lr			@ yes, assume SMP
+	moveq	pc, lr			@ yes, assume SMP
 
 	mrc	p15, 0, r0, c0, c0, 5	@ read MPIDR
 	and	r0, r0, #0xc0000000	@ multiprocessing extensions and
 	teq	r0, #0x80000000		@ not part of a uniprocessor system?
-	retne	lr
+	moveq	pc, lr			@ yes, assume SMP
 
 __fixup_smp_on_up:
 	adr	r0, 1f
@@ -520,7 +516,7 @@ smp_on_up:
 	.text
 __do_fixup_smp_on_up:
 	cmp	r4, r5
-	reths	lr
+	movhs	pc, lr
 	ldmia	r4!, {r0, r6}
  ARM(	str	r6, [r0, r3]	)
  THUMB(	add	r0, r0, r3	)
@@ -588,10 +584,8 @@ __fixup_a_pv_table:
 	b	2f
 1:	add     r7, r3
 	ldrh	ip, [r7, #2]
-ARM_BE8(rev16	ip, ip)
 	and	ip, 0x8f00
 	orr	ip, r6	@ mask in offset bits 31-24
-ARM_BE8(rev16	ip, ip)
 	strh	ip, [r7, #2]
 2:	cmp	r4, r5
 	ldrcc	r7, [r4], #4	@ use branch for delay slot
@@ -600,19 +594,13 @@ ARM_BE8(rev16	ip, ip)
 #else
 	b	2f
 1:	ldr	ip, [r7, r3]
-#ifdef CONFIG_CPU_ENDIAN_BE8
-	@ in BE8, we load data in BE, but instructions still in LE
-	bic	ip, ip, #0xff000000
-	orr	ip, ip, r6, lsl#24
-#else
 	bic	ip, ip, #0x000000ff
 	orr	ip, ip, r6	@ mask in offset bits 31-24
-#endif
 	str	ip, [r7, r3]
 2:	cmp	r4, r5
 	ldrcc	r7, [r4], #4	@ use branch for delay slot
 	bcc	1b
-	ret	lr
+	mov	pc, lr
 #endif
 ENDPROC(__fixup_a_pv_table)
 

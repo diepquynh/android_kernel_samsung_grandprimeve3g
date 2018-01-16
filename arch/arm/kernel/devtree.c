@@ -220,7 +220,7 @@ struct machine_desc * __init setup_machine_fdt(unsigned int dt_phys)
 	}
 	if (!mdesc_best) {
 		const char *prop;
-		int size;
+		long size;
 
 		early_print("\nError: unrecognized/unsupported "
 			    "device tree compatible list:\n[ ");

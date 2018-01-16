@@ -14,12 +14,12 @@ struct timer_list {
 	 * All fields that change during normal runtime grouped to the
 	 * same cacheline
 	 */
-	void (*function)(unsigned long);
-	unsigned long data;
-
 	struct list_head entry;
 	unsigned long expires;
 	struct tvec_base *base;
+
+	void (*function)(unsigned long);
+	unsigned long data;
 
 	int slack;
 

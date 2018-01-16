@@ -49,7 +49,6 @@
 #include <linux/rmap.h>
 #include <linux/export.h>
 #include <linux/delayacct.h>
-#include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/writeback.h>
 #include <linux/memcontrol.h>
@@ -118,8 +117,6 @@ __setup("norandmaps", disable_randmaps);
 
 unsigned long zero_pfn __read_mostly;
 unsigned long highest_memmap_pfn __read_mostly;
-
-EXPORT_SYMBOL(zero_pfn);
 
 /*
  * CONFIG_MMU architectures set up ZERO_PAGE in their paging_init()
@@ -194,11 +191,7 @@ static int tlb_next_batch(struct mmu_gather *tlb)
 	if (tlb->batch_count == MAX_GATHER_BATCH_COUNT)
 		return 0;
 
-#ifndef CONFIG_SPRD_PAGERECORDER
 	batch = (void *)__get_free_pages(GFP_NOWAIT | __GFP_NOWARN, 0);
-#else
-	batch = (void *)__get_free_pages_nopagedebug(GFP_NOWAIT | __GFP_NOWARN, 0);
-#endif
 	if (!batch)
 		return 0;
 
@@ -3015,14 +3008,6 @@ void unmap_mapping_range(struct address_space *mapping,
 }
 EXPORT_SYMBOL(unmap_mapping_range);
 
-#ifdef CONFIG_ZRAM
-#include <linux/module.h>
-// always try to free swap in zram swap case
-static int keep_to_free_swap = 1;
-module_param_named(keep_to_free_swap,keep_to_free_swap, int, S_IRUGO | S_IWUSR);
-#endif
-
-
 /*
  * We enter with non-exclusive mmap_sem (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
@@ -3047,16 +3032,6 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	entry = pte_to_swp_entry(orig_pte);
 	if (unlikely(non_swap_entry(entry))) {
 		if (is_migration_entry(entry)) {
-#ifdef CONFIG_CMA
-			/*
-			 * FIXME: mszyprow: cruel, brute-force method for
-			 * letting cma/migration to finish it's job without
-			 * stealing the lock migration_entry_wait() and creating
-			 * a live-lock on the faulted page
-			 * (page->_count == 2 migration failure issue)
-			 */
-			mdelay(10);
-#endif
 			migration_entry_wait(mm, pmd, address);
 		} else if (is_hwpoison_entry(entry)) {
 			ret = VM_FAULT_HWPOISON;
@@ -3173,12 +3148,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	mem_cgroup_commit_charge_swapin(page, ptr);
 
 	swap_free(entry);
-
-#ifdef CONFIG_ZRAM
-	if (keep_to_free_swap || vm_swap_full() || (vma->vm_flags & VM_LOCKED) || PageMlocked(page))
-#else
 	if (vm_swap_full() || (vma->vm_flags & VM_LOCKED) || PageMlocked(page))
-#endif
 		try_to_free_swap(page);
 	unlock_page(page);
 	if (page != swapcache) {

@@ -44,11 +44,6 @@ config CPU_FREQ_STAT_DETAILS
 	  system.
 
 	  If in doubt, say N.
-config CPU_FREQ_LIMIT
-	bool "CPU frequency limit API"
-	default n
-	help
-	  This driver supports API to limit CPU frequency.
 
 choice
 	prompt "Default CPUFreq governor"
@@ -107,37 +102,6 @@ config CPU_FREQ_DEFAULT_GOV_CONSERVATIVE
 	  Be aware that not all cpufreq drivers support the conservative
 	  governor. If unsure have a look at the help section of the
 	  driver. Fallback governor will be the performance governor.
-
-config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
-	bool "interactive"
-	select CPU_FREQ_GOV_INTERACTIVE
-	help
-	  Use the CPUFreq governor 'interactive' as default. This allows
-	  you to get a full dynamic cpu frequency capable system by simply
-	  loading your cpufreq low-level hardware driver, using the
-	  'interactive' governor for latency-sensitive workloads.
-
-config CPU_FREQ_DEFAULT_GOV_SPRDEMAND
-	bool "sprdemand"
-	select CPU_FREQ_GOV_SPRDEMAND
-	select CPU_FREQ_GOV_PERFORMANCE
-	help
-	  Use the CPUFreq governor 'sprdemand' as default. This allows
-	  you to get a full dynamic frequency capable system by simply
-	  loading your cpufreq low-level hardware driver.
-	  Be aware that not all cpufreq drivers support the ondemand
-	  governor. If unsure have a look at the help section of the
-	  driver. Fallback governor will be the performance governor.
-
-config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
-	bool "intelliactive"
-	select CPU_FREQ_GOV_INTELLIACTIVE
-	help
-	  Use the CPUFreq governor 'intelliactive' as default. This allows
-	  you to get a full dynamic cpu frequency capable system by simply
-	  loading your cpufreq low-level hardware driver, using the
-	  'interactive' governor for latency-sensitive workloads.
-
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -162,6 +126,21 @@ config CPU_FREQ_GOV_POWERSAVE
 
 	  If in doubt, say Y.
 
+config CPU_FREQ_GOV_USERSPACE
+	tristate "'userspace' governor for userspace frequency scaling"
+	help
+	  Enable this cpufreq governor when you either want to set the
+	  CPU frequency manually or when a userspace program shall
+	  be able to set the CPU dynamically, like on LART 
+	  <http://www.lartmaker.nl/>.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_userspace.
+
+	  For details, take a look at <file:Documentation/cpu-freq/>.
+
+	  If in doubt, say Y.
+
 config CPU_FREQ_GOV_ONDEMAND
 	tristate "'ondemand' cpufreq policy governor"
 	select CPU_FREQ_TABLE
@@ -176,24 +155,6 @@ config CPU_FREQ_GOV_ONDEMAND
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called cpufreq_ondemand.
-
-	  For details, take a look at linux/Documentation/cpu-freq.
-
-	  If in doubt, say N.
-
-config CPU_FREQ_GOV_INTERACTIVE
-	tristate "'interactive' cpufreq policy governor"
-	default n
-	help
-	  'interactive' - This driver adds a dynamic cpufreq policy governor
-	  designed for latency-sensitive workloads.
-
-	  This governor attempts to reduce the latency of clock
-	  increases so that the system is more responsive to
-	  interactive workloads.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_interactive.
 
 	  For details, take a look at linux/Documentation/cpu-freq.
 
@@ -223,45 +184,6 @@ config CPU_FREQ_GOV_CONSERVATIVE
 
 	  If in doubt, say N.
 
-config CPU_FREQ_GOV_SPRDEMAND
-	tristate "'sprdemand' cpufreq policy governor"
-	select CPU_FREQ_TABLE
-	select CPU_FREQ_GOV_COMMON
-	help
-	  'sprdemand' - this driver mimics the frequency scaling behavior
-	  in 'ondemand', but with some key differences. 'sprdemand' will
-	  offline auxillary CPUs when the system is idle, and online those
-	  CPUs once the system becomes busy again. This last feature is needed for
-	  architectures which transition to low power states when only
-	  the "master" CPU is online, or for thermally constrained
-	  devices.
-
-	  If you don't have one of these architectures or devices, use
-	  'ondemand' instead.
-
-config DVFS_ONLY
-	bool "USE DVFS ONLY WHEN SPRDEMAND IS ON DUTY"
-	default n
-	help
-	  USE DVFS ONLY WHEN SPRDEMAND IS ON DUTY
-
-config CPU_FREQ_GOV_INTELLIACTIVE
-	tristate "'intelliactive' cpufreq policy governor"
-	help
-	  'intelliactive' - This driver adds a dynamic cpufreq policy governor
-	  designed for latency-sensitive workloads.
-
-	  This governor attempts to reduce the latency of clock
-	  increases so that the system is more responsive to
-	  interactive workloads.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_interactive.
-
-	  For details, take a look at linux/Documentation/cpu-freq.
-
-	  If in doubt, say N.
-	  
 config GENERIC_CPUFREQ_CPU0
 	tristate "Generic CPU0 cpufreq driver"
 	depends on HAVE_CLK && REGULATOR && PM_OPP && OF
@@ -273,20 +195,13 @@ config GENERIC_CPUFREQ_CPU0
 
 	  If in doubt, say N.
 
-config SCX35_1300MHZ
-        bool "SCX35 1300MHZ"
-        depends on ARCH_SCX35
-        default n
-        help
-          enable the 1300MHZ
-
 menu "x86 CPU frequency scaling drivers"
 depends on X86
 source "drivers/cpufreq/Kconfig.x86"
 endmenu
 
 menu "ARM CPU frequency scaling drivers"
-depends on ARM || ARM64
+depends on ARM
 source "drivers/cpufreq/Kconfig.arm"
 endmenu
 

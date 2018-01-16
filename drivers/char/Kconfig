@@ -6,19 +6,6 @@ menu "Character devices"
 
 source "drivers/tty/Kconfig"
 
-config DEVMEM
-	bool "Memory device driver"
-	default y
-	help
-	  The memory driver provides two character devices, mem and kmem, which
-	  provide access to the system's memory. The mem device is a view of
-	  physical memory, and each byte in the device corresponds to the
-	  matching physical address. The kmem device is the same as mem, but
-	  the addresses correspond to the kernel's virtual address space rather
-	  than physical memory. These devices are standard parts of a Linux
-	  system and most users should say Y here. You might say N if very
-	  security conscience or memory is tight.
-
 config DEVKMEM
 	bool "/dev/kmem virtual device support"
 	default y
@@ -63,25 +50,6 @@ config SGI_MBCS
          say Y or M here, otherwise say N.
 
 source "drivers/tty/serial/Kconfig"
-
-config TS0710_MUX_ENABLE
-    bool "Enable Spreadtrum ts0710 mux driver"
-    default n
-    help
-      This driver is used to support spreadtrum ts0710 mux.
-
-config MODEM_INTF
-        bool "MODEM interface"
-        default n
-        help
-          This module supports to connect AP with CP by SPI or SDIO bus.
-
-config MUX_SDIO_OPT1_HAL
-        bool "MUX SDIO OPT1 HAL"
-        default n
-        help
-          This module supports to connect AP with CP use SDIO bus.And
-	  will support the SDIO transfer option "DMA_OPT_1".
 
 config TTY_PRINTK
 	bool "TTY driver to output user messages via printk"
@@ -616,10 +584,6 @@ config DEVPORT
 	depends on ISA || PCI
 	default y
 
-config DCC_TTY
-	tristate "DCC tty driver"
-	depends on ARM
-
 source "drivers/s390/char/Kconfig"
 
 config MSM_SMD_PKT
@@ -640,26 +604,6 @@ config TILE_SROM
 	  in /dev/srom/.  The Tilera hypervisor makes the flash
 	  device appear much like a simple EEPROM, and knows
 	  how to partition a single ROM for multiple purposes.
-
-config MUX_SPI_HAL
-        bool "MUX SPI HAL"
-        default n
-        help
-          This module supports to connect AP with CP use SPI bus.
-
-config FRANDOM
-	tristate "Frandom RNG driver"
-	help
-	  Frandom is a Linux kernel random number generator, which is 
-	  10-50 times faster than what you get from Linux' built-in 
-	  /dev/urandom. And it uses very little (/dev/frandom) or 
-	  none (/dev/erandom) of the kernel's entropy pool, so it is
-	  very useful for applications that require a handy source for
-	  lots of random data.
-
-	  http://www.billauer.co.il/frandom.html
-
-	  If unsure here, select N.
 
 endmenu
 

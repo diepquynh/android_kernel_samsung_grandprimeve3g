@@ -45,16 +45,6 @@
 #include <asm/smp_plat.h>
 #include <asm/virt.h>
 #include <asm/mach/arch.h>
-#define CREATE_TRACE_POINTS
-#include <trace/events/arm-ipi.h>
-
-#ifdef CONFIG_SPRD_DEBUG
-#include <soc/sprd/sprd_debug.h>
-#endif
-
-#if defined(CONFIG_SEC_DEBUG_SCHED_LOG) || defined(CONFIG_SEC_DEBUG)
-#include <soc/sprd/sec_debug.h>
-#endif
 
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
@@ -76,8 +66,6 @@ enum ipi_msg_type {
 	IPI_CALL_FUNC,
 	IPI_CALL_FUNC_SINGLE,
 	IPI_CPU_STOP,
-	IPI_CPU_BACKTRACE,
-	IPI_COMPLETION,
 };
 
 static DECLARE_COMPLETION(cpu_running);
@@ -99,8 +87,8 @@ int __cpuinit __cpu_up(unsigned int cpu, struct task_struct *idle)
 	 * its stack and the page tables.
 	 */
 	secondary_data.stack = task_stack_page(idle) + THREAD_START_SP;
-	secondary_data.pgdir = virt_to_idmap(idmap_pgd);
-	secondary_data.swapper_pg_dir = virt_to_idmap(swapper_pg_dir);
+	secondary_data.pgdir = virt_to_phys(idmap_pgd);
+	secondary_data.swapper_pg_dir = virt_to_phys(swapper_pg_dir);
 	__cpuc_flush_dcache_area(&secondary_data, sizeof(secondary_data));
 	outer_clean_range(__pa(&secondary_data), __pa(&secondary_data + 1));
 
@@ -475,8 +463,6 @@ static const char *ipi_types[NR_IPI] = {
 	S(IPI_CALL_FUNC, "Function call interrupts"),
 	S(IPI_CALL_FUNC_SINGLE, "Single function call interrupts"),
 	S(IPI_CPU_STOP, "CPU stop interrupts"),
-	S(IPI_CPU_BACKTRACE, "CPU backtrace"),
-	S(IPI_COMPLETION, "completion interrupts"),
 };
 
 void show_ipi_list(struct seq_file *p, int prec)
@@ -590,9 +576,6 @@ static void ipi_cpu_stop(unsigned int cpu)
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
-#ifdef CONFIG_SEC_DEBUG
-		sec_debug_dump_stack();
-#endif
 		raw_spin_unlock(&stop_lock);
 	}
 
@@ -605,70 +588,6 @@ static void ipi_cpu_stop(unsigned int cpu)
 		cpu_relax();
 }
 
-static cpumask_t backtrace_mask;
-static DEFINE_RAW_SPINLOCK(backtrace_lock);
-
-/* "in progress" flag of arch_trigger_all_cpu_backtrace */
-static unsigned long backtrace_flag;
-
-void smp_send_all_cpu_backtrace(void)
-{
-	unsigned int this_cpu = smp_processor_id();
-	int i;
-
-	if (test_and_set_bit(0, &backtrace_flag))
-		/*
-		 * If there is already a trigger_all_cpu_backtrace() in progress
-		 * (backtrace_flag == 1), don't output double cpu dump infos.
-		 */
-		return;
-
-	cpumask_copy(&backtrace_mask, cpu_online_mask);
-	cpu_clear(this_cpu, backtrace_mask);
-
-	pr_info("Backtrace for cpu %d (current):\n", this_cpu);
-	dump_stack();
-
-	pr_info("\nsending IPI to all other CPUs:\n");
-	smp_cross_call(&backtrace_mask, IPI_CPU_BACKTRACE);
-
-	/* Wait for up to 10 seconds for all other CPUs to do the backtrace */
-	for (i = 0; i < 10 * 1000; i++) {
-		if (cpumask_empty(&backtrace_mask))
-			break;
-		mdelay(1);
-	}
-
-	clear_bit(0, &backtrace_flag);
-	smp_mb__after_clear_bit();
-}
-
-/*
- * ipi_cpu_backtrace - handle IPI from smp_send_all_cpu_backtrace()
- */
-static void ipi_cpu_backtrace(unsigned int cpu, struct pt_regs *regs)
-{
-	if (cpu_isset(cpu, backtrace_mask)) {
-		raw_spin_lock(&backtrace_lock);
-		pr_warning("IPI backtrace for cpu %d\n", cpu);
-		show_regs(regs);
-		raw_spin_unlock(&backtrace_lock);
-		cpu_clear(cpu, backtrace_mask);
-	}
-}
-static DEFINE_PER_CPU(struct completion *, cpu_completion);
-
-int register_ipi_completion(struct completion *completion, int cpu)
-{
-	per_cpu(cpu_completion, cpu) = completion;
-	return IPI_COMPLETION;
-}
-
-static void ipi_complete(unsigned int cpu)
-{
-	complete(per_cpu(cpu_completion, cpu));
-}
-
 /*
  * Main handler for inter-processor interrupts
  */
@@ -677,12 +596,6 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 	handle_IPI(ipinr, regs);
 }
 
-#ifdef CONFIG_SPRD_SYSDUMP
-		extern void sysdump_ipi(struct pt_regs *regs);
-#endif
-#ifdef CONFIG_SEC_DEBUG
-extern void sec_debug_backup_ctx(struct pt_regs *regs);
-#endif
 void handle_IPI(int ipinr, struct pt_regs *regs)
 {
 	unsigned int cpu = smp_processor_id();
@@ -691,14 +604,6 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	if (ipinr < NR_IPI)
 		__inc_irq_stat(cpu, ipi_irqs[ipinr]);
 
-#ifdef CONFIG_SPRD_DEBUG
-	sprd_debug_irq_log(ipinr, do_IPI, 1);
-#endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
-	sec_debug_irq_log(ipinr, do_IPI, 1);
-#endif
-
-	trace_arm_ipi_entry(ipinr);
 	switch (ipinr) {
 	case IPI_WAKEUP:
 		break;
@@ -729,23 +634,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 	case IPI_CPU_STOP:
 		irq_enter();
-#ifdef CONFIG_SPRD_SYSDUMP
-		sysdump_ipi(regs);
-#endif
-#ifdef CONFIG_SEC_DEBUG
-		sec_debug_backup_ctx(regs);
-#endif
 		ipi_cpu_stop(cpu);
-		irq_exit();
-		break;
-
-	case IPI_CPU_BACKTRACE:
-		ipi_cpu_backtrace(cpu, regs);
-		break;
-
-	case IPI_COMPLETION:
-		irq_enter();
-		ipi_complete(cpu);
 		irq_exit();
 		break;
 
@@ -754,15 +643,6 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		       cpu, ipinr);
 		break;
 	}
-
-#ifdef CONFIG_SPRD_DEBUG
-	sprd_debug_irq_log(ipinr, do_IPI, 2);
-#endif
-#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
-	sec_debug_irq_log(ipinr, do_IPI, 2);
-#endif
-
-	trace_arm_ipi_exit(ipinr);
 	set_irq_regs(old_regs);
 }
 
@@ -782,9 +662,9 @@ void smp_send_stop(void)
 		smp_cross_call(&mask, IPI_CPU_STOP);
 
 	/* Wait up to one second for other CPUs to stop */
-	timeout = MSEC_PER_SEC;
-	while (num_active_cpus() > 1 && timeout--)
-		mdelay(1);
+	timeout = USEC_PER_SEC;
+	while (num_online_cpus() > 1 && timeout--)
+		udelay(1);
 
 	if (num_online_cpus() > 1)
 		pr_warning("SMP: failed to stop secondary CPUs\n");

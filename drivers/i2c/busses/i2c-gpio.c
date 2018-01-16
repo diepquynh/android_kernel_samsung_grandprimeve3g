@@ -130,7 +130,6 @@ static int i2c_gpio_probe(struct platform_device *pdev)
 	unsigned int sda_pin, scl_pin;
 	int ret;
 
-
 	/* First get the GPIO pins; if it fails, we'll defer the probe. */
 	if (pdev->dev.of_node) {
 		ret = of_i2c_gpio_get_pins(pdev->dev.of_node,
@@ -214,12 +213,6 @@ static int i2c_gpio_probe(struct platform_device *pdev)
 		strlcpy(adap->name, dev_name(&pdev->dev), sizeof(adap->name));
 	else
 		snprintf(adap->name, sizeof(adap->name), "i2c-gpio%d", pdev->id);
-
-#ifdef CONFIG_OF
-	if (pdev->dev.of_node) {
-		pdev->id = of_alias_get_id(pdev->dev.of_node, "i2c_gpio");
-	}
-#endif
 
 	adap->algo_data = bit_data;
 	adap->class = I2C_CLASS_HWMON | I2C_CLASS_SPD;

@@ -205,7 +205,6 @@ struct pde_opener {
 extern const struct inode_operations proc_link_inode_operations;
 
 extern const struct inode_operations proc_pid_link_inode_operations;
-extern const struct file_operations proc_reclaim_operations;
 
 extern void proc_init_inodecache(void);
 extern struct inode *proc_get_inode(struct super_block *, struct proc_dir_entry *);
@@ -281,21 +280,6 @@ struct proc_maps_private {
 #endif
 #ifdef CONFIG_NUMA
 	struct mempolicy *task_mempolicy;
-#endif
-#ifdef CONFIG_SPRD_DEBUG_MORE_SMAPS_INFO
-	u64 rss;            /* sum of Rss == filecache_rss + anonymous_rss*/
-	u64 pss;            /* sum of Pss == filecache_pss + anonymous_pss*/
-	u64 uss;            /* sum of Uss == filecache_uss + anonymous_uss*/
-	u64 filecache_rss;  /* sum of page_is_file_cache Rss*/
-	u64 anonymous_rss;  /* sum of PageAnon Rss*/
-	u64 filecache_pss;  /* sum of page_is_file_cache Pss */
-	u64 anonymous_pss;  /* sum of PageAnon Pss */
-	u64 filecache_uss;  /* sum of page_is_file_cache Uss */
-	u64 anonymous_uss;  /* sum of PageAnon Uss */
-	u64 swap;           /* sum of Swap for PageAnon */
-	u64 pswap;          /* sum of Pswap for PageAnon */
-	u64 anonymous_uswap;/* sum of Uswap for PageAnon */
-	bool is_last;
 #endif
 };
 

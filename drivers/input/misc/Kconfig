@@ -299,17 +299,6 @@ config INPUT_ATI_REMOTE2
 	  To compile this driver as a module, choose M here: the module will be
 	  called ati_remote2.
 
-config INPUT_KEYCHORD
-	tristate "Key chord input driver support"
-	help
-	  Say Y here if you want to enable the key chord driver
-	  accessible at /dev/keychord.  This driver can be used
-	  for receiving notifications when client specified key
-	  combinations are pressed.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called keychord.
-
 config INPUT_KEYSPAN_REMOTE
 	tristate "Keyspan DMR USB remote control"
 	depends on USB_ARCH_HAS_HCD
@@ -444,11 +433,6 @@ config INPUT_SGI_BTNS
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called sgi_btns.
-
-config INPUT_GPIO
-	tristate "GPIO driver support"
-	help
-	  Say Y here if you want to support gpio based keys, wheels etc...
 
 config HP_SDC_RTC
 	tristate "HP SDC Real Time Clock"
@@ -653,87 +637,4 @@ config INPUT_XEN_KBDDEV_FRONTEND
 	  To compile this driver as a module, choose M here: the
 	  module will be called xen-kbdfront.
 
-config INPUT_HEADSET_SPRD_SC2723
-     tristate "SPRD SC2723 builtin headset & button detect driver"
-     default n
-     help
-       Say Y here if you are using SPRD platform.
-
-       To compile this driver as a module, choose M here: the
-       module will be called headset.
-
-config INPUT_SPRD_HEADSET_SHARK
-     tristate "SPRD platform builtin headset & button detect driver"
-     help
-       Say Y here if you are using SPRD platform.
-
-       To compile this driver as a module, choose M here: the
-       module will be called headset.
-
-config  HEADSET_KEY_VOLUME_SUPPORTED
-	bool "HEADSET_KEY_VOLUME_SUPPORTED"
-	depends on INPUT_SPRD_HEADSET_SHARK
-	help
-	  Say Y to enable HEADSET_KEY_VOLUME_SUPPORT.
-
-config  HEADSET_EXTERNAL_HEADMICBIAS_POWER_SUPPORTED
-	bool "HEADSET_EXTERNAL_HEADMICBIAS_POWER_SUPPORTED"
-	depends on INPUT_SPRD_HEADSET_SHARK
-	help
-	  Say Y to enable HEADSET_EXTERNAL_HEADMICBIAS_POWER_SUPPORT.
-
-config  HEADSET_STS_POLLING_DISABLED
-	bool "HEADSET_STS_POLLING_DISABLED"
-	depends on INPUT_SPRD_HEADSET_SHARK
-	help
-	  Say Y to disable HEADSET_STS_POLLING.
-
-config INPUT_LIS3DH_I2C
-	tristate "ST lid3dh 3-Axid accelerometer device with I2C bus"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a lis3dh device on the board and use I2C
-	  communication, else say N.
-
-	  To compile this driver as a module, choose M here.
-
-config INPUT_LIS3DH_ZT_I2C
-	tristate "ST lid3dh_zt 3-Axid accelerometer device with I2C bus"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a lis3dh_zt device on the board and use I2C
-	  communication, else say N.
-
-	  To compile this driver as a module, choose M here.
-
-config INPUT_LTR558_I2C
-	tristate "LTR558 proximity and light sensor device with I2C bus"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a LTR558 device on the board and use I2C
-	  communication, else say N.
-
-	  To compile this driver as a module, choose M here.
-config INPUT_EPL2182_I2C
-	tristate "epl2182 proximity and light sensor device with I2C bus"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a epl2182 device on the board and use I2C
-	  communication, else say N.
-
-	  To compile this driver as a module, choose M here.
-
-config INPUT_EPL259X_I2C
-	tristate "epl259x proximity and light sensor device with I2C bus"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a epl259x device on the board and use I2C
-	  communication, else say N.
-
-	  To compile this driver as a module, choose M here.
 endif

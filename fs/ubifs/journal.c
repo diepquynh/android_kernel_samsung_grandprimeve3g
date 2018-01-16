@@ -692,7 +692,7 @@ out_ro:
 int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len)
 {
-	struct ubifs_data_node *data = NULL;
+	struct ubifs_data_node *data;
 	int err, lnum, offs, compr_type, out_len;
 	int dlen = COMPRESSED_DATA_NODE_BUF_SZ, allocated = 1;
 	struct ubifs_inode *ui = ubifs_inode(inode);
@@ -701,7 +701,7 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 		(unsigned long)key_inum(c, key), key_block(c, key), len);
 	ubifs_assert(len <= UBIFS_BLOCK_SIZE);
 
-	//data = kmalloc(dlen, GFP_NOFS | __GFP_NOWARN);
+	data = kmalloc(dlen, GFP_NOFS | __GFP_NOWARN);
 	if (!data) {
 		/*
 		 * Fall-back to the write reserve buffer. Note, we might be
@@ -1159,7 +1159,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 
 	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ +
 	     UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
-	ino = __vmalloc(sz, GFP_NOFS, PAGE_KERNEL);
+	ino = kmalloc(sz, GFP_NOFS);
 	if (!ino)
 		return -ENOMEM;
 
@@ -1254,7 +1254,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	ui->synced_i_size = ui->ui_size;
 	spin_unlock(&ui->ui_lock);
 	mark_inode_clean(c, ui);
-	vfree(ino);
+	kfree(ino);
 	return 0;
 
 out_release:
@@ -1263,7 +1263,7 @@ out_ro:
 	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
-	vfree(ino);
+	kfree(ino);
 	return err;
 }
 

@@ -19,23 +19,6 @@
 
 #define lzo1x_worst_compress(x) ((x) + ((x) / 16) + 64 + 3)
 
-#if defined(CONFIG_LZO_HW_ALGO)
-
-/* This requires 'wrkmem' of size LZO1X_1_MEM_COMPRESS */
-int lzo1x_1_compress_hw(const unsigned char *src, size_t src_len,
-		     unsigned char *dst, size_t *dst_len, void *wrkmem);
-
-/* safe decompression with overrun testing */
-int lzo1x_decompress_safe_hw(const unsigned char *src, size_t src_len,
-			  unsigned char *dst, size_t *dst_len);
-
-#define LZO_HW_OK			(0)
-#define LZO_HW_IN_PARA_ERROR		(-1)
-#define LZO_HW_ERROR			(-2)
-#define LZO_HW_OUT_LEN_ERROR		(-3)
-#define LZO_OTHER_ERROR			(-4)
-#endif
-
 /* This requires 'wrkmem' of size LZO1X_1_MEM_COMPRESS */
 int lzo1x_1_compress(const unsigned char *src, size_t src_len,
 		     unsigned char *dst, size_t *dst_len, void *wrkmem);

@@ -25,22 +25,8 @@ static LIST_HEAD(clocks);
 static DEFINE_MUTEX(clocks_mutex);
 
 #if defined(CONFIG_OF) && defined(CONFIG_COMMON_CLK)
-
-static struct clk_lookup *clk_find(const char *dev_id, const char *con_id);
-
 struct clk *of_clk_get(struct device_node *np, int index)
 {
-#ifdef CONFIG_SC_FPGA
-	struct clk_lookup *cl;
-
-        mutex_lock(&clocks_mutex);
-        cl = clk_find(NULL, "ext_26m");
-        if (cl && !__clk_get(cl->clk))
-                cl = NULL;
-        mutex_unlock(&clocks_mutex);
-
-        return cl ? cl->clk : ERR_PTR(-ENOENT);
-#else
 	struct of_phandle_args clkspec;
 	struct clk *clk;
 	int rc;
@@ -56,7 +42,6 @@ struct clk *of_clk_get(struct device_node *np, int index)
 	clk = of_clk_get_from_provider(&clkspec);
 	of_node_put(clkspec.np);
 	return clk;
-#endif
 }
 EXPORT_SYMBOL(of_clk_get);
 
@@ -156,11 +141,7 @@ struct clk *clk_get_sys(const char *dev_id, const char *con_id)
 	struct clk_lookup *cl;
 
 	mutex_lock(&clocks_mutex);
-#ifndef CONFIG_SC_FPGA
 	cl = clk_find(dev_id, con_id);
-#else
-	cl = clk_find(NULL, "ext_26m");
-#endif
 	if (cl && !__clk_get(cl->clk))
 		cl = NULL;
 	mutex_unlock(&clocks_mutex);

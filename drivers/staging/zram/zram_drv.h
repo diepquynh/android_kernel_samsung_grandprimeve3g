@@ -17,7 +17,8 @@
 
 #include <linux/spinlock.h>
 #include <linux/mutex.h>
-#include <linux/zsmalloc.h>
+
+#include "../zsmalloc/zsmalloc.h"
 
 /*
  * Some arbitrary value. This is just to catch
@@ -92,8 +93,9 @@ struct zram_meta {
 struct zram {
 	struct zram_meta *meta;
 	spinlock_t stat64_lock;	/* protect 64-bit stats */
-	struct rw_semaphore lock; /* protect compression buffers and table
-				   * against concurrent read and writes */
+	struct rw_semaphore lock; /* protect compression buffers, table,
+				   * 32bit stat counters against concurrent
+				   * notifications, reads and writes */
 	struct request_queue *queue;
 	struct gendisk *disk;
 	int init_done;

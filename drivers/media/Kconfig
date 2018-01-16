@@ -18,16 +18,6 @@ comment "Multimedia core support"
 #
 # Multimedia support - automatically enable V4L2 and DVB core
 #
-
-source "drivers/media/sprd_gsp/Kconfig"
-config VIDEO_DCAM_SPRD
-	tristate "SPRD DCAM driver"
-	select VIDEOBUF_VMALLOC
-	help
-	  Support digital camera for SPRD
-
-source "drivers/media/sprd_dcam/Kconfig"
-
 config MEDIA_CAMERA_SUPPORT
 	bool "Cameras/video grabbers support"
 	---help---
@@ -208,9 +198,5 @@ config MEDIA_ATTACH
 source "drivers/media/i2c/Kconfig"
 source "drivers/media/tuners/Kconfig"
 source "drivers/media/dvb-frontends/Kconfig"
-
-# MTV drivers
-#
-source "drivers/media/mtv/Kconfig"
 
 endif # MEDIA_SUPPORT

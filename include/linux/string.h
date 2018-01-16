@@ -52,9 +52,6 @@ extern int strncasecmp(const char *s1, const char *s2, size_t n);
 #ifndef __HAVE_ARCH_STRCHR
 extern char * strchr(const char *,int);
 #endif
-#ifndef __HAVE_ARCH_STRCHRNUL
-extern char * strchrnul(const char *,int);
-#endif
 #ifndef __HAVE_ARCH_STRNCHR
 extern char * strnchr(const char *, size_t, int);
 #endif
@@ -109,10 +106,6 @@ extern void * memscan(void *,int,__kernel_size_t);
 #endif
 #ifndef __HAVE_ARCH_MEMCMP
 extern int memcmp(const void *,const void *,__kernel_size_t);
-#ifdef CONFIG_KSM_ASSEMBLY_MEMCMP
-extern int memcmpksm(const void *,const void *,__kernel_size_t);
-#endif
-
 #endif
 #ifndef __HAVE_ARCH_MEMCHR
 extern void * memchr(const void *,int,__kernel_size_t);

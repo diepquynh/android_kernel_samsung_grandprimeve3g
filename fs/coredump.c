@@ -485,19 +485,6 @@ static int umh_pipe_setup(struct subprocess_info *info, struct cred *new)
 	return err;
 }
 
-static int s_dumpTsk = 0;
-
-int get_dumpTsk(void)
-{
-    return s_dumpTsk;
-}
-
-void set_dumpTsk(int tsk)
-{
-    s_dumpTsk = tsk;
-}
-
-
 void do_coredump(siginfo_t *siginfo)
 {
 	struct core_state core_state;
@@ -525,7 +512,6 @@ void do_coredump(siginfo_t *siginfo)
 		.mm_flags = mm->flags,
 	};
 
-	set_dumpTsk(current);
 	audit_core_dumps(siginfo->si_signo);
 
 	binfmt = mm->binfmt;
@@ -679,17 +665,15 @@ void do_coredump(siginfo_t *siginfo)
 		 */
 		if (!S_ISREG(inode->i_mode))
 			goto close_fail;
-#if 0
 		/*
 		 * Dont allow local users get cute and trick others to coredump
 		 * into their pre-created files.
 		 */
 		if (!uid_eq(inode->i_uid, current_fsuid()))
 			goto close_fail;
-#endif
 		if (!cprm.file->f_op || !cprm.file->f_op->write)
 			goto close_fail;
-		if (do_truncate2(cprm.file->f_path.mnt, cprm.file->f_path.dentry, 0, 0, cprm.file))
+		if (do_truncate(cprm.file->f_path.dentry, 0, 0, cprm.file))
 			goto close_fail;
 	}
 
@@ -720,8 +704,6 @@ fail_corename:
 fail_creds:
 	put_cred(cred);
 fail:
-	set_dumpTsk(0);
-
 	return;
 }
 

@@ -257,9 +257,6 @@ EXPORT_SYMBOL(mutex_unlock);
 /*
  * Lock a mutex (possibly interruptible), slowpath:
  */
-
-//print debug log per debug_log_cnt
-#define DEBUG_LOG_CNT_MAX	0x100000
 static inline int __sched
 __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		    struct lockdep_map *nest_lock, unsigned long ip)
@@ -267,8 +264,6 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	struct task_struct *task = current;
 	struct mutex_waiter waiter;
 	unsigned long flags;
-	int cnt = INT_MAX;
-	int debug_log_cnt = 0x0;
 
 	preempt_disable();
 	mutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);
@@ -302,11 +297,6 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	for (;;) {
 		struct task_struct *owner;
 		struct mspin_node  node;
-
-		if(!(++debug_log_cnt % DEBUG_LOG_CNT_MAX))
-			printk("%s(%d): spinning is too long\n", __func__, __LINE__);
-		if(!cnt--)
-			panic("%s(%d): timeout!", __func__,__LINE__);
 
 		/*
 		 * If there's an owner, wait for it to either
@@ -348,8 +338,6 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	}
 slowpath:
 #endif
-	cnt = INT_MAX;
-	debug_log_cnt = 0x0;
 	spin_lock_mutex(&lock->wait_lock, flags);
 
 	debug_mutex_lock_common(lock, &waiter);
@@ -365,10 +353,6 @@ slowpath:
 	lock_contended(&lock->dep_map, ip);
 
 	for (;;) {
-		if(!(++debug_log_cnt % DEBUG_LOG_CNT_MAX))
-			printk("%s(%d): spinning is too long\n", __func__, __LINE__);
-		if(!cnt--)
-			panic("%s(%d): timeout!", __func__,__LINE__);
 		/*
 		 * Lets try to take the lock again - this is needed even if
 		 * we get here for the first time (shortly after failing to

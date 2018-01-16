@@ -41,10 +41,6 @@
 #include <asm/tlbflush.h>
 #include "internal.h"
 
-#ifdef CONFIG_OPTIMIZE_KSM
-#include <asm/checksum.h>
-#endif
-
 #ifdef CONFIG_NUMA
 #define NUMA(x)		(x)
 #define DO_NUMA(x)	do { (x); } while (0)
@@ -834,11 +830,7 @@ static u32 calc_checksum(struct page *page)
 {
 	u32 checksum;
 	void *addr = kmap_atomic(page);
-#ifdef CONFIG_OPTIMIZE_KSM
-	checksum = csum_partial(addr, PAGE_SIZE / 4, 17);
-#else
 	checksum = jhash2(addr, PAGE_SIZE / 4, 17);
-#endif
 	kunmap_atomic(addr);
 	return checksum;
 }
@@ -850,11 +842,7 @@ static int memcmp_pages(struct page *page1, struct page *page2)
 
 	addr1 = kmap_atomic(page1);
 	addr2 = kmap_atomic(page2);
-#ifdef CONFIG_KSM_ASSEMBLY_MEMCMP
-	ret = memcmpksm(addr1, addr2, PAGE_SIZE);
-#else
 	ret = memcmp(addr1, addr2, PAGE_SIZE);
-#endif
 	kunmap_atomic(addr2);
 	kunmap_atomic(addr1);
 	return ret;

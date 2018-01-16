@@ -6,8 +6,6 @@
 #include <linux/linkage.h>
 #include <linux/topology.h>
 #include <linux/mmdebug.h>
-#include <linux/hardirq.h>
-#include <linux/kmempagerecorder.h>
 
 struct vm_area_struct;
 
@@ -37,7 +35,6 @@ struct vm_area_struct;
 #define ___GFP_NO_KSWAPD	0x400000u
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
-#define ___GFP_CMA		0x2000000u
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -53,9 +50,7 @@ struct vm_area_struct;
 #define __GFP_HIGHMEM	((__force gfp_t)___GFP_HIGHMEM)
 #define __GFP_DMA32	((__force gfp_t)___GFP_DMA32)
 #define __GFP_MOVABLE	((__force gfp_t)___GFP_MOVABLE)  /* Page is movable */
-#define __GFP_CMA	((__force gfp_t)___GFP_CMA)
-#define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE| \
-			__GFP_CMA)
+#define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)
 /*
  * Action modifiers - doesn't change the zoning
  *
@@ -104,7 +99,7 @@ struct vm_area_struct;
  */
 #define __GFP_NOTRACK_FALSE_POSITIVE (__GFP_NOTRACK)
 
-#define __GFP_BITS_SHIFT 26	/* Room for N __GFP_FOO bits */
+#define __GFP_BITS_SHIFT 25	/* Room for N __GFP_FOO bits */
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /* This equals 0, but use constants in case they ever change */
@@ -134,7 +129,7 @@ struct vm_area_struct;
 #endif
 
 /* This mask makes up all the page movable related flags */
-#define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE|__GFP_CMA)
+#define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 
 /* Control page allocator reclaim behavior */
 #define GFP_RECLAIM_MASK (__GFP_WAIT|__GFP_HIGH|__GFP_IO|__GFP_FS|\
@@ -167,14 +162,8 @@ static inline int allocflags_to_migratetype(gfp_t gfp_flags)
 		return MIGRATE_UNMOVABLE;
 
 	/* Group based on mobility */
-#ifndef CONFIG_CMA
 	return (((gfp_flags & __GFP_MOVABLE) != 0) << 1) |
 		((gfp_flags & __GFP_RECLAIMABLE) != 0);
-#else
-	return (((gfp_flags & __GFP_MOVABLE) != 0) << 1) |
-		(((gfp_flags & __GFP_CMA) != 0) << 1) |
-		((gfp_flags & __GFP_RECLAIMABLE) != 0);
-#endif
 }
 
 #ifdef CONFIG_HIGHMEM
@@ -348,38 +337,10 @@ extern struct page *alloc_pages_vma(gfp_t gfp_mask, int order,
 			struct vm_area_struct *vma, unsigned long addr,
 			int node);
 #else
-
-#ifndef CONFIG_SPRD_PAGERECORDER
-
 #define alloc_pages(gfp_mask, order) \
 		alloc_pages_node(numa_node_id(), gfp_mask, order)
 #define alloc_pages_vma(gfp_mask, order, vma, addr, node)	\
 	alloc_pages(gfp_mask, order)
-#else // CONFIG_SPRD_PAGERECORDER
-static inline struct page *
-alloc_pages(gfp_t gfp_mask, unsigned int order)
-{
-	/* Hook to ION Debugger - for Casper */
-	struct page *tmp_page = alloc_pages_node(numa_node_id(), gfp_mask, order);
-	if(!in_interrupt())
-	{
-		record_page_record((void *)tmp_page,order);
-	}
-	else if(gfp_mask & __GFP_HIGH)
-	{
-		printk("[WARNING]can't use alloc_pages function without GFP_ATOMIC mask in interruption function!!!\n");
-	}
-	return tmp_page;
-}
-
-#define alloc_pages_vma(gfp_mask, order, vma, addr, node)	\
-		alloc_pages_nopagedebug(gfp_mask, order)
-
-#define alloc_pages_nopagedebug(gfp_mask, order) \
-		alloc_pages_node(numa_node_id(), gfp_mask, order)
-#define alloc_page_nopagedebug(gfp_mask) alloc_pages_nopagedebug(gfp_mask, 0)
-#endif // CONFIG_SPRD_PAGERECORDER
-
 #endif
 #define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 #define alloc_page_vma(gfp_mask, vma, addr)			\
@@ -388,12 +349,6 @@ alloc_pages(gfp_t gfp_mask, unsigned int order)
 	alloc_pages_vma(gfp_mask, 0, vma, addr, node)
 
 extern unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
-
-#ifdef CONFIG_SPRD_PAGERECORDER
-extern unsigned long __get_free_pages_nopagedebug(gfp_t gfp_mask, unsigned int order);
-extern unsigned long get_zeroed_page_nopagedebug(gfp_t gfp_mask);
-#endif
-
 extern unsigned long get_zeroed_page(gfp_t gfp_mask);
 
 void *alloc_pages_exact(size_t size, gfp_t gfp_mask);
@@ -404,35 +359,16 @@ void *alloc_pages_exact_nid(int nid, size_t size, gfp_t gfp_mask);
 #define __get_free_page(gfp_mask) \
 		__get_free_pages((gfp_mask), 0)
 
-#ifdef CONFIG_SPRD_PAGERECORDER
-#define __get_free_page_nopagedebug(gfp_mask) \
-		__get_free_pages_nopagedebug((gfp_mask), 0)
-#endif
-
 #define __get_dma_pages(gfp_mask, order) \
 		__get_free_pages((gfp_mask) | GFP_DMA, (order))
 
 extern void __free_pages(struct page *page, unsigned int order);
 extern void free_pages(unsigned long addr, unsigned int order);
-
-#ifdef CONFIG_SPRD_PAGERECORDER
-extern void __free_pages_nopagedebug(struct page *page, unsigned int order);
-extern void free_pages_nopagedebug(unsigned long addr, unsigned int order);
-#endif
-
 extern void free_hot_cold_page(struct page *page, int cold);
 extern void free_hot_cold_page_list(struct list_head *list, int cold);
 
-#ifdef CONFIG_SPRD_PAGERECORDER
-#define __free_page_nopagedebug(page) __free_pages_nopagedebug((page), 0)
-#define free_page_nopagedebug(addr) free_pages_nopagedebug((addr), 0)
-#endif
-
 extern void __free_memcg_kmem_pages(struct page *page, unsigned int order);
 extern void free_memcg_kmem_pages(unsigned long addr, unsigned int order);
-#ifdef CONFIG_SPRD_PAGERECORDER
-extern void __free_memcg_kmem_pages_nopagedebug(struct page *page, unsigned int order);
-#endif
 
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(addr) free_pages((addr), 0)

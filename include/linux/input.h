@@ -24,9 +24,6 @@
 #include <linux/timer.h>
 #include <linux/mod_devicetable.h>
 
-#define KEY_RECENT              254
-#define BTN_GAME                0x13f   /* Add game button for samsung bluetooth keypad */
-
 /**
  * struct input_value - input value representation
  * @type: type of value (EV_KEY, EV_ABS, etc)

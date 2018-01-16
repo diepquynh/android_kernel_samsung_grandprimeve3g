@@ -39,9 +39,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/oom.h>
 
-#define CREATE_TRACE_POINTS
-#include <trace/events/memkill.h>
-
 int sysctl_panic_on_oom;
 int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
@@ -148,8 +145,6 @@ static bool oom_unkillable_task(struct task_struct *p,
  * The heuristic for determining which task to kill is made to be as simple and
  * predictable as possible.  The goal is to return the highest value for the
  * task consuming the most memory to avoid subsequent oom failures.
- *
- * ps. we don't want to kill the process still in the uninterruptible state
  */
 unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 			  const nodemask_t *nodemask, unsigned long totalpages)
@@ -188,13 +183,6 @@ unsigned long oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	/* Normalize to oom_score_adj units */
 	adj *= totalpages / 1000;
 	points += adj;
-
-	/*
-	 * The unterruptible task cannot be killed,
-	 * which couldn't receive any signal including SIGKILL.
-	 */
-	if (p->state == TASK_UNINTERRUPTIBLE)
-		points /= 16;
 
 	/*
 	 * Never return 0 for an eligible task regardless of the root bonus and
@@ -363,7 +351,7 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
  * State information includes task's pid, uid, tgid, vm size, rss, nr_ptes,
  * swapents, oom_score_adj value, and name.
  */
-void dump_tasks(const struct mem_cgroup *memcg, const nodemask_t *nodemask)
+static void dump_tasks(const struct mem_cgroup *memcg, const nodemask_t *nodemask)
 {
 	struct task_struct *p;
 	struct task_struct *task;
@@ -414,27 +402,6 @@ static void dump_header(struct task_struct *p, gfp_t gfp_mask, int order,
 		dump_tasks(memcg, nodemask);
 }
 
-static void set_thread_group_flag(struct task_struct *p, int flag)
-{
-	struct task_struct *t;
-	/*
-	 * In some situation, a thread group member holds the mm->mmap_sem
-	 * as a writer and then blocks waiting for memory.
-	 * After that, the oom-killer chooses this particular thread group
-	 * to die to release some memory. since the mm->mmap_sem is held,
-	 * the thread group cannot finish the exit routine,
-	 * therefore no memory can be released, which leads to a deadlock
-	 * situation.
-	 * Here grants TIF_MEMDIE to all thread group members to avoid the
-	 * deadlock.
-	 */
-	rcu_read_lock();
-	for_each_thread(p, t) {
-		set_tsk_thread_flag(t, TIF_MEMDIE);
-	}
-	rcu_read_unlock();
-}
-
 /*
  * Number of OOM killer invocations (including memcg OOM killer).
  * Primarily used by PM freezer to check for potential races with
@@ -475,7 +442,7 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 	 * its children or threads, just set TIF_MEMDIE so it can die quickly
 	 */
 	if (p->flags & PF_EXITING) {
-		set_thread_group_flag(p, TIF_MEMDIE);
+		set_tsk_thread_flag(p, TIF_MEMDIE);
 		put_task_struct(p);
 		return;
 	}
@@ -532,11 +499,6 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 		task_pid_nr(victim), victim->comm, K(victim->mm->total_vm),
 		K(get_mm_counter(victim->mm, MM_ANONPAGES)),
 		K(get_mm_counter(victim->mm, MM_FILEPAGES)));
-	trace_oom_kill(
-		task_pid_nr(victim), victim->comm, K(victim->mm->total_vm),
-		K(get_mm_counter(victim->mm, MM_ANONPAGES)),
-		K(get_mm_counter(victim->mm, MM_FILEPAGES)),
-		victim->signal->oom_score_adj, order, victim_points);
 	task_unlock(victim);
 
 	/*
@@ -558,14 +520,12 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 			task_lock(p);	/* Protect ->comm from prctl() */
 			pr_err("Kill process %d (%s) sharing same memory\n",
 				task_pid_nr(p), p->comm);
-			trace_oom_kill_shared(
-				task_pid_nr(p), p->comm);
 			task_unlock(p);
 			do_send_sig_info(SIGKILL, SEND_SIG_FORCED, p, true);
 		}
 	rcu_read_unlock();
 
-	set_thread_group_flag(victim, TIF_MEMDIE);
+	set_tsk_thread_flag(victim, TIF_MEMDIE);
 	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, victim, true);
 	put_task_struct(victim);
 }
@@ -692,7 +652,7 @@ void out_of_memory(struct zonelist *zonelist, gfp_t gfp_mask,
 	 * quickly exit and free its memory.
 	 */
 	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
-		set_thread_group_flag(current, TIF_MEMDIE);
+		set_thread_flag(TIF_MEMDIE);
 		return;
 	}
 

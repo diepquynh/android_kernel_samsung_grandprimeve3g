@@ -11,7 +11,7 @@
  *
  * Project home: http://compcache.googlecode.com/
  */
-#include <linux/module.h>
+
 #include <linux/device.h>
 #include <linux/genhd.h>
 #include <linux/mm.h>
@@ -190,85 +190,11 @@ static ssize_t mem_used_total_show(struct device *dev,
 
 	down_read(&zram->init_lock);
 	if (zram->init_done)
-		val = zs_get_total_pages(meta->mem_pool);
+		val = zs_get_total_size_bytes(meta->mem_pool);
 	up_read(&zram->init_lock);
 
-	return sprintf(buf, "%llu\n", val << PAGE_SHIFT);
+	return sprintf(buf, "%llu\n", val);
 }
-
-static uint32_t total_mem_usage_percent = 30;
-module_param_named(total_mem_usage_percent, total_mem_usage_percent, uint, S_IRUGO | S_IWUSR);
-
-static ssize_t mem_free_percent(void)
-{
-	unsigned long mem_used_pages = 0;
-	u64 val = 0;
-	int i = 0;
-	struct zram *zram = NULL;
-	struct zram_meta *meta = NULL;
-	unsigned long total_zram_pages = totalram_pages*total_mem_usage_percent/100;
-
-	for (i = 0; i < zram_get_num_devices(); i++) {
-
-		zram = &zram_devices[i];
-		if(!zram || !zram->disk)
-		{
-			continue;
-		}
-
-		if( !down_read_trylock(&zram->init_lock) )
-			return -1;
-
-		if(zram->init_done)
-		{
-			meta = zram->meta;
-			if (meta && meta->mem_pool)
-			{
-				val += zs_get_total_pages(meta->mem_pool);
-			}
-		}
-
-		up_read(&zram->init_lock);
-	}
-
-	mem_used_pages = val;
-
-	pr_debug("ZRAM:totalram_pages:%lu,total_zram_pages:%lu,mem_used_pages:%lu\r\n", totalram_pages, total_zram_pages,mem_used_pages);
-
-	return (mem_used_pages >= total_zram_pages) ? 0 : ((total_zram_pages - mem_used_pages)*100/total_zram_pages);
-}
-
-
-static ssize_t mem_free_total(void)
-{
-	//zram average compress ratio 40%
-	ssize_t zram_free_pages = totalram_pages*total_mem_usage_percent * mem_free_percent()*5 /20000;
-	ssize_t total_anon_pages = global_page_state(NR_ACTIVE_ANON) + global_page_state(NR_INACTIVE_ANON);
-
-	pr_debug("%s: zram_free_pages:%d, total_anon_pages:%d\r\n", __func__, zram_free_pages, total_anon_pages);
-
-	//Since zram compress ratio is 40%, exclude zram self cost memory, the lastly saved memory is 60% of the total swap memory.
-	return ((zram_free_pages < total_anon_pages) ? zram_free_pages : total_anon_pages) * 60/100;
-}
-
-
-static ssize_t mem_free_percent_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	ssize_t free_percent = mem_free_percent();
-	printk("%s, percent:%d\r\n", __func__, free_percent);
-	return sprintf(buf, "%d\n", free_percent);
-}
-
-static ssize_t mem_free_total_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	ssize_t  free_total  = mem_free_total();
-	printk("%s, percent:%d\r\n", __func__, free_total);
-	return sprintf(buf, "%d\n", free_total);
-}
-
-
 
 static DEVICE_ATTR(disksize, S_IRUGO | S_IWUSR,
 		disksize_show, disksize_store);
@@ -282,8 +208,6 @@ static DEVICE_ATTR(zero_pages, S_IRUGO, zero_pages_show, NULL);
 static DEVICE_ATTR(orig_data_size, S_IRUGO, orig_data_size_show, NULL);
 static DEVICE_ATTR(compr_data_size, S_IRUGO, compr_data_size_show, NULL);
 static DEVICE_ATTR(mem_used_total, S_IRUGO, mem_used_total_show, NULL);
-static DEVICE_ATTR(mem_free_percent, S_IRUGO, mem_free_percent_show, NULL);
-static DEVICE_ATTR(mem_free_total, S_IRUGO, mem_free_total_show, NULL);
 
 static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_disksize.attr,
@@ -297,23 +221,9 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_orig_data_size.attr,
 	&dev_attr_compr_data_size.attr,
 	&dev_attr_mem_used_total.attr,
-	&dev_attr_mem_free_percent.attr,
-	&dev_attr_mem_free_total.attr,
 	NULL,
 };
 
 struct attribute_group zram_disk_attr_group = {
 	.attrs = zram_disk_attrs,
 };
-
-
-ssize_t zram_mem_free_percent(void)
-{
-	return mem_free_percent();
-}
-
-ssize_t zram_mem_usage(void)
-{
-	unsigned long total_zram_pages = totalram_pages*total_mem_usage_percent/100;
-	return  (100 - mem_free_percent()) *total_zram_pages/100;
-}

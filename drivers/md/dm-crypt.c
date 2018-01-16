@@ -666,7 +666,7 @@ static int crypt_convert_block(struct crypt_config *cc,
 	struct bio_vec *bv_out = bio_iovec_idx(ctx->bio_out, ctx->idx_out);
 	struct dm_crypt_request *dmreq;
 	u8 *iv;
-	int r = 0;
+	int r;
 
 	dmreq = dmreq_of_req(cc, req);
 	iv = iv_of_dmreq(cc, dmreq);

@@ -1893,9 +1893,8 @@ int regulator_disable_deferred(struct regulator *regulator, int ms)
 	rdev->deferred_disables++;
 	mutex_unlock(&rdev->mutex);
 
-	ret = queue_delayed_work(system_power_efficient_wq,
-				 &rdev->disable_work,
-				 msecs_to_jiffies(ms));
+	ret = schedule_delayed_work(&rdev->disable_work,
+				    msecs_to_jiffies(ms));
 	if (ret < 0)
 		return ret;
 	else
@@ -4030,11 +4029,4 @@ unlock:
 
 	return 0;
 }
-
-/* FIXME:
- * not all module driver enable regulator before use at now,
- * and system regulators is not fixed, so always_on property is difficult to be set.
- */
-#if !defined(CONFIG_ARCH_SC)
-//late_initcall(regulator_init_complete);
-#endif
+late_initcall(regulator_init_complete);

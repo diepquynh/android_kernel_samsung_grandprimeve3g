@@ -991,8 +991,7 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 		if (ret)
 			goto done;
 
-		if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW
-			|| (var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NODISP) {
+		if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 			struct fb_var_screeninfo old_var;
 			struct fb_videomode mode;
 
@@ -1018,10 +1017,7 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 				}
 			}
 
-			if((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-				fb_pan_display(info, &info->var);
-			}
-
+			fb_pan_display(info, &info->var);
 			fb_set_cmap(&info->cmap, info);
 			fb_var_to_videomode(&mode, &info->var);
 
@@ -1198,14 +1194,14 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		unlock_fb_info(info);
 		break;
 	default:
-		/*if (!lock_fb_info(info))
-			return -ENODEV;*/
+		if (!lock_fb_info(info))
+			return -ENODEV;
 		fb = info->fbops;
 		if (fb->fb_ioctl)
 			ret = fb->fb_ioctl(info, cmd, arg);
 		else
 			ret = -ENOTTY;
-		/*unlock_fb_info(info);*/
+		unlock_fb_info(info);
 	}
 	return ret;
 }

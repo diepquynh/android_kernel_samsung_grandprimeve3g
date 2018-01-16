@@ -17,9 +17,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <asm/cputime.h>
 #include <linux/kernel.h>
-#include <linux/kernel_stat.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/notifier.h>
@@ -27,15 +25,12 @@
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/spinlock.h>
-#include <linux/tick.h>
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/cpu.h>
 #include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/syscore_ops.h>
-#include <linux/suspend.h>
-#include <linux/tick.h>
 
 #include <trace/events/power.h>
 
@@ -52,14 +47,6 @@ static DEFINE_PER_CPU(char[CPUFREQ_NAME_LEN], cpufreq_cpu_governor);
 #endif
 static DEFINE_RWLOCK(cpufreq_driver_lock);
 static DEFINE_MUTEX(cpufreq_governor_lock);
-
-/* Flag to suspend/resume CPUFreq governors */
-static bool cpufreq_suspended;
-
-static inline bool has_target(void)
-{
-	return cpufreq_driver->target;
-}
 
 /*
  * cpu_policy_rwsem is a per CPU reader-writer semaphore designed to cure
@@ -105,10 +92,6 @@ static void unlock_policy_rwsem_##mode(int cpu)				\
 unlock_policy_rwsem(read, cpu);
 unlock_policy_rwsem(write, cpu);
 
-#ifdef CONFIG_CPU_FREQ_LIMIT
-static atomic_t wait_cpufreq = ATOMIC_INIT(0); /*add atomic wait_cpufreq variable to prevent cpufreq_policy_cpu value being setting to -1*/
-#endif
-
 /* internal prototypes */
 static int __cpufreq_governor(struct cpufreq_policy *policy,
 		unsigned int event);
@@ -150,51 +133,6 @@ bool have_governor_per_policy(void)
 {
 	return cpufreq_driver->have_governor_per_policy;
 }
-EXPORT_SYMBOL_GPL(have_governor_per_policy);
-
-struct kobject *get_governor_parent_kobj(struct cpufreq_policy *policy)
-{
-	if (have_governor_per_policy())
-		return &policy->kobj;
-	else
-		return cpufreq_global_kobject;
-}
-EXPORT_SYMBOL_GPL(get_governor_parent_kobj);
-
-static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
-{
-	u64 idle_time;
-	u64 cur_wall_time;
-	u64 busy_time;
-
-	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
-
-	busy_time = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
-
-	idle_time = cur_wall_time - busy_time;
-	if (wall)
-		*wall = cputime_to_usecs(cur_wall_time);
-
-	return cputime_to_usecs(idle_time);
-}
-
-u64 get_cpu_idle_time(unsigned int cpu, u64 *wall, int io_busy)
-{
-	u64 idle_time = get_cpu_idle_time_us(cpu, io_busy ? wall : NULL);
-
-	if (idle_time == -1ULL)
-		return get_cpu_idle_time_jiffy(cpu, wall);
-	else if (!io_busy)
-		idle_time += get_cpu_iowait_time_us(cpu, wall);
-
-	return idle_time;
-}
-EXPORT_SYMBOL_GPL(get_cpu_idle_time);
 
 static struct cpufreq_policy *__cpufreq_cpu_get(unsigned int cpu, bool sysfs)
 {
@@ -929,6 +867,7 @@ static int cpufreq_add_dev(struct device *dev, struct subsys_interface *sif)
 	if (cpu_is_offline(cpu))
 		return 0;
 
+	pr_debug("adding CPU %u\n", cpu);
 
 #ifdef CONFIG_SMP
 	/* check whether a different CPU already registered this
@@ -1161,23 +1100,15 @@ static int __cpufreq_remove_dev(struct device *dev, struct subsys_interface *sif
 
 		free_cpumask_var(data->related_cpus);
 		free_cpumask_var(data->cpus);
-		pr_debug("policy %d is freed\n",data->cpu);
 		kfree(data);
 	} else {
-		pr_debug("%s: removing link, cpu: %d policy[%d] %x\n", __func__, cpu,data->cpu,data);
+		pr_debug("%s: removing link, cpu: %d\n", __func__, cpu);
 		cpufreq_cpu_put(data);
 		if (cpufreq_driver->target) {
 			__cpufreq_governor(data, CPUFREQ_GOV_START);
 			__cpufreq_governor(data, CPUFREQ_GOV_LIMITS);
 		}
 	}
-
-#ifdef CONFIG_CPU_FREQ_LIMIT
-	while (atomic_read(&wait_cpufreq) != 0){
-		pr_warn("cpu %d offline thread should wait until TSP irq thread finish updating cpufreq policy \n",cpu);
-		msleep(1);
-	}
-#endif
 
 	per_cpu(cpufreq_policy_cpu, cpu) = -1;
 	return 0;
@@ -1344,71 +1275,82 @@ static struct subsys_interface cpufreq_interface = {
 
 
 /**
- * cpufreq_suspend() - Suspend CPUFreq governors
+ * cpufreq_bp_suspend - Prepare the boot CPU for system suspend.
  *
- * Called during system wide Suspend/Hibernate cycles for suspending governors
- * as some platforms can't change frequency after this point in suspend cycle.
- * Because some of the devices (like: i2c, regulators, etc) they use for
- * changing frequency are suspended quickly after this point.
+ * This function is only executed for the boot processor.  The other CPUs
+ * have been put offline by means of CPU hotplug.
  */
-void cpufreq_suspend(void)
+static int cpufreq_bp_suspend(void)
 {
-	struct cpufreq_policy *policy;
+	int ret = 0;
 
-	if (!cpufreq_driver)
-		return;
+	int cpu = smp_processor_id();
+	struct cpufreq_policy *cpu_policy;
 
-	if (!has_target())
-		return;
+	pr_debug("suspending cpu %u\n", cpu);
 
-	pr_debug("%s: Suspending Governors\n", __func__);
+	/* If there's no policy for the boot CPU, we have nothing to do. */
+	cpu_policy = cpufreq_cpu_get(cpu);
+	if (!cpu_policy)
+		return 0;
 
-	policy = cpufreq_cpu_get(0);
+	if (cpufreq_driver->suspend) {
+		ret = cpufreq_driver->suspend(cpu_policy);
+		if (ret)
+			printk(KERN_ERR "cpufreq: suspend failed in ->suspend "
+					"step on CPU %u\n", cpu_policy->cpu);
+	}
 
-	if (__cpufreq_governor(policy, CPUFREQ_GOV_STOP))
-		pr_err("%s: Failed to stop governor for policy: %p\n",
-			__func__, policy);
-	else if (cpufreq_driver->suspend
-	    && cpufreq_driver->suspend(policy))
-		pr_err("%s: Failed to suspend driver: %p\n", __func__,
-			policy);
-
-	cpufreq_suspended = true;
+	cpufreq_cpu_put(cpu_policy);
+	return ret;
 }
 
 /**
- * cpufreq_resume() - Resume CPUFreq governors
+ * cpufreq_bp_resume - Restore proper frequency handling of the boot CPU.
  *
- * Called during system wide Suspend/Hibernate cycle for resuming governors that
- * are suspended with cpufreq_suspend().
+ *	1.) resume CPUfreq hardware support (cpufreq_driver->resume())
+ *	2.) schedule call cpufreq_update_policy() ASAP as interrupts are
+ *	    restored. It will verify that the current freq is in sync with
+ *	    what we believe it to be. This is a bit later than when it
+ *	    should be, but nonethteless it's better than calling
+ *	    cpufreq_driver->get() here which might re-enable interrupts...
+ *
+ * This function is only executed for the boot CPU.  The other CPUs have not
+ * been turned on yet.
  */
-void cpufreq_resume(void)
+static void cpufreq_bp_resume(void)
 {
-	struct cpufreq_policy *policy;
+	int ret = 0;
 
-	if (!cpufreq_driver)
+	int cpu = smp_processor_id();
+	struct cpufreq_policy *cpu_policy;
+
+	pr_debug("resuming cpu %u\n", cpu);
+
+	/* If there's no policy for the boot CPU, we have nothing to do. */
+	cpu_policy = cpufreq_cpu_get(cpu);
+	if (!cpu_policy)
 		return;
 
-	if (!has_target())
-		return;
+	if (cpufreq_driver->resume) {
+		ret = cpufreq_driver->resume(cpu_policy);
+		if (ret) {
+			printk(KERN_ERR "cpufreq: resume failed in ->resume "
+					"step on CPU %u\n", cpu_policy->cpu);
+			goto fail;
+		}
+	}
 
-	pr_debug("%s: Resuming Governors\n", __func__);
+	schedule_work(&cpu_policy->update);
 
-	cpufreq_suspended = false;
-
-	policy = cpufreq_cpu_get(0);
-
-	if (__cpufreq_governor(policy, CPUFREQ_GOV_START)
-	    || __cpufreq_governor(policy, CPUFREQ_GOV_LIMITS))
-		pr_err("%s: Failed to start governor for policy: %p\n",
-			__func__, policy);
-	else if (cpufreq_driver->resume
-	    && cpufreq_driver->resume(policy))
-		pr_err("%s: Failed to resume driver: %p\n", __func__,
-			policy);
-
-	schedule_work(&policy->update);
+fail:
+	cpufreq_cpu_put(cpu_policy);
 }
+
+static struct syscore_ops cpufreq_syscore_ops = {
+	.suspend	= cpufreq_bp_suspend,
+	.resume		= cpufreq_bp_resume,
+};
 
 /**
  *	cpufreq_get_current_driver - return current driver's name
@@ -1601,10 +1543,6 @@ static int __cpufreq_governor(struct cpufreq_policy *policy,
 #else
 	struct cpufreq_governor *gov = NULL;
 #endif
-
-	/* Don't start any governor operations if we are entering suspend */
-	if (cpufreq_suspended)
-		return 0;
 
 	if (policy->governor->max_transition_latency &&
 	    policy->cpuinfo.transition_latency >
@@ -1868,18 +1806,9 @@ error_out:
  */
 int cpufreq_update_policy(unsigned int cpu)
 {
-#ifdef CONFIG_CPU_FREQ_LIMIT
-	struct cpufreq_policy *data = NULL;
-#else
 	struct cpufreq_policy *data = cpufreq_cpu_get(cpu);
-#endif
 	struct cpufreq_policy policy;
 	int ret;
-
-#ifdef CONFIG_CPU_FREQ_LIMIT
-	atomic_inc(&wait_cpufreq);
-	data = cpufreq_cpu_get(cpu);
-#endif
 
 	if (!data) {
 		ret = -ENODEV;
@@ -1919,11 +1848,6 @@ int cpufreq_update_policy(unsigned int cpu)
 fail:
 	cpufreq_cpu_put(data);
 no_policy:
-
-#ifdef CONFIG_CPU_FREQ_LIMIT
-	atomic_dec(&wait_cpufreq);
-#endif
-
 	return ret;
 }
 EXPORT_SYMBOL(cpufreq_update_policy);
@@ -1957,28 +1881,6 @@ static int __cpuinit cpufreq_cpu_callback(struct notifier_block *nfb,
 static struct notifier_block __refdata cpufreq_cpu_notifier = {
     .notifier_call = cpufreq_cpu_callback,
 };
-
-int cpufreq_thermal_limit(int cluster, int max_freq)
-{
-	unsigned int ret;
-	struct cpufreq_policy *policy, new_policy;
-	int cpu = smp_processor_id(); /*should get by cluster*/
-
-	policy = cpufreq_cpu_get(cpu);
-	if (!policy)
-		return -EINVAL;
-	if (policy->max == max_freq)
-		return 0;
-	ret = cpufreq_get_policy(&new_policy, policy->cpu);
-	if (ret)
-		return -EINVAL;
-	new_policy.max = max_freq;
-	ret = __cpufreq_set_policy(policy, &new_policy);
-	policy->user_policy.max = policy->max;
-
-	return ret;
-
-}
 
 /*********************************************************************
  *               REGISTER / UNREGISTER CPUFREQ DRIVER                *
@@ -2099,6 +2001,7 @@ static int __init cpufreq_core_init(void)
 
 	cpufreq_global_kobject = kobject_create_and_add("cpufreq", &cpu_subsys.dev_root->kobj);
 	BUG_ON(!cpufreq_global_kobject);
+	register_syscore_ops(&cpufreq_syscore_ops);
 
 	return 0;
 }

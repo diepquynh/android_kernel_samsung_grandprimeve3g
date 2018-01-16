@@ -81,14 +81,6 @@ allnoconfig allyesconfig allmodconfig alldefconfig randconfig: $(obj)/conf
 
 PHONY += listnewconfig olddefconfig oldnoconfig savedefconfig defconfig
 
-ifneq ($(SELINUX_DEFCONFIG),)
-export KCONFIG_SELINUX := arch/$(SRCARCH)/configs/$(SELINUX_DEFCONFIG)
-endif
-
-ifneq ($(SELINUX_LOG_DEFCONFIG),)
-export KCONFIG_LOG_SELINUX := arch/$(SRCARCH)/configs/$(SELINUX_LOG_DEFCONFIG)
-endif
-
 listnewconfig olddefconfig: $(obj)/conf
 	$< --$@ $(Kconfig)
 

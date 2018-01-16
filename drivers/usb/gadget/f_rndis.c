@@ -408,13 +408,8 @@ static void rndis_response_available(void *_rndis)
 static void rndis_response_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct f_rndis			*rndis = req->context;
-	struct usb_composite_dev	*cdev;
+	struct usb_composite_dev	*cdev = rndis->port.func.config->cdev;
 	int				status = req->status;
-
-	if (!rndis->port.func.config || !rndis->port.func.config->cdev)
-		return;
-	else
-		cdev = rndis->port.func.config->cdev;
 
 	/* after TX:
 	 *  - USB_CDC_GET_ENCAPSULATED_RESPONSE (ep0/control)
@@ -690,16 +685,6 @@ rndis_bind(struct usb_configuration *c, struct usb_function *f)
 
 	status = -ENODEV;
 
-	/* NOTE:  a status/notification endpoint is, strictly speaking,
-	 * optional.  We don't treat it that way though!  It's simpler,
-	 * and some newer profiles don't treat it as optional.
-	 */
-	ep = usb_ep_autoconfig(cdev->gadget, &fs_notify_desc);
-	if (!ep)
-		goto fail;
-	rndis->notify = ep;
-	ep->driver_data = cdev;	/* claim */
-
 	/* allocate instance-specific endpoints */
 	ep = usb_ep_autoconfig(cdev->gadget, &fs_in_desc);
 	if (!ep)
@@ -711,6 +696,16 @@ rndis_bind(struct usb_configuration *c, struct usb_function *f)
 	if (!ep)
 		goto fail;
 	rndis->port.out_ep = ep;
+	ep->driver_data = cdev;	/* claim */
+
+	/* NOTE:  a status/notification endpoint is, strictly speaking,
+	 * optional.  We don't treat it that way though!  It's simpler,
+	 * and some newer profiles don't treat it as optional.
+	 */
+	ep = usb_ep_autoconfig(cdev->gadget, &fs_notify_desc);
+	if (!ep)
+		goto fail;
+	rndis->notify = ep;
 	ep->driver_data = cdev;	/* claim */
 
 	status = -ENOMEM;
@@ -826,12 +821,12 @@ rndis_bind_config_vendor(struct usb_configuration *c, u8 ethaddr[ETH_ALEN],
 	if (!can_support_rndis(c) || !ethaddr)
 		return -EINVAL;
 
-	/* setup RNDIS itself */
-	status = rndis_init();
-	if (status < 0)
-		return status;
-
 	if (rndis_string_defs[0].id == 0) {
+		/* ... and setup RNDIS itself */
+		status = rndis_init();
+		if (status < 0)
+			return status;
+
 		status = usb_string_ids_tab(c->cdev, rndis_string_defs);
 		if (status)
 			return status;

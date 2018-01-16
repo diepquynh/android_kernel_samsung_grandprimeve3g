@@ -6,8 +6,6 @@ obj-$(CONFIG_GPIO_DEVRES)	+= devres.o
 obj-$(CONFIG_GPIOLIB)		+= gpiolib.o
 obj-$(CONFIG_OF_GPIO)		+= gpiolib-of.o
 obj-$(CONFIG_GPIO_ACPI)		+= gpiolib-acpi.o
-obj-$(CONFIG_SEC_GPIO_DVS)	+= secgpio_dvs.o
-obj-$(CONFIG_ARCH_SCX30G)	+= secgpio_dvs_sc77xx.o
 
 # Device drivers. Generally keep list sorted alphabetically
 obj-$(CONFIG_GPIO_GENERIC)	+= gpio-generic.o
@@ -24,15 +22,6 @@ obj-$(CONFIG_GPIO_CS5535)	+= gpio-cs5535.o
 obj-$(CONFIG_GPIO_DA9052)	+= gpio-da9052.o
 obj-$(CONFIG_GPIO_DA9055)	+= gpio-da9055.o
 obj-$(CONFIG_ARCH_DAVINCI)	+= gpio-davinci.o
-ifdef CONFIG_ARCH_SCX35L64
-obj-$(CONFIG_GPIO_SPRD)     += gpio-eic.o
-else
-ifdef CONFIG_ARCH_SCX35LT8
-obj-$(CONFIG_GPIO_SPRD)     += gpio-eic.o
-else
-obj-$(CONFIG_ARCH_SC)      	+= gpio-eic.o
-endif
-endif
 obj-$(CONFIG_GPIO_EM)		+= gpio-em.o
 obj-$(CONFIG_GPIO_EP93XX)	+= gpio-ep93xx.o
 obj-$(CONFIG_GPIO_GE_FPGA)	+= gpio-ge.o
@@ -98,4 +87,3 @@ obj-$(CONFIG_GPIO_WM831X)	+= gpio-wm831x.o
 obj-$(CONFIG_GPIO_WM8350)	+= gpio-wm8350.o
 obj-$(CONFIG_GPIO_WM8994)	+= gpio-wm8994.o
 obj-$(CONFIG_GPIO_XILINX)	+= gpio-xilinx.o
-

@@ -1,10 +1,3 @@
-config MTD_NAND_IDS
-	tristate "Include chip ids for known NAND devices."
-	depends on MTD
-	help
-	  Useful for NAND drivers that do not use the NAND subsystem but
-	  still like to take advantage of the known chip information.
-
 config MTD_NAND_ECC
 	tristate
 
@@ -139,6 +132,9 @@ config BCH_CONST_T
 	default 4 if MTD_NAND_OMAP_BCH4
 	default 8 if MTD_NAND_OMAP_BCH8
 endif
+
+config MTD_NAND_IDS
+	tristate
 
 config MTD_NAND_RICOH
 	tristate "Ricoh xD card reader"
@@ -547,28 +543,5 @@ config MTD_NAND_XWAY
 	help
 	  Enables support for NAND Flash chips on Lantiq XWAY SoCs. NAND is attached
 	  to the External Bus Unit (EBU).
-
-config MTD_NAND_SC8810
-	tristate "NAND Flash support for SpreadTrum SC8810 phone board"
-   	depends on ARCH_SC8810
-	help
-	  This enables the NAND flash controller with hardware ecc on the SC8810 phone board
-
-config MTD_NAND_SC8825
-	tristate "NAND Flash support for SpreadTrum SC8825 phone board"
-	depends on ARCH_SC8825
-	help
-	  This enables the NAND flash controller with hardware ecc on the SC8825 phone board
-
-config MTD_NAND_DOLPHIN
-        tristate "NAND Flash support for SpreadTrum DOLPHIN phone board"
-        depends on ARCH_SCX15
-        help
-          This enables the NAND flash controller with hardware ecc on the DOLPHIN phone board
-config MTD_NAND_SC8830
-	tristate "NAND Flash support for SpreadTrum SC8830 phone board"
-	depends on ARCH_SCX35
-	help
-	  This enables the NAND flash controller with hardware ecc on the SC8830 phone board
 
 endif # MTD_NAND

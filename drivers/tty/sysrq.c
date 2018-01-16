@@ -405,8 +405,6 @@ static struct sysrq_key_op sysrq_unrt_op = {
 	.enable_mask	= SYSRQ_ENABLE_RTNICE,
 };
 
-extern struct sysrq_key_op sysrq_show_blocked_group_op;
-
 /* Key Operations table and lock */
 static DEFINE_SPINLOCK(sysrq_key_table_lock);
 
@@ -462,8 +460,7 @@ static struct sysrq_key_op *sysrq_key_table[36] = {
 	&sysrq_showstate_blocked_op,	/* w */
 	/* x: May be registered on ppc/powerpc for xmon */
 	/* x: May be registered on sparc64 for global PMU dump */
-	/* x: On SPRD platform, used for dump blocked thread's group stack */
-	&sysrq_show_blocked_group_op,				/* x */
+	NULL,				/* x */
 	/* y: May be registered on sparc64 for global register dump */
 	NULL,				/* y */
 	&sysrq_ftrace_dump_op,		/* z */

@@ -4,6 +4,4 @@ endif
 if GOLDFISH
 source "drivers/platform/goldfish/Kconfig"
 endif
-if ARCH_SCX35
-source "drivers/platform/sprd/Kconfig"
-endif
+

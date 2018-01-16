@@ -113,11 +113,7 @@ kmalloc_order(size_t size, gfp_t flags, unsigned int order)
 	void *ret;
 
 	flags |= (__GFP_COMP | __GFP_KMEMCG);
-#ifndef CONFIG_SPRD_PAGERECORDER
 	ret = (void *) __get_free_pages(flags, order);
-#else
-	ret = (void *) __get_free_pages_nopagedebug(flags, order);
-#endif
 	kmemleak_alloc(ret, size, 1, flags);
 	return ret;
 }

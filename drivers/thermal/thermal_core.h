@@ -30,7 +30,6 @@
 /* Initial state of a cooling device during binding */
 #define THERMAL_NO_TARGET -1UL
 
-#define TRIP_TEMP_OFFSET 2
 /*
  * This structure is used to describe the behavior of
  * a certain cooling device on a certain trip point
@@ -77,14 +76,5 @@ void thermal_gov_user_space_unregister(void);
 static inline int thermal_gov_user_space_register(void) { return 0; }
 static inline void thermal_gov_user_space_unregister(void) {}
 #endif /* CONFIG_THERMAL_GOV_USER_SPACE */
-
-/* device tree support */
-#ifdef CONFIG_THERMAL_OF
-int of_parse_thermal_zones(void);
-void of_thermal_destroy_zones(void);
-#else
-static inline int of_parse_thermal_zones(void) { return 0; }
-static inline void of_thermal_destroy_zones(void) { }
-#endif
 
 #endif /* __THERMAL_CORE_H__ */

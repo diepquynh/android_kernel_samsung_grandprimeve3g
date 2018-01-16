@@ -46,7 +46,6 @@
  *       if the cooling state already equals lower limit,
  *       deactive the thermal instance
  */
-#if 0
 static unsigned long get_target_state(struct thermal_instance *instance,
 				enum thermal_trend trend, bool throttle)
 {
@@ -54,7 +53,6 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 	unsigned long cur_state;
 
 	cdev->ops->get_cur_state(cdev, &cur_state);
-	dev_dbg(&cdev->device, "cur_state=%ld\n", cur_state);
 
 	switch (trend) {
 	case THERMAL_TREND_RAISING:
@@ -126,9 +124,6 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 	if (tz->temperature >= trip_temp)
 		throttle = true;
 
-	dev_dbg(&tz->device, "Trip%d[type=%d,temp=%ld]:trend=%d,throttle=%d\n",
-				trip, trip_type, trip_temp, trend, throttle);
-
 	mutex_lock(&tz->lock);
 
 	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
@@ -137,8 +132,6 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 
 		old_target = instance->target;
 		instance->target = get_target_state(instance, trend, throttle);
-		dev_dbg(&instance->cdev->device, "old_target=%d, target=%d\n",
-					old_target, (int)instance->target);
 
 		/* Activate a passive thermal instance */
 		if (old_target == THERMAL_NO_TARGET &&
@@ -155,130 +148,6 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 
 	mutex_unlock(&tz->lock);
 }
-#else
-
-static int get_hyst_target(struct thermal_zone_device *tz)
-{
-	int count;
-	unsigned long trip_temp, trip_hyst, hyst_temp;
-
-	if (tz->trips == 0 || !tz->ops->get_trip_hyst){
-		return 0;
-	}
-	for (count = 0; count < tz->trips; count++) {
-		tz->ops->get_trip_temp(tz, count, &trip_temp);
-		tz->ops->get_trip_hyst(tz, count, &trip_hyst);
-		hyst_temp = trip_temp - trip_hyst;
-		printk("trip:%d, temp:%d, hyst_temp:%d\n", count, tz->temperature, hyst_temp);
-		if (tz->temperature < (long)hyst_temp  + TRIP_TEMP_OFFSET)
-			break;
-	}
-	return count;
-}
-
-static int get_trip_target(struct thermal_zone_device *tz)
-{
-	int count = 0;
-	unsigned long trip_temp;
-
-	if (tz->trips == 0 || !tz->ops->get_trip_temp)
-		return 0;
-
-	for (count = 0; count < tz->trips; count++) {
-		tz->ops->get_trip_temp(tz, count, &trip_temp);
-		printk("trip:%d, temp:%d, trip_temp:%d\n", count, tz->temperature, trip_temp);
-		if (tz->temperature < (long)trip_temp  - TRIP_TEMP_OFFSET)
-			break;
-	}
-	return count;
-}
-
-static int get_step_wise_target(struct thermal_instance *instance,
-		struct thermal_zone_device *tz, int trip)
-{
-	struct thermal_cooling_device *cdev = instance->cdev;
-	enum thermal_trend trend;
-	unsigned long cur_target;
-	unsigned long new_target;
-
-	cur_target = instance->target;
-	printk("%s trip:%d cur_target:%d\n", __func__, trip, cur_target);
-	if (cur_target == THERMAL_NO_TARGET){
-		cur_target = instance->lower;
-	}
-	if (tz->ops->get_trend){
-		tz->ops->get_trend(tz, trip, &trend);
-	}else{
-		new_target = get_trip_target(tz);
-		printk("%s trip:%d new_target:%d\n", __func__, trip, new_target);
-		if (new_target < cur_target){
-			trend = THERMAL_TREND_DROPPING;
-			if (!tz->ops->get_trip_hyst){
-				goto dropping;
-			}
-		}else if(new_target >= cur_target){
-			goto raising;
-		}
-	}
-	switch (trend){
-		case THERMAL_TREND_RAISING:
-			new_target = get_trip_target(tz);
-			printk("%s trend raising, target:%d\n", __func__, new_target);
-			goto raising;
-		case THERMAL_TREND_DROPPING:
-			if (tz->ops->get_trip_hyst){
-				new_target = get_hyst_target(tz);
-			}else{
-				new_target = get_trip_target(tz);
-			}
-			printk("%s trend dropping, target:%d\n", __func__, new_target);
-			goto dropping;
-		case THERMAL_TREND_STABLE:
-		default:
-			printk("%s trend stable\n", __func__);
-			return instance->lower;
-	}
-raising:
-	if (new_target > cur_target){
-		++cur_target;
-	}
-	return cur_target;
-dropping:
-	if (new_target < cur_target){
-		--cur_target;
-	}
-	return cur_target;
-
-}
-
-static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
-{
-	struct thermal_instance *instance;
-	unsigned long target;
-
-	mutex_lock(&tz->lock);
-	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		if (instance->trip != trip)
-			continue;
-		target = get_step_wise_target(instance, tz, trip);
-		printk(":%s get target_state: %d\n", instance->name, target);
-		if (target == THERMAL_NO_TARGET){
-			continue;
-		}
-		if (target < instance->lower){
-			target = instance->lower;
-		}
-		if (target > instance->upper){
-			target = instance->upper;
-		}
-		instance->target  = target;
-		instance->cdev->updated = false; /* cdev needs update */
-	}
-	mutex_unlock(&tz->lock);
-
-	return;
-}
-#endif
 
 /**
  * step_wise_throttle - throttles devices asscciated with the given zone

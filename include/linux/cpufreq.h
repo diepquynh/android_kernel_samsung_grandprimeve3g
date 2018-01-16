@@ -185,9 +185,6 @@ static inline unsigned long cpufreq_scale(unsigned long old, u_int div, u_int mu
 #define CPUFREQ_GOV_LIMITS	3
 #define CPUFREQ_GOV_POLICY_INIT	4
 #define CPUFREQ_GOV_POLICY_EXIT	5
-#define CPUFREQ_RELATION_L 0  /* lowest frequency at or above target */
-#define CPUFREQ_RELATION_H 1  /* highest frequency below or at target */
-#define CPUFREQ_RELATION_C 2  /* closest frequency to target */
 
 struct cpufreq_governor {
 	char	name[CPUFREQ_NAME_LEN];
@@ -277,7 +274,6 @@ struct cpufreq_driver {
 					 * frequency transitions */
 #define CPUFREQ_PM_NO_WARN	0x04	/* don't warn on suspend/resume speed
 					 * mismatches */
-#define CPUFREQ_SHARED	0x08	/* smp share same frequency */
 
 int cpufreq_register_driver(struct cpufreq_driver *driver_data);
 int cpufreq_unregister_driver(struct cpufreq_driver *driver_data);
@@ -310,18 +306,6 @@ struct freq_attr {
 #define cpufreq_freq_attr_ro(_name)		\
 static struct freq_attr _name =			\
 __ATTR(_name, 0444, show_##_name, NULL)
-
-#ifdef CONFIG_CPU_FREQ
-void cpufreq_suspend(void);
-void cpufreq_resume(void);
-#else
-static inline void cpufreq_suspend(void) {}
-static inline void cpufreq_resume(void) {}
-#endif
-
-/*********************************************************************
- *                     CPUFREQ NOTIFIER INTERFACE                    *
- *********************************************************************/
 
 #define cpufreq_freq_attr_ro_perm(_name, _perm)	\
 static struct freq_attr _name =			\
@@ -357,7 +341,6 @@ const char *cpufreq_get_current_driver(void);
 int cpufreq_get_policy(struct cpufreq_policy *policy, unsigned int cpu);
 int cpufreq_update_policy(unsigned int cpu);
 bool have_governor_per_policy(void);
-struct kobject *get_governor_parent_kobj(struct cpufreq_policy *policy);
 
 #ifdef CONFIG_CPU_FREQ
 /* query the current CPU frequency (in kHz). If zero, cpufreq couldn't detect it */
@@ -411,12 +394,6 @@ extern struct cpufreq_governor cpufreq_gov_ondemand;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_CONSERVATIVE)
 extern struct cpufreq_governor cpufreq_gov_conservative;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_conservative)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SPRDEMAND)
-extern struct cpufreq_governor cpufreq_gov_sprdemand;
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_sprdemand)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE)
-extern struct cpufreq_governor cpufreq_gov_intelliactive;
-#define CPUFREQ_DEFAULT_GOVERNOR        (&cpufreq_gov_intelliactive)
 #endif
 
 

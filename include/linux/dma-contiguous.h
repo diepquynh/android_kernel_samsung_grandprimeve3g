@@ -67,47 +67,9 @@ struct device;
 
 extern struct cma *dma_contiguous_default_area;
 
-static inline struct cma *dev_get_cma_area(struct device *dev)
-{
-	if (dev && dev->cma_area)
-		return dev->cma_area;
-	return dma_contiguous_default_area;
-}
-
-static inline void dev_set_cma_area(struct device *dev, struct cma *cma)
-{
-	if (dev)
-		dev->cma_area = cma;
-}
-
-static inline void dma_contiguous_set_default(struct cma *cma)
-{
-	dma_contiguous_default_area = cma;
-}
-
 void dma_contiguous_reserve(phys_addr_t addr_limit);
-int dma_contiguous_reserve_area(struct device *dev, phys_addr_t size,
-				  phys_addr_t base, phys_addr_t limit,
-				  phys_addr_t reserve_size, phys_addr_t threshold_size);
-static inline int dma_declare_contiguous(struct device *dev, phys_addr_t size,
-			   phys_addr_t base, phys_addr_t limit)
-{
-	int ret;
-	ret = dma_contiguous_reserve_area(dev, size,
-				  base, limit, 0, 0);
-	return ret;
-}
-
-static inline int dma_declare_contiguous_reserved(struct device *dev,
-					 phys_addr_t size, phys_addr_t base,
-					 phys_addr_t limit, phys_addr_t reserve_size,
-					 phys_addr_t threshold_size)
-{
-	int ret;
-	ret = dma_contiguous_reserve_area(dev, size,
-				  base, limit, reserve_size, threshold_size);
-	return ret;
-}
+int dma_declare_contiguous(struct device *dev, phys_addr_t size,
+			   phys_addr_t base, phys_addr_t limit);
 
 struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 				       unsigned int order);
@@ -117,15 +79,6 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 #else
 
 #define MAX_CMA_AREAS	(0)
-
-static inline struct cma *dev_get_cma_area(struct device *dev)
-{
-	return NULL;
-}
-
-static inline void dev_set_cma_area(struct device *dev, struct cma *cma) { }
-
-static inline void dma_contiguous_set_default(struct cma *cma) { }
 
 static inline void dma_contiguous_reserve(phys_addr_t limit) { }
 

@@ -242,24 +242,4 @@ config BT_WILINK
 
 	  Say Y here to compile support for Texas Instrument's WiLink7 driver
 	  into the kernel or say M to compile it as module.
-
-config BT_BCM4343
-	tristate "Broadcomm BCM4330 LPM driver"
-	help
-	  This enables the Bluetooth driver for Broadcomm's BT/FM/WLAN
-	  combo devices. This makes use of shared transport line discipline
-	  core driver to communicate with the BT core of the combo chip.
-
-	  Say Y here to compile support for Broadcomm's BCM4343 LPM driver
-	  into the kernel or say M to compile it as module.
-config SPRD_2331
-	tristate "SPRD 2331 LPM driver"
-	help
-	  This enables the Bluetooth driver for Spreadtrum's BT/FM/WLAN
-	  combo devices. This makes use of shared transport line discipline
-	  core driver to communicate with the BT core of the combo chip.
-
-	  Say Y here to compile support for SPRD 2331 LPM driver
-	  into the kernel or say M to compile it as module.
-
 endmenu

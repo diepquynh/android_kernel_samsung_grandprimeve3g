@@ -1481,7 +1481,7 @@ static bool migrate_balanced_pgdat(struct pglist_data *pgdat,
 		if (!populated_zone(zone))
 			continue;
 
-		if (!zone_reclaimable(zone))
+		if (zone->all_unreclaimable)
 			continue;
 
 		/* Avoid waking kswapd by allocating pages_to_migrate pages. */

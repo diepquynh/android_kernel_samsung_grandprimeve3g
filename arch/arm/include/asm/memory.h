@@ -26,7 +26,7 @@
  * Allow for constants defined here to be used from assembly code
  * by prepending the UL suffix only with actual C code compilation.
  */
-#define UL(x)  (_AC(x, UL))
+#define UL(x) _AC(x, UL)
 
 #ifdef CONFIG_MMU
 
@@ -230,23 +230,6 @@ static inline void *phys_to_virt(phys_addr_t x)
 #define __pa(x)			__virt_to_phys((unsigned long)(x))
 #define __va(x)			((void *)__phys_to_virt((unsigned long)(x)))
 #define pfn_to_kaddr(pfn)	__va((pfn) << PAGE_SHIFT)
-
-extern phys_addr_t (*arch_virt_to_idmap) (unsigned long x);
-
-/*
- * These are for systems that have a hardware interconnect supported alias of
- * physical memory for idmap purposes.  Most cases should leave these
- * untouched.
- */
-static inline phys_addr_t __virt_to_idmap(unsigned long x)
-{
-	if (arch_virt_to_idmap)
-		return arch_virt_to_idmap(x);
-	else
-		return __virt_to_phys(x);
-}
-
-#define virt_to_idmap(x)	__virt_to_idmap((unsigned long)(x))
 
 /*
  * Virtual <-> DMA view memory address translations

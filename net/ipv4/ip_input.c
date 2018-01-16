@@ -381,16 +381,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	 * that it receives, do not try to analyse it.
 	 */
 	if (skb->pkt_type == PACKET_OTHERHOST)
-        {
-		printk(KERN_WARNING "ip_rcv skb 0x%x type PACKET_OTHERHOST dev %s adjust to PACKET_HOST\n", skb, dev->name);
-
-                /* BUG 415805 This type used to drop it, but in multi card communication.
-                   many skb packet from the different net device, so maybe one
-                   skb's PACKET_OHTERHOST, so pointer skb->pkt_type to PACKET_HOST */
-                skb->pkt_type = PACKET_HOST;
-                //goto drop;
-        }
-
+		goto drop;
 
 
 	IP_UPD_PO_STATS_BH(dev_net(dev), IPSTATS_MIB_IN, skb->len);

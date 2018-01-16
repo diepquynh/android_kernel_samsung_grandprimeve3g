@@ -25,25 +25,22 @@
 #include <linux/suspend.h>
 #include <linux/syscore_ops.h>
 #include <linux/ftrace.h>
-#include <linux/rtc.h>
 #include <trace/events/power.h>
-#include <linux/wakeup_reason.h>
 
 #include "power.h"
 
-#ifdef CONFIG_SEC_GPIO_DVS
-#include <linux/secgpio_dvs.h>
-#endif
-
 struct pm_sleep_state pm_states[PM_SUSPEND_MAX] = {
-#ifdef CONFIG_EARLYSUSPEND
-	[PM_SUSPEND_ON] = {.label = "on", .state = PM_SUSPEND_ON},
-#endif
+	[PM_SUSPEND_FREEZE] = { .label = "freeze", .state = PM_SUSPEND_FREEZE },
 	[PM_SUSPEND_STANDBY] = { .label = "standby", },
 	[PM_SUSPEND_MEM] = { .label = "mem", },
 };
 
 static const struct platform_suspend_ops *suspend_ops;
+
+static bool need_suspend_ops(suspend_state_t state)
+{
+	return !!(state > PM_SUSPEND_FREEZE);
+}
 
 static DECLARE_WAIT_QUEUE_HEAD(suspend_freeze_wait_head);
 static bool suspend_freeze_wake;
@@ -65,7 +62,7 @@ void freeze_wake(void)
 }
 EXPORT_SYMBOL_GPL(freeze_wake);
 
-bool valid_state(suspend_state_t state)
+static bool valid_state(suspend_state_t state)
 {
 	/*
 	 * PM_SUSPEND_STANDBY and PM_SUSPEND_MEM states need low level
@@ -125,17 +122,15 @@ static int suspend_test(int level)
  * hibernation).  Run suspend notifiers, allocate the "suspend" console and
  * freeze processes.
  */
-static int suspend_prepare(void)
+static int suspend_prepare(suspend_state_t state)
 {
 	int error;
 
-	if (!suspend_ops || !suspend_ops->enter)
+	if (need_suspend_ops(state) && (!suspend_ops || !suspend_ops->enter))
 		return -EPERM;
 
-	printk("PM:  before pm_prepare_consol ... \n");
 	pm_prepare_console();
 
-	printk("PM:  before pm_notifier_call_chain  ... \n");
 	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
 	if (error)
 		goto Finish;
@@ -143,7 +138,7 @@ static int suspend_prepare(void)
 	error = suspend_freeze_processes();
 	if (!error)
 		return 0;
-	log_suspend_abort_reason("One or more tasks refusing to freeze");
+
 	suspend_stats.failed_freeze++;
 	dpm_save_failed_step(SUSPEND_FREEZE);
  Finish:
@@ -173,28 +168,9 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
  */
 static int suspend_enter(suspend_state_t state, bool *wakeup)
 {
-	char suspend_abort[MAX_SUSPEND_ABORT_LEN];
-	int error, last_dev;
+	int error;
 
-#ifdef CONFIG_SEC_GPIO_DVS
-    /************************ Caution !!! ****************************/
-    /* This function must be located in appropriate SLEEP position
-     * in accordance with the specification of each BB vendor.
-     */
-    /************************ Caution !!! ****************************/
-    gpio_dvs_check_sleepgpio();
-#ifdef SECGPIO_SLEEP_DEBUGGING
-    /************************ Caution !!! ****************************/
-    /* This func. must be located in an appropriate position for GPIO SLEEP debugging
-     * in accordance with the specification of each BB vendor, and 
-     * the func. must be called after calling the function "gpio_dvs_check_sleepgpio"
-     */
-    /************************ Caution !!! ****************************/
-    gpio_dvs_set_sleepgpio();
-#endif
-#endif
-
-	if (suspend_ops->prepare) {
+	if (need_suspend_ops(state) && suspend_ops->prepare) {
 		error = suspend_ops->prepare();
 		if (error)
 			goto Platform_finish;
@@ -202,15 +178,11 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	error = dpm_suspend_end(PMSG_SUSPEND);
 	if (error) {
-		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
-		last_dev %= REC_FAILED_NUM;
 		printk(KERN_ERR "PM: Some devices failed to power down\n");
-		log_suspend_abort_reason("%s device failed to power down",
-			suspend_stats.failed_devs[last_dev]);
 		goto Platform_finish;
 	}
 
-	if (suspend_ops->prepare_late) {
+	if (need_suspend_ops(state) && suspend_ops->prepare_late) {
 		error = suspend_ops->prepare_late();
 		if (error)
 			goto Platform_wake;
@@ -219,11 +191,20 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	if (suspend_test(TEST_PLATFORM))
 		goto Platform_wake;
 
-	error = disable_nonboot_cpus();
-	if (error || suspend_test(TEST_CPUS)) {
-		log_suspend_abort_reason("Disabling non-boot cpus failed");
-		goto Enable_cpus;
+	/*
+	 * PM_SUSPEND_FREEZE equals
+	 * frozen processes + suspended devices + idle processors.
+	 * Thus we should invoke freeze_enter() soon after
+	 * all the devices are suspended.
+	 */
+	if (state == PM_SUSPEND_FREEZE) {
+		freeze_enter();
+		goto Platform_wake;
 	}
+
+	error = disable_nonboot_cpus();
+	if (error || suspend_test(TEST_CPUS))
+		goto Enable_cpus;
 
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
@@ -234,10 +215,6 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
 			error = suspend_ops->enter(state);
 			events_check_enabled = false;
-		} else {
-			pm_get_active_wakeup_sources(suspend_abort,
-				MAX_SUSPEND_ABORT_LEN);
-			log_suspend_abort_reason(suspend_abort);
 		}
 		syscore_resume();
 	}
@@ -249,13 +226,13 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	enable_nonboot_cpus();
 
  Platform_wake:
-	if (suspend_ops->wake)
+	if (need_suspend_ops(state) && suspend_ops->wake)
 		suspend_ops->wake();
 
 	dpm_resume_start(PMSG_RESUME);
 
  Platform_finish:
-	if (suspend_ops->finish)
+	if (need_suspend_ops(state) && suspend_ops->finish)
 		suspend_ops->finish();
 
 	return error;
@@ -270,11 +247,11 @@ int suspend_devices_and_enter(suspend_state_t state)
 	int error;
 	bool wakeup = false;
 
-	if (!suspend_ops)
+	if (need_suspend_ops(state) && !suspend_ops)
 		return -ENOSYS;
 
 	trace_machine_suspend(state);
-	if (suspend_ops->begin) {
+	if (need_suspend_ops(state) && suspend_ops->begin) {
 		error = suspend_ops->begin(state);
 		if (error)
 			goto Close;
@@ -285,7 +262,6 @@ int suspend_devices_and_enter(suspend_state_t state)
 	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to suspend\n");
-		log_suspend_abort_reason("Some devices failed to suspend");
 		goto Recover_platform;
 	}
 	suspend_test_finish("suspend devices");
@@ -294,7 +270,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 
 	do {
 		error = suspend_enter(state, &wakeup);
-	} while (!error && !wakeup
+	} while (!error && !wakeup && need_suspend_ops(state)
 		&& suspend_ops->suspend_again && suspend_ops->suspend_again());
 
  Resume_devices:
@@ -304,13 +280,13 @@ int suspend_devices_and_enter(suspend_state_t state)
 	ftrace_start();
 	resume_console();
  Close:
-	if (suspend_ops->end)
+	if (need_suspend_ops(state) && suspend_ops->end)
 		suspend_ops->end();
 	trace_machine_suspend(PWR_EVENT_EXIT);
 	return error;
 
  Recover_platform:
-	if (suspend_ops->recover)
+	if (need_suspend_ops(state) && suspend_ops->recover)
 		suspend_ops->recover();
 	goto Resume_devices;
 }
@@ -354,10 +330,15 @@ static int enter_state(suspend_state_t state)
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
 
-	suspend_sys_sync_queue();
+	if (state == PM_SUSPEND_FREEZE)
+		freeze_begin();
+
+	printk(KERN_INFO "PM: Syncing filesystems ... ");
+	sys_sync();
+	printk("done.\n");
 
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state].label);
-	error = suspend_prepare();
+	error = suspend_prepare(state);
 	if (error)
 		goto Unlock;
 
@@ -377,18 +358,6 @@ static int enter_state(suspend_state_t state)
 	return error;
 }
 
-static void pm_suspend_marker(char *annotation)
-{
-	struct timespec ts;
-	struct rtc_time tm;
-
-	getnstimeofday(&ts);
-	rtc_time_to_tm(ts.tv_sec, &tm);
-	pr_info("PM: suspend %s %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
-		annotation, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
-}
-
 /**
  * pm_suspend - Externally visible function for suspending the system.
  * @state: System sleep state to enter.
@@ -403,7 +372,6 @@ int pm_suspend(suspend_state_t state)
 	if (state <= PM_SUSPEND_ON || state >= PM_SUSPEND_MAX)
 		return -EINVAL;
 
-	pm_suspend_marker("entry");
 	error = enter_state(state);
 	if (error) {
 		suspend_stats.fail++;
@@ -411,7 +379,6 @@ int pm_suspend(suspend_state_t state)
 	} else {
 		suspend_stats.success++;
 	}
-	pm_suspend_marker("exit");
 	return error;
 }
 EXPORT_SYMBOL(pm_suspend);
