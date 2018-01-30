@@ -582,7 +582,7 @@ sprd_vpp@61000000{
 		#address-cells = <1>;
 		#size-cells = <1>;
 		/*
-		ranges = <0x8000000 0x88000000 0x1c00000>,
+		ranges = <0x8000000 0x88000000 0x2000000>,
 				<0x07800000 0x87800000 0x180000>,
 				<0x9aff000 0x89aff000 0x1000>;
 		 */
@@ -594,7 +594,7 @@ sprd_vpp@61000000{
 			sprd,trig = <0x01>; /* trigger bit */
 			sprd,clr = <0x01>; /* clear bit */
 			interrupts = <0 68 0x0>;
-			/* reg = <0x8000000 0x1b00000> , */ /* <CP_start_addr size> */
+			/* reg = <0x8000000 0x1f00000> , */ /* <CP_start_addr size> */
 			/* <0x07800000 0x180000>, */ /* <SMEM_phy_addr total_size> */
 			/* <0x9aff000 0x1000>; */ /* smsg ring buffer <base size> */
 		};
@@ -607,8 +607,8 @@ sprd_vpp@61000000{
 		sprd,dst = <2>;
 		sprd,channel = <4>;
 		sprd,ringnr = <11>;
-		sprd,size-rxbuf = <0x1000>; /* 4*1024 */
-		sprd,size-txbuf = <0x1000>; /* 4*1024 */
+		sprd,size-rxbuf = <0x3000>; /* 12*1024 */
+		sprd,size-txbuf = <0x3000>; /* 12*1024 */
 	};
 
 	slog-cpw {
@@ -660,7 +660,7 @@ sprd_vpp@61000000{
 		sprd,ctrl-reg = <0x44 0x44 0xb0 0xff>; /* <shut_down deep_sleep reset get_status> */
 		sprd,ctrl-mask = <0x02000000 0x10000000 0x01 0xf0000>; /* masks <> */
 		/* sprd,iram-data = <0xe59f0000 0xe12fff10 0x88300000>; */ /* 3rd param equals modem_addr*/
-		reg = <0x88000000 0x1b00000>,  /* <CP_start_addr total_size> = <+128M 27M> */
+		reg = <0x88000000 0x1f00000>,  /* <CP_start_addr total_size> = <+128M 31M> */
 		/*	<0x50000000 0x0c>, */ /* <iram1_base size> */
 		/*	<0x402b0000 0x10000>; */ /* <pmu_base size> */
 			<0x50000000 0x0c>, /* <iram1_base size> */
@@ -673,12 +673,12 @@ sprd_vpp@61000000{
 		#size-cells = <1>;
 		/* segnr=2 */
 		/*
-		ranges = <0x300000 0x88300000 0x00800000>,
+		ranges = <0x300000 0x88300000 0xb00000>,
 				<0x20000 0x88020000 0x00220000>;
 		*/
 		modem {
 			cproc,name = "modem";
-			/* reg = <0x300000 0x00800000>; */ /* <modem_addr size> */
+			/* reg = <0x300000 0xb00000>; */ /* <modem_addr size> */
 		};
 		dsp {
 			cproc,name = "dsp";
