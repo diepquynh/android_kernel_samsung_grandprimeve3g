@@ -744,6 +744,7 @@ int32_t dcam_module_en(struct device_node *dn)
 			ret = -DCAM_RTN_MAX;
 			goto fail_exit;
 		}
+		dynamic_dmc_qos_config(0, 1);
 		DCAM_TRACE("DCAM: dcam_module_en end \n");
 	}
 	DCAM_TRACE("DCAM: dcam_module_en, Out %d \n", s_dcam_users.counter);
@@ -777,6 +778,7 @@ int32_t dcam_module_dis(struct device_node *dn)
 		if (ret) {
 			rtn = -DCAM_RTN_MAX;
 		}
+		dynamic_dmc_qos_config(0, 0);
 		wake_unlock(&dcam_wakelock);
 		wake_lock_destroy(&dcam_wakelock);
 	}

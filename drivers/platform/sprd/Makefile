@@ -41,11 +41,13 @@ obj-$(CONFIG_ARCH_SCX35) += clock-sc8830_dt.o
 obj-$(CONFIG_ARCH_SCX35) += io-sc8830.o pin_switch.o
 
 ifeq ($(CONFIG_ARCH_SCX30G),y)
+obj-y += dmc_misc.o
 obj-$(CONFIG_PM_DEVFREQ) += dmc_freq_28nm.o dmc_dfs_test.o
 obj-$(CONFIG_SCX35_DMC_FREQ_AP) += dmc_freq_ap_28nm.o
 	CFLAGS_dmc_freq_ap_28nm.o += -fPIC
 else
 ifeq ($(CONFIG_ARCH_SCX35L),y)
+obj-y += dmc_misc.o
 obj-y += dmc_freq_28nm.o
 else
 obj-$(CONFIG_PM_DEVFREQ) += dmc_freq.o
