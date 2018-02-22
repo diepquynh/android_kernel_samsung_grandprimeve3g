@@ -71,7 +71,7 @@ static struct mem_cgroup *root_mem_cgroup __read_mostly;
 
 #ifdef CONFIG_MEMCG_SWAP
 /* Turned on only when memory cgroup is enabled && really_do_swap_account = 1 */
-int do_swap_account __read_mostly;
+int do_swap_account __read_mostly = 1;
 
 /* for remember boot option*/
 #ifdef CONFIG_MEMCG_SWAP_ENABLED
@@ -5526,7 +5526,7 @@ static int mem_cgroup_swappiness_write(struct cgroup *cgrp, struct cftype *cft,
 	struct mem_cgroup *memcg = mem_cgroup_from_cont(cgrp);
 	struct mem_cgroup *parent;
 
-	if (val > 100)
+	if (val > 200)
 		return -EINVAL;
 
 	if (cgrp->parent == NULL)
