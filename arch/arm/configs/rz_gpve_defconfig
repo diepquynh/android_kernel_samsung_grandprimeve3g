@@ -1449,8 +1449,8 @@ CONFIG_BCM4343=y
 CONFIG_WLAN_SDIO=y
 CONFIG_WIFI_CONTROL_FUNC=y
 CONFIG_BROADCOM_WIFI_RESERVED_MEM=y
-CONFIG_BCMDHD_FW_PATH="/system/etc/wifi/bcmdhd_sta.bin"
-CONFIG_BCMDHD_NVRAM_PATH="/system/etc/wifi/nvram_net.txt"
+CONFIG_BCMDHD_FW_PATH="/vendor/etc/wifi/bcmdhd_sta.bin"
+CONFIG_BCMDHD_NVRAM_PATH="/vendor/etc/wifi/nvram_net.txt"
 CONFIG_WIFI_BROADCOM_COB=y
 
 #
