@@ -2,11 +2,11 @@
  * fs/sdcardfs/file.c
  *
  * Copyright (c) 2013 Samsung Electronics Co. Ltd
- *   Authors: Daeho Jeong, Woojoong Lee, Seunghwan Hyun,
+ *   Authors: Daeho Jeong, Woojoong Lee, Seunghwan Hyun, 
  *               Sunghwan Yun, Sungjong Seo
- *
+ *                      
  * This program has been developed as a stackable file system based on
- * the WrapFS which written by
+ * the WrapFS which written by 
  *
  * Copyright (c) 1998-2011 Erez Zadok
  * Copyright (c) 2009     Shrikar Archak
@@ -65,7 +65,7 @@ static ssize_t sdcardfs_write(struct file *file, const char __user *buf,
 
 	/* check disk space */
 	if (!check_min_free_space(dentry, count, 0)) {
-		pr_err("No minimum free space.\n");
+		printk(KERN_INFO "No minimum free space.\n");
 		return -ENOSPC;
 	}
 
@@ -82,7 +82,7 @@ static ssize_t sdcardfs_write(struct file *file, const char __user *buf,
 	return err;
 }
 
-static int sdcardfs_readdir(struct file *file, struct dir_context *ctx)
+static int sdcardfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 {
 	int err = 0;
 	struct file *lower_file = NULL;
@@ -91,7 +91,7 @@ static int sdcardfs_readdir(struct file *file, struct dir_context *ctx)
 	lower_file = sdcardfs_lower_file(file);
 
 	lower_file->f_pos = file->f_pos;
-	err = iterate_dir(lower_file, ctx);
+	err = vfs_readdir(lower_file, filldir, dirent);
 	file->f_pos = lower_file->f_pos;
 	if (err >= 0)		/* copy the atime */
 		fsstack_copy_attr_atime(dentry->d_inode,
@@ -143,7 +143,6 @@ static int sdcardfs_mmap(struct file *file, struct vm_area_struct *vma)
 	bool willwrite;
 	struct file *lower_file;
 	const struct vm_operations_struct *saved_vm_ops = NULL;
-
 	/* this might be deferred to mmap's writepage */
 	willwrite = ((vma->vm_flags | VM_SHARED | VM_WRITE) == vma->vm_flags);
 
@@ -160,7 +159,8 @@ static int sdcardfs_mmap(struct file *file, struct vm_area_struct *vma)
 	lower_file = sdcardfs_lower_file(file);
 	if (willwrite && !lower_file->f_mapping->a_ops->writepage) {
 		err = -EINVAL;
-		pr_err("sdcardfs: lower file system does not support writeable mmap\n");
+		printk(KERN_ERR "sdcardfs: lower file system does not "
+		       "support writeable mmap\n");
 		goto out;
 	}
 
@@ -172,14 +172,14 @@ static int sdcardfs_mmap(struct file *file, struct vm_area_struct *vma)
 	if (!SDCARDFS_F(file)->lower_vm_ops) {
 		err = lower_file->f_op->mmap(lower_file, vma);
 		if (err) {
-			pr_err("sdcardfs: lower mmap failed %d\n", err);
+			printk(KERN_ERR "sdcardfs: lower mmap failed %d\n", err);
 			goto out;
 		}
 		saved_vm_ops = vma->vm_ops; /* save: came from lower ->mmap */
 		err = do_munmap(current->mm, vma->vm_start,
 				vma->vm_end - vma->vm_start);
 		if (err) {
-			pr_err("sdcardfs: do_munmap failed %d\n", err);
+			printk(KERN_ERR "sdcardfs: do_munmap failed %d\n", err);
 			goto out;
 		}
 	}
@@ -206,22 +206,30 @@ static int sdcardfs_open(struct inode *inode, struct file *file)
 	struct path lower_path;
 	struct dentry *dentry = file->f_path.dentry;
 	struct dentry *parent = dget_parent(dentry);
-	struct sdcardfs_sb_info *sbi = SDCARDFS_SB(dentry->d_sb);
+	struct sdcardfs_sb_info *sbi = SDCARDFS_SB(dentry->d_sb); 
 	const struct cred *saved_cred = NULL;
+	int has_rw;
 
 	/* don't open unhashed/deleted files */
 	if (d_unhashed(dentry)) {
 		err = -ENOENT;
 		goto out_err;
 	}
+	
+	has_rw = get_caller_has_rw_locked(sbi->pkgl_id, sbi->options.derive);
 
-	if (!check_caller_access_to_name(parent->d_inode, &dentry->d_name)) {
+	if(!check_caller_access_to_name(parent->d_inode, dentry->d_name.name, 
+				sbi->options.derive, 
+				open_flags_to_access_mode(file->f_flags), has_rw)) {
+		printk(KERN_INFO "%s: need to check the caller's gid in packages.list\n" 
+                         "	dentry: %s, task:%s\n",
+						 __func__, dentry->d_name.name, current->comm);
 		err = -EACCES;
 		goto out_err;
 	}
 
 	/* save current_cred and override it */
-	OVERRIDE_CRED(sbi, saved_cred, SDCARDFS_I(inode));
+	OVERRIDE_CRED(sbi, saved_cred);
 
 	file->f_mode |= FMODE_NONMAPPABLE;
 	file->private_data =
@@ -232,9 +240,8 @@ static int sdcardfs_open(struct inode *inode, struct file *file)
 	}
 
 	/* open lower object and link sdcardfs's file struct to lower's */
-	sdcardfs_get_lower_path(file->f_path.dentry, &lower_path);
+	sdcardfs_copy_lower_path(file->f_path.dentry, &lower_path);
 	lower_file = dentry_open(&lower_path, file->f_flags, current_cred());
-	path_put(&lower_path);
 	if (IS_ERR(lower_file)) {
 		err = PTR_ERR(lower_file);
 		lower_file = sdcardfs_lower_file(file);
@@ -248,8 +255,12 @@ static int sdcardfs_open(struct inode *inode, struct file *file)
 
 	if (err)
 		kfree(SDCARDFS_F(file));
-	else
-		sdcardfs_copy_and_fix_attrs(inode, sdcardfs_lower_inode(inode));
+	else {
+		mutex_lock(&inode->i_mutex);
+		sdcardfs_copy_inode_attr(inode, sdcardfs_lower_inode(inode));
+		fix_derived_permission(inode);
+		mutex_unlock(&inode->i_mutex);
+	}
 
 out_revert_cred:
 	REVERT_CRED(saved_cred);
@@ -285,23 +296,19 @@ static int sdcardfs_file_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int sdcardfs_fsync(struct file *file, loff_t start, loff_t end,
-			int datasync)
+static int
+sdcardfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	int err;
 	struct file *lower_file;
 	struct path lower_path;
 	struct dentry *dentry = file->f_path.dentry;
 
-	err = generic_file_fsync(file, start, end, datasync);
-	if (err)
-		goto out;
-
 	lower_file = sdcardfs_lower_file(file);
 	sdcardfs_get_lower_path(dentry, &lower_path);
 	err = vfs_fsync_range(lower_file, start, end, datasync);
 	sdcardfs_put_lower_path(dentry, &lower_path);
-out:
+
 	return err;
 }
 
@@ -343,7 +350,7 @@ const struct file_operations sdcardfs_main_fops = {
 const struct file_operations sdcardfs_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
-	.iterate	= sdcardfs_readdir,
+	.readdir	= sdcardfs_readdir,
 	.unlocked_ioctl	= sdcardfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= sdcardfs_compat_ioctl,
