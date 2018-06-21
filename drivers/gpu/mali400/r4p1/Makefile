@@ -13,59 +13,22 @@
 # set up defaults if not defined by the user
 TIMESTAMP ?= default
 OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 16
-USING_GPU_UTILIZATION ?= 1
-PROFILING_SKIP_PP_JOBS ?= 0
-PROFILING_SKIP_PP_AND_GP_JOBS ?= 0
+USING_GPU_UTILIZATION = 1
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP ?= 0
 MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
 MALI_UPPER_HALF_SCHEDULING ?= 1
+USING_PP_CORE = 2
 MALI_ENABLE_CPU_CYCLES ?= 0
+MALI_ENABLE_GPU_CONTROL_IN_PARAM ?= 1
+DFS_MAX_FREQ ?= 460800
+DFS_MIN_FREQ ?= 460800
 
-ifeq ($(USING_GPU_UTILIZATION),1)
-    ifeq ($(CONFIG_MALI_DVFS),y)
-        $(error USING_GPU_UTILIZATION conflict with USING_DVFS you can read the Integration Guide to choose which one do you need)
-    endif
+ifeq ($(CONFIG_MALI400),y)
+    MALI_ENABLE_GPU_CONTROL_IN_PARAM = 0
+else
+    MALI_ENABLE_GPU_CONTROL_IN_PARAM = 1
 endif
-
-ifeq ($(CONFIG_MALI400_PROFILING),y)
-	ifeq ($(CONFIG_TRACEPOINTS),)
-		$(warning CONFIG_TRACEPOINTS required for profiling)
-	else
-		export EXTRA_DEFINES += -DCONFIG_MALI400_PROFILING=1
-		ifeq ($(CONFIG_MALI400_INTERNAL_PROFILING),y)
-			export EXTRA_DEFINES += -DCONFIG_MALI400_INTERNAL_PROFILING=1
-		endif
-		ifeq ($(CONFIG_MALI_HEATMAPS_ENABLED),y)
-			export EXTRA_DEFINES += -DCONFIG_MALI400_HEATMAPS_ENABLED
-		endif
-	endif
-endif
-
-ifeq ($(CONFIG_MALI_DMA_BUF_MAP_ON_ATTACH),y)
-export EXTRA_DEFINES += -DCONFIG_MALI_DMA_BUF_MAP_ON_ATTACH
-endif
-
-ifeq ($(CONFIG_MALI_SHARED_INTERRUPTS),y)
-export EXTRA_DEFINES += -DCONFIG_MALI_SHARED_INTERRUPTS
-endif
-
-ifeq ($(CONFIG_MALI_DVFS),y)
-export EXTRA_DEFINES += -DCONFIG_MALI_DVFS
-endif
-
-ifeq ($(CONFIG_MALI_PMU_PARALLEL_POWER_UP),y)
-export EXTRA_DEFINES += -DCONFIG_MALI_PMU_PARALLEL_POWER_UP
-endif
-
-export EXTRA_DEFINES += -DCONFIG_MALI_DT
-
-ifeq ($(CONFIG_MALI_PLATFORM_SC8830),y)
-	export MALI_PLATFORM := sc8830
-	export TARGET_PLATFORM := sc8830
-endif
-
-EXTRA_DEFINES += -DCONFIG_MALI400=1
 
 mali-y += \
 	linux/mali_osk_atomics.o \
@@ -80,20 +43,11 @@ mali-y += \
 	linux/mali_osk_mali.o \
 	linux/mali_osk_notification.o \
 	linux/mali_osk_time.o \
-	linux/mali_osk_timers.o \
-	linux/mali_osk_bitmap.o
+	linux/mali_osk_timers.o
 
 mali-y += linux/mali_memory.o linux/mali_memory_os_alloc.o
 mali-y += linux/mali_memory_external.o
 mali-y += linux/mali_memory_block_alloc.o
-mali-y += linux/mali_memory_swap_alloc.o
-
-mali-y += \
-	linux/mali_memory_manager.o \
-	linux/mali_memory_virtual.o \
-	linux/mali_memory_util.o \
-	linux/mali_memory_cow.o \
-	linux/mali_memory_defer_bind.o
 
 mali-y += \
 	linux/mali_ukk_mem.o \
@@ -107,6 +61,7 @@ mali-y += \
 mali-y += \
 	common/mali_kernel_core.o \
 	linux/mali_kernel_linux.o \
+	common/mali_kernel_descriptor_mapping.o \
 	common/mali_session.o \
 	linux/mali_device_pause_resume.o \
 	common/mali_kernel_vsync.o \
@@ -122,7 +77,8 @@ mali-y += \
 	common/mali_gp_job.o \
 	common/mali_soft_job.o \
 	common/mali_scheduler.o \
-	common/mali_executor.o \
+	common/mali_gp_scheduler.o \
+	common/mali_pp_scheduler.o \
 	common/mali_group.o \
 	common/mali_dlbu.o \
 	common/mali_broadcast.o \
@@ -130,8 +86,8 @@ mali-y += \
 	common/mali_pmu.o \
 	common/mali_user_settings_db.o \
 	common/mali_kernel_utilization.o \
-	common/mali_control_timer.o \
 	common/mali_l2_cache.o \
+	common/mali_dma.o \
 	common/mali_timeline.o \
 	common/mali_timeline_fence_wait.o \
 	common/mali_timeline_sync_fence.o \
@@ -140,6 +96,10 @@ mali-y += \
 	linux/mali_osk_pm.o \
 	linux/mali_pmu_power_up_down.o \
 	__malidrv_build_info.o
+
+ifneq ($(MALI_PLATFORM_FILES),)
+	mali-y += $(MALI_PLATFORM_FILES:.c=.o)
+endif
 
 mali-$(CONFIG_MALI400_PROFILING) += linux/mali_ukk_profiling.o
 mali-$(CONFIG_MALI400_PROFILING) += linux/mali_osk_profiling.o
@@ -153,7 +113,7 @@ ccflags-$(CONFIG_SYNC) += -Idrivers/staging/android
 
 mali-$(CONFIG_MALI400_UMP) += linux/mali_memory_ump.o
 
-mali-$(CONFIG_MALI_DVFS) += common/mali_dvfs_policy.o
+mali-$(CONFIG_MALI400_POWER_PERFORMANCE_POLICY) += common/mali_power_performance_policy.o
 
 # Tell the Linux build system from which .o file to create the kernel module
 obj-$(CONFIG_MALI400) := mali.o
@@ -164,13 +124,20 @@ ccflags-y += $(EXTRA_DEFINES)
 ccflags-y += -DSPRD_MEM_OPT_PAGE_TABLE_SHRINK
 ccflags-y += -DSPRD_GPU_BOOST
 
+mali-y += platform/sc8830/mali_platform.o
+ccflags-y += -I$(src)/platform/sc8830
+
 ccflags-y += -DMALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP=$(MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP)
 ccflags-y += -DMALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED=$(MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED)
 ccflags-y += -DMALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS=$(MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS)
 ccflags-y += -DMALI_STATE_TRACKING=1
 ccflags-y += -DMALI_OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB=$(OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB)
 ccflags-y += -DUSING_GPU_UTILIZATION=$(USING_GPU_UTILIZATION)
+ccflags-y += -DMALI_PP_CORE_NUMBER=$(USING_PP_CORE)
 ccflags-y += -DMALI_ENABLE_CPU_CYCLES=$(MALI_ENABLE_CPU_CYCLES)
+ccflags-y += -DMALI_ENABLE_GPU_CONTROL_IN_PARAM=$(MALI_ENABLE_GPU_CONTROL_IN_PARAM)
+ccflags-y += -DDFS_MAX_FREQ=$(DFS_MAX_FREQ)
+ccflags-y += -DDFS_MIN_FREQ=$(DFS_MIN_FREQ)
 
 ifeq ($(MALI_UPPER_HALF_SCHEDULING),1)
 	ccflags-y += -DMALI_UPPER_HALF_SCHEDULING
@@ -180,16 +147,7 @@ ccflags-$(CONFIG_MALI400_UMP) += -I$(src)/../ump/include/ump
 ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
-ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/linux/license/gpl -I$(src)/platform -Wno-date-time
-ccflags-y += -O3 -ffast-math -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4
-
-export EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
-export MALI_PLATFORM_FILES = $(wildcard platform/$(MALI_PLATFORM)/*.c)
-
-ifneq ($(MALI_PLATFORM),)
-mali-y += platform/sc8830/mali_platform.o
-ccflags-y += -I$(src)/platform/sc8830
-endif
+ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/platform -I$(src)/platform/$(MALI_PLATFORM)
 
 # Get subversion revision number, fall back to only ${MALI_RELEASE_NAME} if no svn info is available
 MALI_RELEASE_NAME=$(shell cat $(src)/.version 2> /dev/null)
@@ -222,7 +180,6 @@ endif
 endif
 
 ccflags-y += -DSVN_REV_STRING=\"$(DRIVER_REV)\"
-ccflags-y += -fno-PIC
 
 VERSION_STRINGS :=
 VERSION_STRINGS += API_VERSION=$(shell cd $(src); grep "\#define _MALI_API_VERSION" $(FILES_PREFIX)include/linux/mali/mali_utgard_uk_types.h | cut -d' ' -f 3 )
@@ -244,7 +201,7 @@ VERSION_STRINGS += USING_UMP=$(CONFIG_MALI400_UMP)
 VERSION_STRINGS += USING_PROFILING=$(CONFIG_MALI400_PROFILING)
 VERSION_STRINGS += USING_INTERNAL_PROFILING=$(CONFIG_MALI400_INTERNAL_PROFILING)
 VERSION_STRINGS += USING_GPU_UTILIZATION=$(USING_GPU_UTILIZATION)
-VERSION_STRINGS += USING_DVFS=$(CONFIG_MALI_DVFS)
+VERSION_STRINGS += USING_POWER_PERFORMANCE_POLICY=$(CONFIG_POWER_PERFORMANCE_POLICY)
 VERSION_STRINGS += MALI_UPPER_HALF_SCHEDULING=$(MALI_UPPER_HALF_SCHEDULING)
 
 # Create file with Mali driver configuration

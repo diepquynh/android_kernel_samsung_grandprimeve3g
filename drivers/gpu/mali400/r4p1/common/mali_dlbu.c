@@ -81,12 +81,11 @@ struct mali_dlbu_core {
 
 _mali_osk_errcode_t mali_dlbu_initialize(void)
 {
+
 	MALI_DEBUG_PRINT(2, ("Mali DLBU: Initializing\n"));
 
-	if (_MALI_OSK_ERR_OK ==
-	    mali_mmu_get_table_page(&mali_dlbu_phys_addr,
-				    &mali_dlbu_cpu_addr)) {
-		return _MALI_OSK_ERR_OK;
+	if (_MALI_OSK_ERR_OK == mali_mmu_get_table_page(&mali_dlbu_phys_addr, &mali_dlbu_cpu_addr)) {
+		MALI_SUCCESS;
 	}
 
 	return _MALI_OSK_ERR_FAULT;
@@ -96,19 +95,14 @@ void mali_dlbu_terminate(void)
 {
 	MALI_DEBUG_PRINT(3, ("Mali DLBU: terminating\n"));
 
-	if (0 != mali_dlbu_phys_addr && 0 != mali_dlbu_cpu_addr) {
-		mali_mmu_release_table_page(mali_dlbu_phys_addr,
-					    mali_dlbu_cpu_addr);
-		mali_dlbu_phys_addr = 0;
-		mali_dlbu_cpu_addr = 0;
-	}
+	mali_mmu_release_table_page(mali_dlbu_phys_addr, mali_dlbu_cpu_addr);
 }
 
 struct mali_dlbu_core *mali_dlbu_create(const _mali_osk_resource_t *resource)
 {
 	struct mali_dlbu_core *core = NULL;
 
-	MALI_DEBUG_PRINT(4, ("Mali DLBU: Creating Mali dynamic load balancing unit: %s\n", resource->description));
+	MALI_DEBUG_PRINT(2, ("Mali DLBU: Creating Mali dynamic load balancing unit: %s\n", resource->description));
 
 	core = _mali_osk_malloc(sizeof(struct mali_dlbu_core));
 	if (NULL != core) {
@@ -132,6 +126,8 @@ struct mali_dlbu_core *mali_dlbu_create(const _mali_osk_resource_t *resource)
 void mali_dlbu_delete(struct mali_dlbu_core *dlbu)
 {
 	MALI_DEBUG_ASSERT_POINTER(dlbu);
+
+	mali_dlbu_reset(dlbu);
 	mali_hw_core_delete(&dlbu->hw_core);
 	_mali_osk_free(dlbu);
 }

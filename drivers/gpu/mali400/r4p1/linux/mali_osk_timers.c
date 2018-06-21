@@ -31,14 +31,14 @@ _mali_osk_timer_t *_mali_osk_timer_init(void)
 	return t;
 }
 
-void _mali_osk_timer_add(_mali_osk_timer_t *tim, unsigned long ticks_to_expire)
+void _mali_osk_timer_add(_mali_osk_timer_t *tim, u32 ticks_to_expire)
 {
 	MALI_DEBUG_ASSERT_POINTER(tim);
 	tim->timer.expires = jiffies + ticks_to_expire;
 	add_timer(&(tim->timer));
 }
 
-void _mali_osk_timer_mod(_mali_osk_timer_t *tim, unsigned long ticks_to_expire)
+void _mali_osk_timer_mod(_mali_osk_timer_t *tim, u32 ticks_to_expire)
 {
 	MALI_DEBUG_ASSERT_POINTER(tim);
 	mod_timer(&(tim->timer), jiffies + ticks_to_expire);

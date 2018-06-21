@@ -85,16 +85,7 @@ void mali_mmu_activate_fault_flush_page_directory(struct mali_mmu_core *mmu);
 
 void mali_mmu_page_fault_done(struct mali_mmu_core *mmu);
 
-MALI_STATIC_INLINE enum mali_interrupt_result mali_mmu_get_interrupt_result(struct mali_mmu_core *mmu)
-{
-	u32 rawstat_used = mali_hw_core_register_read(&mmu->hw_core, MALI_MMU_REGISTER_INT_RAWSTAT);
-	if (0 == rawstat_used) {
-		return MALI_INTERRUPT_RESULT_NONE;
-	}
-	return MALI_INTERRUPT_RESULT_ERROR;
-}
-
-
+/*** Register reading/writing functions ***/
 MALI_STATIC_INLINE u32 mali_mmu_get_int_status(struct mali_mmu_core *mmu)
 {
 	return mali_hw_core_register_read(&mmu->hw_core, MALI_MMU_REGISTER_INT_STATUS);

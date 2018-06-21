@@ -37,10 +37,11 @@ u32 _mali_osk_atomic_inc_return(_mali_osk_atomic_t *atom)
 	return atomic_inc_return((atomic_t *)&atom->u.val);
 }
 
-void _mali_osk_atomic_init(_mali_osk_atomic_t *atom, u32 val)
+_mali_osk_errcode_t _mali_osk_atomic_init(_mali_osk_atomic_t *atom, u32 val)
 {
-	MALI_DEBUG_ASSERT_POINTER(atom);
+	MALI_CHECK_NON_NULL(atom, _MALI_OSK_ERR_INVALID_ARGS);
 	atomic_set((atomic_t *)&atom->u.val, val);
+	return _MALI_OSK_ERR_OK;
 }
 
 u32 _mali_osk_atomic_read(_mali_osk_atomic_t *atom)

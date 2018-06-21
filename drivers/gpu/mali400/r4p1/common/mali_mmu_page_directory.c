@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2015 ARM Limited. All rights reserved.
+ * Copyright (C) 2011-2014 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -120,13 +120,11 @@ _mali_osk_errcode_t mali_mmu_pagedir_map(struct mali_page_directory *pagedir, u3
 	_mali_osk_errcode_t err;
 	mali_io_address pde_mapping;
 	mali_dma_addr pde_phys;
-	int i, page_count;
-	u32 start_address;
-	if (last_pde < first_pde){
-		MALI_DEBUG_PRINT(2,("function = %s, line =%d, last_pde < first_pde \n", __FUNCTION__, __LINE__));
+	int i;
+
+	if (last_pde < first_pde)
 		return _MALI_OSK_ERR_INVALID_ARGS;
-	}
-	
+
 	for (i = first_pde; i <= last_pde; i++) {
 		if (0 == (_mali_osk_mem_ioread32(pagedir->page_directory_mapped,
 						 i * sizeof(u32)) & MALI_MMU_FLAGS_PRESENT)) {
@@ -136,7 +134,7 @@ _mali_osk_errcode_t mali_mmu_pagedir_map(struct mali_page_directory *pagedir, u3
 
 			err = mali_mmu_get_table_page(&pde_phys, &pde_mapping);
 			if (_MALI_OSK_ERR_OK != err) {
-				MALI_PRINT_ERROR(("Failed to allocate page table page( %d).\n", err));
+				MALI_PRINT_ERROR(("Failed to allocate page table page.\n"));
 				return err;
 			}
 			pagedir->page_entries_mapped[i] = pde_mapping;
@@ -146,20 +144,9 @@ _mali_osk_errcode_t mali_mmu_pagedir_map(struct mali_page_directory *pagedir, u3
 							pde_phys | MALI_MMU_FLAGS_PRESENT);
 
 			MALI_DEBUG_ASSERT(0 == pagedir->page_entries_usage_count[i]);
-		}
-
-		if (first_pde == last_pde) {
-			pagedir->page_entries_usage_count[i] += size / MALI_MMU_PAGE_SIZE;
-		} else if (i == first_pde) {
-			start_address = i * MALI_MMU_VIRTUAL_PAGE_SIZE;
-			page_count = (start_address + MALI_MMU_VIRTUAL_PAGE_SIZE - mali_address) / MALI_MMU_PAGE_SIZE;
-			pagedir->page_entries_usage_count[i] += page_count;
-		} else if (i == last_pde) {
-			start_address = i * MALI_MMU_VIRTUAL_PAGE_SIZE;
-			page_count = (mali_address + size - start_address) / MALI_MMU_PAGE_SIZE;
-			pagedir->page_entries_usage_count[i] += page_count;
+			pagedir->page_entries_usage_count[i] = 1;
 		} else {
-			pagedir->page_entries_usage_count[i] = 1024;
+			pagedir->page_entries_usage_count[i]++;
 		}
 	}
 	_mali_osk_write_mem_barrier();
@@ -211,7 +198,7 @@ _mali_osk_errcode_t mali_mmu_pagedir_unmap(struct mali_page_directory *pagedir, 
 			size_in_pde = MALI_MMU_VIRTUAL_PAGE_SIZE - offset;
 		}
 
-		pagedir->page_entries_usage_count[i] -= size_in_pde / MALI_MMU_PAGE_SIZE;
+		pagedir->page_entries_usage_count[i]--;
 
 		/* If entire page table is unused, free it */
 		if (0 == pagedir->page_entries_usage_count[i]) {
@@ -428,13 +415,15 @@ static _mali_osk_errcode_t dump_mmu_page_table(struct mali_page_directory *paged
 
 	if (NULL != pagedir->page_directory_mapped) {
 		int i;
-
+		const int num_page_table_entries = sizeof(pagedir->page_entries_mapped) / sizeof(pagedir->page_entries_mapped[0]);
 		MALI_CHECK_NO_ERROR(
 			mali_mmu_dump_page(pagedir->page_directory_mapped, pagedir->page_directory, info)
 		);
 
-		for (i = 0; i < sizeof(pagedir->page_entries_mapped) / sizeof(pagedir->page_entries_mapped[0]); i++) {
-			if (NULL != pagedir->page_entries_mapped[i]) {
+		for (i = 0; i < num_page_table_entries; i++)
+		{
+			if (NULL != pagedir->page_entries_mapped[i])
+			{
 				MALI_CHECK_NO_ERROR(
 					mali_mmu_dump_page(pagedir->page_entries_mapped[i],
 							   _mali_osk_mem_ioread32(pagedir->page_directory_mapped,

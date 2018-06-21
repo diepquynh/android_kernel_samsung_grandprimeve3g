@@ -26,4 +26,9 @@ typedef u32 mali_scheduler_mask;
 #define MALI_SCHEDULER_MASK_EMPTY 0
 #define MALI_SCHEDULER_MASK_ALL (MALI_SCHEDULER_MASK_GP | MALI_SCHEDULER_MASK_PP)
 
+typedef enum {
+	MALI_SCHEDULER_HINT_GP_BOUND = 0
+#define MALI_SCHEDULER_HINT_MAX        1
+} mali_scheduler_hint;
+
 #endif /* __MALI_SCHEDULER_TYPES_H__ */
