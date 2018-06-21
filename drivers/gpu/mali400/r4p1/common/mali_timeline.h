@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 ARM Limited. All rights reserved.
+ * Copyright (C) 2013-2014 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -18,7 +18,6 @@
 #include "mali_spinlock_reentrant.h"
 #include "mali_sync.h"
 #include "mali_scheduler_types.h"
-#include <linux/version.h>
 
 /**
  * Soft job timeout.
@@ -26,7 +25,7 @@
  * Soft jobs have to be signaled as complete after activation.  Normally this is done by user space,
  * but in order to guarantee that every soft job is completed, we also have a timer.
  */
-#define MALI_TIMELINE_TIMEOUT_HZ ((unsigned long) (HZ * 3 / 2)) /* 1500 ms. */
+#define MALI_TIMELINE_TIMEOUT_HZ ((u32) (HZ * 3 / 2)) /* 1500 ms. */
 
 /**
  * Timeline type.
@@ -141,8 +140,6 @@ struct mali_timeline {
 
 #if defined(CONFIG_SYNC)
 	struct sync_timeline         *sync_tl;      /**< Sync timeline that corresponds to this timeline. */
-	mali_bool destroyed;
-	struct mali_spinlock_reentrant *spinlock;       /**< Spin lock protecting the timeline system */
 #endif /* defined(CONFIG_SYNC) */
 
 	/* The following fields are used to time out soft job trackers. */
@@ -197,14 +194,10 @@ struct mali_timeline_tracker {
 	void                          *job;          /**< Owner of tracker. */
 
 	/* The following fields are used to time out soft job trackers. */
-	unsigned long                 os_tick_create;
-	unsigned long                 os_tick_activate;
+	u32                           os_tick_create;
+	u32                           os_tick_activate;
 	mali_bool                     timer_active;
 };
-
-extern _mali_osk_atomic_t gp_tracker_count;
-extern _mali_osk_atomic_t phy_pp_tracker_count;
-extern _mali_osk_atomic_t virt_pp_tracker_count;
 
 /**
  * What follows is a set of functions to check the state of a timeline and to determine where on a
@@ -446,14 +439,6 @@ mali_scheduler_mask mali_timeline_system_tracker_put(struct mali_timeline_system
  */
 mali_scheduler_mask mali_timeline_tracker_release(struct mali_timeline_tracker *tracker);
 
-MALI_STATIC_INLINE mali_bool mali_timeline_tracker_activation_error(
-	struct mali_timeline_tracker *tracker)
-{
-	MALI_DEBUG_ASSERT_POINTER(tracker);
-	return (MALI_TIMELINE_ACTIVATION_ERROR_FATAL_BIT &
-		tracker->activation_error) ? MALI_TRUE : MALI_FALSE;
-}
-
 /**
  * Copy data from a UK fence to a Timeline fence.
  *
@@ -461,25 +446,6 @@ MALI_STATIC_INLINE mali_bool mali_timeline_tracker_activation_error(
  * @param uk_fence UK fence.
  */
 void mali_timeline_fence_copy_uk_fence(struct mali_timeline_fence *fence, _mali_uk_fence_t *uk_fence);
-
-void mali_timeline_initialize(void);
-
-void mali_timeline_terminate(void);
-
-MALI_STATIC_INLINE mali_bool mali_timeline_has_gp_job(void)
-{
-	return 0 < _mali_osk_atomic_read(&gp_tracker_count);
-}
-
-MALI_STATIC_INLINE mali_bool mali_timeline_has_physical_pp_job(void)
-{
-	return 0 < _mali_osk_atomic_read(&phy_pp_tracker_count);
-}
-
-MALI_STATIC_INLINE mali_bool mali_timeline_has_virtual_pp_job(void)
-{
-	return 0 < _mali_osk_atomic_read(&virt_pp_tracker_count);
-}
 
 #if defined(DEBUG)
 #define MALI_TIMELINE_DEBUG_FUNCTIONS
@@ -517,11 +483,6 @@ void mali_timeline_debug_print_tracker(struct mali_timeline_tracker *tracker, _m
  * @param timeline Timeline to print.
  */
 void mali_timeline_debug_print_timeline(struct mali_timeline *timeline, _mali_osk_print_ctx *print_ctx);
-
-#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0))
-void mali_timeline_debug_direct_print_tracker(struct mali_timeline_tracker *tracker);
-void mali_timeline_debug_direct_print_timeline(struct mali_timeline *timeline);
-#endif
 
 /**
  * Print debug information about timeline system.

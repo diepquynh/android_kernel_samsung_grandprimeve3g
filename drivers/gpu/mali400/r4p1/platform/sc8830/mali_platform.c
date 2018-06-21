@@ -1,9 +1,9 @@
 /*
  * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
- *
+ * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
- *
+ * 
  * A copy of the licence is included with the program, and can also be obtained from Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
@@ -18,18 +18,12 @@
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/pm.h>
-#include <linux/vmalloc.h>
 #include <linux/dma-mapping.h>
 #ifdef CONFIG_PM_RUNTIME
 #include <linux/pm_runtime.h>
 #endif
-#ifdef CONFIG_MALI_DT
-#include <linux/of.h>
-#endif
 #include <asm/io.h>
 #include <linux/mali/mali_utgard.h>
-
-#include "mali_pm.h"
 #include "mali_kernel_linux.h"
 
 #ifdef CONFIG_64BIT
@@ -37,102 +31,292 @@
 #include <soc/sprd/sci.h>
 #include <soc/sprd/sci_glb_regs.h>
 #else
+#include <soc/sprd/irqs.h>
+#include <soc/sprd/hardware.h>
 #include <soc/sprd/sci.h>
 #include <soc/sprd/sci_glb_regs.h>
 #endif
-
 #include <linux/workqueue.h>
 #include <linux/semaphore.h>
 #include "mali_kernel_common.h"
 #include "base.h"
-#include <linux/sprd_thm.h>
-
-#ifdef CONFIG_CPLL_1024M
-#define GPU_OVER_FREQ_512M
-#endif
 
 #define GPU_GLITCH_FREE_DFS		0
 
+#define UP_THRESHOLD			9/10
+
+#define GPU_HARDWARE_MIN_DIVISION	1
+#define GPU_HARDWARE_MAX_DIVISION	4
+
+#ifdef CONFIG_ARCH_SCX30G
+/*tshark 28nm*/
+#define DFS_FREQ_NUM			8
+
+#define GPU_MAX_FREQ			460800
+#define GPU_MIN_FREQ			64000
+
+#define GPU_150M_FREQ_INDEX 	5
+#elif defined (CONFIG_ARCH_SCX35L)
+/*sharkl 28nm*/
+#define DFS_FREQ_NUM			8
+
+#define GPU_MAX_FREQ			512000
+#define GPU_MIN_FREQ			64000
+
+#define GPU_150M_FREQ_INDEX 	5
+#else
+/*shark 40nm*/
+#define DFS_FREQ_NUM			6
+
+#define GPU_MAX_FREQ			312000
+#define GPU_MIN_FREQ			64000
+
+#define GPU_150M_FREQ_INDEX 	3
+#endif
+
 #define __SPRD_GPU_TIMEOUT      (3*1000)
 
-struct gpu_freq_info {
+#ifdef CONFIG_64BIT
+#define SPRD_MALI_PHYS          0x60000000
+#endif
+
+struct gpu_clock_source {
+	char* name;
+	int   freq;
+	int   freq_select;
 	struct clk* clk_src;
+};
+
+struct gpu_freq_info {
+	int	index;
 	int	freq;
-	int	div;
+	int	freq_select;
+	int	div_select;
 	int	up_threshold;
+	int	down_threshold;
+	struct clk* clk_src;
 };
 
 struct gpu_dfs_context {
+	struct gpu_freq_info* cur_freq_p;
+	struct gpu_freq_info* next_freq_p;
+
+	int cur_load;
+	int freq_list_len;
+
 	int gpu_clock_on;
 	int gpu_power_on;
+	int gpu_suspended;
+
+	struct gpu_freq_info* dfs_min_freq_p;
+	struct gpu_freq_info* dfs_max_freq_p;
+	struct gpu_freq_info* default_min_freq_p;
+	struct gpu_freq_info* default_max_freq_p;
+	struct gpu_freq_info* gpu_max_freq_p;
+	struct gpu_freq_info* gpu_min_freq_p;
+
+	struct gpu_freq_info* dfs_freq_list[DFS_FREQ_NUM];
 
 	struct clk* gpu_clock;
 	struct clk* gpu_clock_i;
-	struct clk** gpu_clk_src;
-	int gpu_clk_num;
-
-	bool is_clk_change;
-	int cur_load;
-
-	struct gpu_freq_info* freq_list;
-	int freq_list_len;
-
-	const struct gpu_freq_info* freq_cur;
-	const struct gpu_freq_info* freq_next;
-
-	const struct gpu_freq_info* freq_min;
-	const struct gpu_freq_info* freq_max;
-	const struct gpu_freq_info* freq_default;
-	const struct gpu_freq_info* freq_9;
-	const struct gpu_freq_info* freq_8;
-	const struct gpu_freq_info* freq_7;
-	const struct gpu_freq_info* freq_5;
-	const struct gpu_freq_info* freq_range_max;
-	const struct gpu_freq_info* freq_range_min;
-#ifdef GPU_OVER_FREQ_512M
-	const struct gpu_freq_info* freq_clk_nb;
-	const struct gpu_freq_info* freq_clk_nb_prev;
-#endif
-
 	struct workqueue_struct *gpu_dfs_workqueue;
 	struct semaphore* sem;
 };
 
 DEFINE_SEMAPHORE(gpu_dfs_sem);
 
-static struct gpu_dfs_context gpu_dfs_ctx = {
-	.is_clk_change = 0,
-	.sem = &gpu_dfs_sem,
+#ifdef CONFIG_ARCH_SCX30G
+/*tshark 28nm*/
+static struct gpu_clock_source  gpu_clk_src[]=
+{
+	{
+		.name="clk_460m8",
+		.freq=460800,
+		.freq_select=6,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_384m",
+		.freq=384000,
+		.freq_select=5,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_312m",
+		.freq=312000,
+		.freq_select=4,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_256m",
+		.freq=256000,
+		.freq_select=2,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_208m",
+		.freq=208000,
+		.freq_select=1,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_153m6",
+		.freq=153600,
+		.freq_select=0,
+		.clk_src=NULL,
+	},
 };
-
-#ifdef GPU_OVER_FREQ_512M
-extern void (*change_clk_notify_gpu)(bool is_change);
+#elif defined (CONFIG_ARCH_SCX35L)
+/*sharkl 28nm*/
+static struct gpu_clock_source  gpu_clk_src[]=
+{
+	{
+		.name="clk_512m",
+		.freq=512000,
+		.freq_select=5,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_384m",
+		.freq=384000,
+		.freq_select=4,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_307m2",
+		.freq=307200,
+		.freq_select=3,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_256m",
+		.freq=256000,
+		.freq_select=2,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_192m",
+		.freq=192000,
+		.freq_select=1,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_153m6",
+		.freq=153600,
+		.freq_select=0,
+		.clk_src=NULL,
+	},
+};
+#else
+/*shark 40nm*/
+static struct gpu_clock_source  gpu_clk_src[]=
+{
+	{
+		.name="clk_312m",
+		.freq=312000,
+		.freq_select=3,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_256m",
+		.freq=256000,
+		.freq_select=1,
+		.clk_src=NULL,
+	},
+	{
+		.name="clk_208m",
+		.freq=208000,
+		.freq_select=0,
+		.clk_src=NULL,
+	},
+};
 #endif
 
-extern int gpu_boost_level;
-extern int gpu_boost_sf_level;
+static const int gpu_clk_num=sizeof(gpu_clk_src)/sizeof(struct gpu_clock_source);
+static struct gpu_freq_info dfs_freq_full_list[32];
 
-extern int gpu_freq_cur;
-extern int utilization;
-extern int up_threshold;
-extern int gpu_freq_min_limit;
-extern int gpu_freq_max_limit;
-extern char* gpu_freq_list;
-
-//functions
-static void gpu_dfs_change(bool is_rate_notify, bool is_clk_change);
-
-static void gpu_freq_list_show(char* buf)
+static struct gpu_dfs_context gpu_dfs_ctx=
 {
-	int i=0,len=0;
+	.cur_load=0,
+	.freq_list_len=DFS_FREQ_NUM,
+	.gpu_clock_on=0,
+	.gpu_power_on=0,
+	.gpu_suspended=0,
 
-	for(i=0; i<gpu_dfs_ctx.freq_list_len; i++)
+#ifdef CONFIG_ARCH_SCX30G
+/*tshark 28nm*/
+	.dfs_freq_list=
 	{
-		len = sprintf(buf,"%2d  %6d\n", i, gpu_dfs_ctx.freq_list[i].freq);
-		buf += len;
-	}
-}
+		/*index:  0 freq:460800 freq_select:  6  div_select:  1*/
+		&dfs_freq_full_list[0],
+		/*index:  1 freq:384000 freq_select:  5  div_select:  1*/
+		&dfs_freq_full_list[4],
+		/*index:  2 freq:312000 freq_select:  4  div_select:  1*/
+		&dfs_freq_full_list[8],
+		/*index:  3 freq:256000 freq_select:  2  div_select:  1*/
+		&dfs_freq_full_list[12],
+		/*index:  4 freq:208000 freq_select:  1  div_select:  1*/
+		&dfs_freq_full_list[16],
+		/*index:  5 freq:153600 freq_select:  0  div_select:  1*/
+		&dfs_freq_full_list[20],
+		/*index:  6 freq:104000 freq_select:  1  div_select:  2*/
+		&dfs_freq_full_list[17],
+		/*index:  7 freq:64000  freq_select:  2  div_select:  4*/
+		&dfs_freq_full_list[15],
+	},
+#elif defined (CONFIG_ARCH_SCX35L)
+/*sharkl 28nm*/
+	.dfs_freq_list=
+	{
+		/*index:  0 freq:512000 freq_select:  5  div_select:  1*/
+		&dfs_freq_full_list[0],
+		/*index:  1 freq:384000 freq_select:  4  div_select:  1*/
+		&dfs_freq_full_list[4],
+		/*index:  2 freq:307200 freq_select:  3  div_select:  1*/
+		&dfs_freq_full_list[8],
+		/*index:  3 freq:256000 freq_select:  2  div_select:  1*/
+		&dfs_freq_full_list[12],
+		/*index:  4 freq:192000 freq_select:  1  div_select:  1*/
+		&dfs_freq_full_list[16],
+		/*index:  5 freq:153600 freq_select:  0  div_select:  1*/
+		&dfs_freq_full_list[20],
+		/*index:  6 freq:102400 freq_select:  3  div_select:  3*/
+		&dfs_freq_full_list[10],
+		/*index:  7 freq:64000  freq_select:  2  div_select:  4*/
+		&dfs_freq_full_list[15],
+	},
+#else
+/*shark 40nm*/
+	.dfs_freq_list=
+	{
+		/*index:  0 freq:312000 freq_select:  3  div_select:  1 up:280800  down:218400*/
+		&dfs_freq_full_list[0],
+		/*index:  1 freq:256000 freq_select:  1  div_select:  1 up:230400  down:179200*/
+		&dfs_freq_full_list[4],
+		/*index:  2 freq:208000 freq_select:  0  div_select:  1 up:187200  down:145600*/
+		&dfs_freq_full_list[8],
+		/*index:  3 freq:156000 freq_select:  3  div_select:  2 up:140400  down:109200*/
+		&dfs_freq_full_list[1],
+		/*index:  4 freq:104000 freq_select:  0  div_select:  2 up: 93600  down: 72800*/
+		&dfs_freq_full_list[9],
+		/*index:  5 freq: 64000 freq_select:  1  div_select:  4 up: 57600  down: 44800*/
+		&dfs_freq_full_list[7],
+	},
+#endif
+	.sem=&gpu_dfs_sem,
+};
 
+extern int gpu_cur_freq;
+extern int gpu_level;
+int gpufreq_min_limit=-1;
+int gpufreq_max_limit=-1;
+char * gpufreq_table=NULL;
+
+static void gpu_change_freq_div(void);
+static void gpufreq_limit_init(void);
+static void gpufreq_limit_uninit(void);
+static inline void mali_set_div(int clock_div);
+static void gpufreq_table_show(char* buf);
 
 static int sprd_gpu_domain_state(void)
 {
@@ -156,11 +340,11 @@ static int sprd_gpu_domain_state(void)
 
 static void sprd_gpu_domain_wait_for_ready(void)
 {
-	int timeout_count = 2000;
+	int timeout_count=2000;
 
 	while(sprd_gpu_domain_state() != BITS_PD_GPU_TOP_STATE(0))
 	{
-		if(0 == timeout_count)
+		if(0==timeout_count)
 		{
 			pr_emerg("gpu domain is not ready for too long time, state %08x %08x\n",
 				sci_glb_read(REG_PMU_APB_PWR_STATUS0_DBG,-1),sci_glb_read(REG_AON_APB_APB_EB0,-1));
@@ -172,340 +356,608 @@ static void sprd_gpu_domain_wait_for_ready(void)
 	return;
 }
 
-static inline void mali_set_div(int clock_div)
+static int freq_search(struct gpu_freq_info* freq_list[],int len,int key)
 {
-	sci_glb_write(REG_GPU_APB_APB_CLK_CTRL,BITS_CLK_GPU_DIV(clock_div-1),BITS_CLK_GPU_DIV(3));
-}
+	int low=0,high=len-1,mid=len/2;
 
-static inline void mali_power_on(void)
-{
-	sci_glb_clr(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
-	udelay(100);
-	gpu_dfs_ctx.gpu_power_on = 1;
-}
+	if(key<0)
+		return -1;
 
-static inline void mali_power_off(void)
-{
-	gpu_dfs_ctx.gpu_power_on = 0;
-	sci_glb_set(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
-}
-
-static inline void mali_clock_on(void)
-{
-	int i;
-	for(i=0;i<gpu_dfs_ctx.gpu_clk_num;i++)
+	while(low<=high)
 	{
-		clk_prepare_enable(gpu_dfs_ctx.gpu_clk_src[i]);
+		mid=(low+high)/2;
+		if(key==freq_list[mid]->freq)
+			return mid;
+		if(key>freq_list[mid]->freq)
+			high=mid-1;
+		else
+			low=mid+1;
+	}
+	return -1;
+}
+
+static int get_next_freq(struct gpu_freq_info* freq_list[],
+		const struct gpu_freq_info* min_freq,const struct gpu_freq_info* max_freq, int key)
+{
+	int low=0,high=0,mid=0;
+	low=max_freq->index;
+	high=min_freq->index;
+	while(low<=high)
+	{
+		mid=(low+high)/2;
+		if((key<freq_list[mid]->up_threshold)&&(mid==min_freq->index))
+			return mid;
+		else if((key<freq_list[mid]->up_threshold)&&(key>freq_list[mid+1]->up_threshold))
+			return mid;
+
+		if(key>freq_list[mid]->up_threshold)
+			high=mid-1;
+		else
+			low=mid+1;
+	}
+	return mid;
+}
+
+static void gpu_dfs_full_list_generate(void)
+{
+	int i=0,j=0;
+
+/*
+	frequency list for tshark 40nm:
+	index:  0 freq:312000 freq_select:  3  div_select:  1 up:280800  down:218400
+	index:  1 freq:156000 freq_select:  3  div_select:  2 up:140400  down:109200
+	index:  2 freq:104000 freq_select:  3  div_select:  3 up: 93600  down: 72800
+	index:  3 freq: 78000 freq_select:  3  div_select:  4 up: 70200  down: 54600
+	index:  4 freq:256000 freq_select:  1  div_select:  1 up:230400  down:179200
+	index:  5 freq:128000 freq_select:  1  div_select:  2 up:115200  down: 89600
+	index:  6 freq: 85333 freq_select:  1  div_select:  3 up: 76800  down: 59733
+	index:  7 freq: 64000 freq_select:  1  div_select:  4 up: 57600  down: 44800
+	index:  8 freq:208000 freq_select:  0  div_select:  1 up:187200  down:145600
+	index:  9 freq:104000 freq_select:  0  div_select:  2 up: 93600  down: 72800
+	index: 10 freq: 69333 freq_select:  0  div_select:  3 up: 62400  down: 48533
+	index: 11 freq: 52000 freq_select:  0  div_select:  4 up: 46800  down: 36400
+*/
+
+/*
+	frequency list for tshark 28nm:
+	index:  0 freq:460800 freq_select:  6  div_select:  1 up:414720  down:     0
+	index:  1 freq:230400 freq_select:  6  div_select:  2 up:207360  down:     0
+	index:  2 freq:153600 freq_select:  6  div_select:  3 up:138240  down:     0
+	index:  3 freq:115200 freq_select:  6  div_select:  4 up:103680  down:     0
+	index:  4 freq:384000 freq_select:  5  div_select:  1 up:345600  down:     0
+	index:  5 freq:192000 freq_select:  5  div_select:  2 up:172800  down:     0
+	index:  6 freq:128000 freq_select:  5  div_select:  3 up:115200  down:     0
+	index:  7 freq: 96000 freq_select:  5  div_select:  4 up: 86400  down:     0
+	index:  8 freq:312000 freq_select:  4  div_select:  1 up:280800  down:     0
+	index:  9 freq:156000 freq_select:  4  div_select:  2 up:140400  down:     0
+	index: 10 freq:104000 freq_select:  4  div_select:  3 up: 93600  down:     0
+	index: 11 freq: 78000 freq_select:  4  div_select:  4 up: 70200  down:     0
+	index: 12 freq:256000 freq_select:  2  div_select:  1 up:230400  down:     0
+	index: 13 freq:128000 freq_select:  2  div_select:  2 up:115200  down:     0
+	index: 14 freq: 85333 freq_select:  2  div_select:  3 up: 76800  down:     0
+	index: 15 freq: 64000 freq_select:  2  div_select:  4 up: 57600  down:     0
+	index: 16 freq:208000 freq_select:  1  div_select:  1 up:187200  down:     0
+	index: 17 freq:104000 freq_select:  1  div_select:  2 up: 93600  down:     0
+	index: 18 freq: 69333 freq_select:  1  div_select:  3 up: 62400  down:     0
+	index: 19 freq: 52000 freq_select:  1  div_select:  4 up: 46800  down:     0
+	index: 20 freq:153600 freq_select:  0  div_select:  1 up:138240  down:     0
+	index: 21 freq: 76800 freq_select:  0  div_select:  2 up: 69120  down:     0
+	index: 22 freq: 51200 freq_select:  0  div_select:  3 up: 46080  down:     0
+	index: 23 freq: 38400 freq_select:  0  div_select:  4 up: 34560  down:     0
+*/
+
+/* sharkl 28nm
+	index:  0 freq:512000 freq_select:  5  div_select:  1 up:460800  down:     0
+	index:  1 freq:256000 freq_select:  5  div_select:  2 up:230400  down:     0
+	index:  2 freq:170666 freq_select:  5  div_select:  3 up:153600  down:     0
+	index:  3 freq:128000 freq_select:  5  div_select:  4 up:115200  down:     0
+	index:  4 freq:384000 freq_select:  4  div_select:  1 up:345600  down:     0
+	index:  5 freq:192000 freq_select:  4  div_select:  2 up:172800  down:     0
+	index:  6 freq:128000 freq_select:  4  div_select:  3 up:115200  down:     0
+	index:  7 freq: 96000 freq_select:  4  div_select:  4 up: 86400  down:     0
+	index:  8 freq:307200 freq_select:  3  div_select:  1 up:276480  down:     0
+	index:  9 freq:153600 freq_select:  3  div_select:  2 up:138240  down:     0
+	index: 10 freq:102400 freq_select:  3  div_select:  3 up: 92160  down:     0
+	index: 11 freq: 76800 freq_select:  3  div_select:  4 up: 69120  down:     0
+	index: 12 freq:256000 freq_select:  2  div_select:  1 up:230400  down:     0
+	index: 13 freq:128000 freq_select:  2  div_select:  2 up:115200  down:     0
+	index: 14 freq: 85333 freq_select:  2  div_select:  3 up: 76800  down:     0
+	index: 15 freq: 64000 freq_select:  2  div_select:  4 up: 57600  down:     0
+	index: 16 freq:192000 freq_select:  1  div_select:  1 up:172800  down:     0
+	index: 17 freq: 96000 freq_select:  1  div_select:  2 up: 86400  down:     0
+	index: 18 freq: 64000 freq_select:  1  div_select:  3 up: 57600  down:     0
+	index: 19 freq: 48000 freq_select:  1  div_select:  4 up: 43200  down:     0
+	index: 20 freq:153600 freq_select:  0  div_select:  1 up:138240  down:     0
+	index: 21 freq: 76800 freq_select:  0  div_select:  2 up: 69120  down:     0
+	index: 22 freq: 51200 freq_select:  0  div_select:  3 up: 46080  down:     0
+	index: 23 freq: 38400 freq_select:  0  div_select:  4 up: 34560  down:     0
+*/
+
+    for(i=0;i<gpu_clk_num;i++)
+	{
+		for(j=0;j<GPU_HARDWARE_MAX_DIVISION;j++)
+		{
+			dfs_freq_full_list[i*4+j].index=i*4+j;
+			dfs_freq_full_list[i*4+j].freq=gpu_clk_src[i].freq/(j+1);
+			dfs_freq_full_list[i*4+j].freq_select=gpu_clk_src[i].freq_select;
+			dfs_freq_full_list[i*4+j].div_select=j+1;
+			dfs_freq_full_list[i*4+j].up_threshold=gpu_clk_src[i].freq*UP_THRESHOLD/(j+1);
+			dfs_freq_full_list[i*4+j].clk_src=gpu_clk_src[i].clk_src;
+		}
 	}
 
-	clk_prepare_enable(gpu_dfs_ctx.gpu_clock_i);
-	sprd_gpu_domain_wait_for_ready();
+    for(i=0;i<gpu_clk_num*GPU_HARDWARE_MAX_DIVISION;i++)
+    {
+		MALI_DEBUG_PRINT(3,("full list index:%3d freq:%6d freq_select:%3d  div_select:%3d up:%6d  down:%6d\n",
+			dfs_freq_full_list[i].index,dfs_freq_full_list[i].freq,
+			dfs_freq_full_list[i].freq_select, dfs_freq_full_list[i].div_select,
+			dfs_freq_full_list[i].up_threshold,dfs_freq_full_list[i].down_threshold));
+    }
+}
 
-	clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_default->clk_src);
+static void gpu_dfs_context_init(void)
+{
+	int i=0;
 
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_cur);
-#ifdef GPU_OVER_FREQ_512M
-	if ((gpu_dfs_ctx.is_clk_change) &&
-		(gpu_dfs_ctx.freq_cur->freq == gpu_dfs_ctx.freq_clk_nb->freq))
+	gpu_dfs_full_list_generate();
+
+	for(i=0;i<gpu_dfs_ctx.freq_list_len;i++)
 	{
-		gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_clk_nb_prev;
+		gpu_dfs_ctx.dfs_freq_list[i]->index=i;
+		MALI_DEBUG_PRINT(2,("index:%3d freq:%6d freq_select:%3d  div_select:%3d up:%6d  down:%6d\n",
+        gpu_dfs_ctx.dfs_freq_list[i]->index,gpu_dfs_ctx.dfs_freq_list[i]->freq,
+		gpu_dfs_ctx.dfs_freq_list[i]->freq_select, gpu_dfs_ctx.dfs_freq_list[i]->div_select,
+		gpu_dfs_ctx.dfs_freq_list[i]->up_threshold,gpu_dfs_ctx.dfs_freq_list[i]->down_threshold));
 	}
+
+	i=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,DFS_MAX_FREQ);
+	if(i<0)
+	{
+		pr_err("invalid DFS_MAX_FREQ:%d\n",DFS_MAX_FREQ);
+		gpu_dfs_ctx.cur_freq_p=gpu_dfs_ctx.dfs_freq_list[0];
+		gpu_dfs_ctx.next_freq_p=gpu_dfs_ctx.dfs_freq_list[0];
+		gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[0];
+		gpu_dfs_ctx.default_max_freq_p=gpu_dfs_ctx.dfs_freq_list[0];
+	}
+	else
+	{
+		gpu_dfs_ctx.cur_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+		gpu_dfs_ctx.next_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+		gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+		gpu_dfs_ctx.default_max_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+	}
+
+	i=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,DFS_MIN_FREQ);
+	if(i<0)
+	{
+		pr_err("invalid DFS_MIN_FREQ:%d\n",DFS_MIN_FREQ);
+		gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[DFS_FREQ_NUM-1];
+		gpu_dfs_ctx.default_min_freq_p=gpu_dfs_ctx.dfs_freq_list[DFS_FREQ_NUM-1];
+	}
+	else
+	{
+		gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+		gpu_dfs_ctx.default_min_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+	}
+
+	i=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,GPU_MAX_FREQ);
+	if(i<0)
+	{
+		pr_err("invalid GPU_MAX_FREQ:%d\n",GPU_MIN_FREQ);
+		gpu_dfs_ctx.gpu_max_freq_p=gpu_dfs_ctx.dfs_freq_list[0];
+	}
+	else
+	{
+		gpu_dfs_ctx.gpu_max_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+	}
+
+	i=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,GPU_MIN_FREQ);
+	if(i<0)
+	{
+		pr_err("invalid GPU_MIN_FREQ:%d\n",GPU_MIN_FREQ);
+		gpu_dfs_ctx.gpu_min_freq_p=gpu_dfs_ctx.dfs_freq_list[DFS_FREQ_NUM-1];
+	}
+	else
+	{
+		gpu_dfs_ctx.gpu_min_freq_p=gpu_dfs_ctx.dfs_freq_list[i];
+	}
+}
+
+static struct resource mali_gpu_resources[] =
+{
+#if MALI_PP_CORE_NUMBER == 4
+	MALI_GPU_RESOURCES_MALI400_MP4_PMU(SPRD_MALI_PHYS, IRQ_GPU_INT, IRQ_GPU_INT,
+													IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT,
+													IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT)
+#elif MALI_PP_CORE_NUMBER == 2
+	MALI_GPU_RESOURCES_MALI400_MP2_PMU(SPRD_MALI_PHYS, IRQ_GPU_INT, IRQ_GPU_INT,
+													IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT)
+#else
+    MALI_GPU_RESOURCES_MALI400_MP1_PMU(SPRD_MALI_PHYS, IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT, IRQ_GPU_INT)
 #endif
-	clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_cur->clk_src);
-	mali_set_div(gpu_dfs_ctx.freq_cur->div);
-
-	clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
-	udelay(100);
-
-	gpu_dfs_ctx.gpu_clock_on = 1;
-
-	gpu_freq_cur = gpu_dfs_ctx.freq_cur->freq;
-}
-
-static inline void mali_clock_off(void)
-{
-	int i;
-
-	gpu_freq_cur = 0;
-
-	gpu_dfs_ctx.gpu_clock_on = 0;
-
-	clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
-	clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
-
-	for(i=0;i<gpu_dfs_ctx.gpu_clk_num;i++)
-	{
-		clk_disable_unprepare(gpu_dfs_ctx.gpu_clk_src[i]);
-	}
-}
-
-void mali_platform_utilization(struct mali_gpu_utilization_data *data);
-
-struct mali_gpu_device_data mali_gpu_data =
-{
-	.shared_mem_size = ARCH_MALI_MEMORY_SIZE_DEFAULT,
-	.control_interval = 100,
-	.utilization_callback = mali_platform_utilization,
-	.get_clock_info = NULL,
-	.get_freq = NULL,
-	.set_freq = NULL,
 };
 
-#ifdef GPU_OVER_FREQ_512M
-void mali_rate_change(bool  is_clk_change)
+static struct mali_gpu_device_data mali_gpu_data =
 {
-	MALI_DEBUG_PRINT(3,("!!Mali rate change is_clk_change=%d cur_freq=%d \n",is_clk_change, gpu_dfs_ctx.freq_cur->freq));
-	gpu_dfs_change(true, is_clk_change);
-}
-#endif
+	.shared_mem_size = ARCH_MALI_MEMORY_SIZE_DEFAULT,
+	.utilization_interval = 300,
+	.utilization_callback = mali_platform_utilization,
+};
 
-int mali_platform_device_init(struct platform_device *pdev)
+static struct platform_device mali_gpu_device =
 {
-	int i;
-	int err = -1;
+	.name = MALI_GPU_NAME_UTGARD,
+	.id = 0,
+	.num_resources = ARRAY_SIZE(mali_gpu_resources),
+	.resource = mali_gpu_resources,
+	.dev.coherent_dma_mask = DMA_BIT_MASK(32),
+	.dev.platform_data = &mali_gpu_data,
+	.dev.release = mali_platform_device_release,
+};
 
-#ifdef CONFIG_SCX35L64BIT_FPGA /* use fpga*/
+int  mali_power_initialize(struct platform_device *pdev)
+{
+	int i=0;
+#ifdef CONFIG_OF
 	struct device_node *np;
 
 	np = of_find_matching_node(NULL, gpu_ids);
 	if(!np) {
 		return -1;
 	}
-	sci_glb_clr(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
-	mdelay(2);
-
-	return 0;
-#else /*not use fpga*/
-
-#ifdef CONFIG_MALI_DT
-	extern struct of_device_id base_dt_ids[];
-	struct device_node *np;
-	int clk_cnt;
-
-	np = of_find_matching_node(NULL, base_dt_ids);
-	if (!np) {
-		return err;
-	}
-
-	gpu_dfs_ctx.gpu_clock_i = of_clk_get(np, 0);
 	gpu_dfs_ctx.gpu_clock = of_clk_get(np, 1);
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clock_i);
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clock);
-
-	clk_cnt = of_property_count_strings(np, "clock-names");
-	gpu_dfs_ctx.gpu_clk_num = clk_cnt - 2;
-	gpu_dfs_ctx.gpu_clk_src = vmalloc(sizeof(struct clk*) * gpu_dfs_ctx.gpu_clk_num);
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clk_src);
-
-	for (i = 0; i < gpu_dfs_ctx.gpu_clk_num; i++) {
-		const char *clk_name;
-		of_property_read_string_index(np, "clock-names", i+2, &clk_name);
-		gpu_dfs_ctx.gpu_clk_src[i] = of_clk_get_by_name(np, clk_name);
-		MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clk_src[i]);
-	}
-
-#ifdef GPU_OVER_FREQ_512M
-	of_property_read_u32(np, "freq-list-len-overclk", &gpu_dfs_ctx.freq_list_len);
-	gpu_dfs_ctx.freq_list = vmalloc(sizeof(struct gpu_freq_info) * gpu_dfs_ctx.freq_list_len);
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_list);
-
-	for(i=0; i<gpu_dfs_ctx.freq_list_len; i++)
-	{
-		int clk;
-		of_property_read_u32_index(np, "freq-lists-overclk", 3*i+1, &clk);
-		gpu_dfs_ctx.freq_list[i].clk_src = gpu_dfs_ctx.gpu_clk_src[clk-2];
-		MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_list[i].clk_src);
-		of_property_read_u32_index(np, "freq-lists-overclk", 3*i,   &gpu_dfs_ctx.freq_list[i].freq);
-		of_property_read_u32_index(np, "freq-lists-overclk", 3*i+2, &gpu_dfs_ctx.freq_list[i].div);
-		gpu_dfs_ctx.freq_list[i].up_threshold =  gpu_dfs_ctx.freq_list[i].freq * up_threshold / 100;
-	}
-
-	of_property_read_u32(np, "freq-default-overclk", &i);
-	gpu_dfs_ctx.freq_default = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_default);
-
-	of_property_read_u32(np, "freq-9-overclk", &i);
-	gpu_dfs_ctx.freq_9 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_9);
-
-	of_property_read_u32(np, "freq-8-overclk", &i);
-	gpu_dfs_ctx.freq_8 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_8);
-
-	of_property_read_u32(np, "freq-7-overclk", &i);
-	gpu_dfs_ctx.freq_7 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_7);
-
-	of_property_read_u32(np, "freq-5-overclk", &i);
-	gpu_dfs_ctx.freq_5 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_5);
-
-	of_property_read_u32(np, "freq-range-max-overclk", &i);
-	gpu_dfs_ctx.freq_range_max = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_range_max);
-
-	of_property_read_u32(np, "freq-range-min-overclk", &i);
-	gpu_dfs_ctx.freq_range_min = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_range_min);
-
-	of_property_read_u32(np, "freq-clk-nb", &i);
-	gpu_dfs_ctx.freq_clk_nb = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_clk_nb);
-
-	of_property_read_u32(np, "freq-clk-nb-prev", &i);
-	gpu_dfs_ctx.freq_clk_nb_prev = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_clk_nb_prev);
+	gpu_dfs_ctx.gpu_clock_i = of_clk_get(np, 0);
+#ifdef CONFIG_ARCH_SCX30G
+/*tshark 28nm*/
+	gpu_clk_src[0].clk_src = of_clk_get(np, 7);
+	gpu_clk_src[1].clk_src = of_clk_get(np, 6);
+	gpu_clk_src[2].clk_src = of_clk_get(np, 5);
+	gpu_clk_src[3].clk_src = of_clk_get(np, 4);
+	gpu_clk_src[4].clk_src = of_clk_get(np, 3);
+	gpu_clk_src[5].clk_src = of_clk_get(np, 2);
+#elif defined (CONFIG_ARCH_SCX35L)
+/*sharkl 28nm*/
+	gpu_clk_src[0].clk_src = of_clk_get(np, 7);
+	gpu_clk_src[1].clk_src = of_clk_get(np, 6);
+	gpu_clk_src[2].clk_src = of_clk_get(np, 5);
+	gpu_clk_src[3].clk_src = of_clk_get(np, 4);
+	gpu_clk_src[4].clk_src = of_clk_get(np, 3);
+	gpu_clk_src[5].clk_src = of_clk_get(np, 2);
 #else
-	of_property_read_u32(np, "freq-list-len", &gpu_dfs_ctx.freq_list_len);
-	gpu_dfs_ctx.freq_list = vmalloc(sizeof(struct gpu_freq_info) * gpu_dfs_ctx.freq_list_len);
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_list);
+/*shark 40nm*/
+	gpu_clk_src[0].clk_src = of_clk_get(np, 4);
+	gpu_clk_src[1].clk_src = of_clk_get(np, 3);
+	gpu_clk_src[2].clk_src = of_clk_get(np, 2);
+#endif
 
-	for(i=0; i<gpu_dfs_ctx.freq_list_len; i++)
+	if (!gpu_dfs_ctx.gpu_clock) {
+		printk ("%s, cant get gpu_clock\n", __FUNCTION__);
+		return -1;
+		}
+	if (!gpu_dfs_ctx.gpu_clock_i) {
+		printk ("%s, cant get gpu_clock_i\n", __FUNCTION__);
+		return -1;
+	}
+	for(i=0;i<gpu_clk_num;i++)
 	{
-		int clk;
-		of_property_read_u32_index(np, "freq-lists", 3*i+1, &clk);
-		gpu_dfs_ctx.freq_list[i].clk_src = gpu_dfs_ctx.gpu_clk_src[clk-2];
-		MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_list[i].clk_src);
-		of_property_read_u32_index(np, "freq-lists", 3*i,   &gpu_dfs_ctx.freq_list[i].freq);
-		of_property_read_u32_index(np, "freq-lists", 3*i+2, &gpu_dfs_ctx.freq_list[i].div);
-		gpu_dfs_ctx.freq_list[i].up_threshold =  gpu_dfs_ctx.freq_list[i].freq * up_threshold / 100;
+		if (!gpu_clk_src[i].clk_src) {
+			printk ("%s, cant get %s\n", __FUNCTION__,gpu_clk_src[i].name);
+			return -1;
+		}
+
+	}
+#else
+	gpu_dfs_ctx.gpu_clock = clk_get(NULL, "clk_gpu");
+	gpu_dfs_ctx.gpu_clock_i = clk_get(NULL, "clk_gpu_i");
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		gpu_clk_src[i].clk_src=clk_get(NULL, gpu_clk_src[i].name);
+	}
+#endif
+
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clock);
+	MALI_DEBUG_ASSERT(gpu_dfs_ctx.gpu_clock_i);
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		MALI_DEBUG_ASSERT(gpu_clk_src[i].clk_src);
 	}
 
-	of_property_read_u32(np, "freq-default", &i);
-	gpu_dfs_ctx.freq_default = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_default);
-
-	of_property_read_u32(np, "freq-9", &i);
-	gpu_dfs_ctx.freq_9 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_9);
-
-	of_property_read_u32(np, "freq-8", &i);
-	gpu_dfs_ctx.freq_8 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_8);
-
-	of_property_read_u32(np, "freq-7", &i);
-	gpu_dfs_ctx.freq_7 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_7);
-
-	of_property_read_u32(np, "freq-5", &i);
-	gpu_dfs_ctx.freq_5 = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_5);
-
-	of_property_read_u32(np, "freq-range-max", &i);
-	gpu_dfs_ctx.freq_range_max = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_range_max);
-
-	of_property_read_u32(np, "freq-range-min", &i);
-	gpu_dfs_ctx.freq_range_min = &gpu_dfs_ctx.freq_list[i];
-	MALI_DEBUG_ASSERT(gpu_dfs_ctx.freq_range_min);
+#ifdef CONFIG_COMMON_CLK
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		clk_prepare_enable(gpu_clk_src[i].clk_src);
+	}
+#else
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		clk_enable(gpu_clk_src[i].clk_src);
+	}
 #endif
+	udelay(100);
 
-	gpu_dfs_ctx.freq_max = gpu_dfs_ctx.freq_range_max;
-	gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_range_min;
-	gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_range_max;
-#endif
-
-	gpu_freq_max_limit = gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len - 1].freq;
-	gpu_freq_min_limit = gpu_dfs_ctx.freq_list[2].freq;
+	gpu_dfs_context_init();
+	gpufreq_limit_init();
 
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_DLY(1),0xff0000);
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_SEQ_DLY(1),0xff00);
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_ISO_ON_DLY(1),0xff);
+	gpu_dfs_ctx.gpu_suspended=0;
 
-	mali_power_on();
-
-	mali_clock_on();
-
-	gpu_dfs_ctx.gpu_dfs_workqueue = create_singlethread_workqueue("gpu_dfs");
-
-	err = platform_device_add_data(pdev, &mali_gpu_data, sizeof(mali_gpu_data));
-
-	if (0 == err) {
-#ifdef CONFIG_PM_RUNTIME
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37))
-		pm_runtime_set_autosuspend_delay(&(pdev->dev), 50);
-		pm_runtime_use_autosuspend(&(pdev->dev));
+	if(!gpu_dfs_ctx.gpu_power_on)
+	{
+		gpu_dfs_ctx.gpu_power_on=1;
+		gpu_cur_freq = gpu_dfs_ctx.cur_freq_p->freq;
+		sci_glb_clr(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+		udelay(100);
+		gpu_dfs_ctx.gpu_clock_on=1;
+#ifdef CONFIG_COMMON_CLK
+		clk_prepare_enable(gpu_dfs_ctx.gpu_clock_i);
+#else
+		clk_enable(gpu_dfs_ctx.gpu_clock_i);
 #endif
-		pm_runtime_enable(&(pdev->dev));
+		sprd_gpu_domain_wait_for_ready();
+		clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_dfs_ctx.dfs_max_freq_p->clk_src);
+		mali_set_div(gpu_dfs_ctx.dfs_max_freq_p->div_select);
+
+#ifdef CONFIG_COMMON_CLK
+		clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+		clk_enable(gpu_dfs_ctx.gpu_clock);
 #endif
+		udelay(100);
 	}
 
-	gpu_freq_list = (char*)vmalloc(256*sizeof(char));
-	gpu_freq_list_show(gpu_freq_list);
+	if(gpu_dfs_ctx.gpu_dfs_workqueue == NULL)
+	{
+		gpu_dfs_ctx.gpu_dfs_workqueue = create_singlethread_workqueue("gpu_dfs");
+	}
 
-#ifdef GPU_OVER_FREQ_512M
-	change_clk_notify_gpu = mali_rate_change;
+#ifdef CONFIG_PM_RUNTIME
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
+	pm_runtime_set_autosuspend_delay(&(pdev->dev), 50);
+	pm_runtime_use_autosuspend(&(pdev->dev));
 #endif
-
-	return err;
-#endif /*not use fpga*/
+	pm_runtime_enable(&(pdev->dev));
+#endif
+	return 0;
 }
 
-int mali_platform_device_deinit(struct platform_device *device)
+int mali_platform_device_register(void)
 {
-	destroy_workqueue(gpu_dfs_ctx.gpu_dfs_workqueue);
+	int err = -1;
 
-	mali_clock_off();
+	MALI_DEBUG_PRINT(4, ("mali_platform_device_register() called\n"));
+	err = platform_device_register(&mali_gpu_device);
+	if (0 == err)
+	{
+		mali_power_initialize(&mali_gpu_device);
+		return 0;
+	}
 
-	mali_power_off();
+	platform_device_unregister(&mali_gpu_device);
 
-	vfree(gpu_freq_list);
+	if(gpu_dfs_ctx.gpu_clock_on)
+	{
+		gpu_dfs_ctx.gpu_clock_on = 0;
+#ifdef CONFIG_COMMON_CLK
+		clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+		clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
+#else
+		clk_disable(gpu_dfs_ctx.gpu_clock);
+		clk_disable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 
-	vfree(gpu_dfs_ctx.freq_list);
+	}
+	if(gpu_dfs_ctx.gpu_power_on)
+	{
+		gpu_dfs_ctx.gpu_power_on = 0;
+		sci_glb_set(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+	}
+	return err;
+}
 
-	vfree(gpu_dfs_ctx.gpu_clk_src);
+void mali_platform_device_unregister(void)
+{
+	int i=0;
 
-	return 0;
+	MALI_DEBUG_PRINT(4, ("mali_platform_device_unregister() called\n"));
+
+	gpufreq_limit_uninit();
+	platform_device_unregister(&mali_gpu_device);
+
+	if(gpu_dfs_ctx.gpu_clock_on)
+	{
+		gpu_dfs_ctx.gpu_clock_on = 0;
+#ifdef CONFIG_COMMON_CLK
+		clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+		clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
+#else
+		clk_disable(gpu_dfs_ctx.gpu_clock);
+		clk_disable(gpu_dfs_ctx.gpu_clock_i);
+#endif
+
+	}
+	if(gpu_dfs_ctx.gpu_power_on)
+	{
+		gpu_dfs_ctx.gpu_power_on = 0;
+		sci_glb_set(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+	}
+
+#ifdef CONFIG_COMMON_CLK
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		clk_disable_unprepare(gpu_clk_src[i].clk_src);
+	}
+#else
+	for(i=0;i<gpu_clk_num;i++)
+	{
+		clk_disable(gpu_clk_src[i].clk_src);
+	}
+#endif
+}
+
+void mali_platform_device_release(struct device *device)
+{
+	MALI_DEBUG_PRINT(4, ("mali_platform_device_release() called\n"));
 }
 
 void mali_platform_power_mode_change(int power_mode)
 {
 #if 1
+	int i=0;
+
 	down(gpu_dfs_ctx.sem);
-	MALI_DEBUG_PRINT(3,("Mali power mode change %d, gpu_power_on=%d gpu_clock_on=%d\n",
-	    power_mode,gpu_dfs_ctx.gpu_power_on,gpu_dfs_ctx.gpu_clock_on));
 	switch(power_mode)
 	{
 	//MALI_POWER_MODE_ON
 	case 0:
+		if(gpu_dfs_ctx.gpu_suspended)
+		{
+			gpu_dfs_ctx.gpu_suspended=0;
+#ifdef CONFIG_COMMON_CLK
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_prepare_enable(gpu_clk_src[i].clk_src);
+			}
+#else
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_enable(gpu_clk_src[i].clk_src);
+			}
+#endif
+		}
+
 		if(!gpu_dfs_ctx.gpu_power_on)
 		{
-			gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_max;
+			gpu_dfs_ctx.gpu_power_on=1;
+			gpu_dfs_ctx.gpu_clock_on=1;
+			gpu_dfs_ctx.cur_freq_p=gpu_dfs_ctx.dfs_max_freq_p;
+			gpu_cur_freq = gpu_dfs_ctx.cur_freq_p->freq;
+			sci_glb_clr(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+			udelay(100);
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock_i);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 
-			mali_power_on();
+			sprd_gpu_domain_wait_for_ready();
 
-			mali_clock_on();
+#ifdef CONFIG_COMMON_CLK
+	#ifdef CONFIG_ARCH_SCX30G
+	/*tshark 28nm*/
+			clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_clk_src[3].clk_src);
+	#elif defined (CONFIG_ARCH_SCX35L)
+	/*sharkl 28nm*/
+			clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_clk_src[3].clk_src);
+	#else
+	/*shark 40nm*/
+			clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_clk_src[1].clk_src);
+	#endif
+#endif
+			clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_dfs_ctx.dfs_max_freq_p->clk_src);
+			mali_set_div(gpu_dfs_ctx.dfs_max_freq_p->div_select);
+
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock);
+#endif
+			udelay(100);
 		}
 
 		if(!gpu_dfs_ctx.gpu_clock_on)
 		{
-			mali_clock_on();
+			gpu_dfs_ctx.gpu_clock_on=1;
+			gpu_cur_freq = gpu_dfs_ctx.cur_freq_p->freq;
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock_i);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock_i);
+#endif
+
+			sprd_gpu_domain_wait_for_ready();
+
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock);
+#endif
+			udelay(100);
 		}
 		break;
-
 	//MALI_POWER_MODE_LIGHT_SLEEP
 	case 1:
 		if(gpu_dfs_ctx.gpu_clock_on)
 		{
-			mali_clock_off();
+			gpu_dfs_ctx.gpu_clock_on = 0;
+			gpu_cur_freq = 0;
+#ifdef CONFIG_COMMON_CLK
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
+#else
+			clk_disable(gpu_dfs_ctx.gpu_clock);
+			clk_disable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 		}
 
 		if(gpu_dfs_ctx.gpu_power_on)
 		{
-			mali_power_off();
+			gpu_dfs_ctx.gpu_power_on = 0;
+			sci_glb_set(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+		}
+
+		if(!gpu_dfs_ctx.gpu_suspended)
+		{
+			gpu_dfs_ctx.gpu_suspended=1;
+#ifdef CONFIG_COMMON_CLK
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_disable_unprepare(gpu_clk_src[i].clk_src);
+			}
+#else
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_disable(gpu_clk_src[i].clk_src);
+			}
+#endif
 		}
 		break;
-
 	//MALI_POWER_MODE_DEEP_SLEEP
 	case 2:
 		if(gpu_dfs_ctx.gpu_clock_on)
 		{
-			mali_clock_off();
+			gpu_dfs_ctx.gpu_clock_on = 0;
+			gpu_cur_freq = 0;
+#ifdef CONFIG_COMMON_CLK
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock_i);
+#else
+			clk_disable(gpu_dfs_ctx.gpu_clock);
+			clk_disable(gpu_dfs_ctx.gpu_clock_i);
+#endif
 		}
 
 		if(gpu_dfs_ctx.gpu_power_on)
 		{
-			mali_power_off();
+			gpu_dfs_ctx.gpu_power_on = 0;
+			sci_glb_set(REG_PMU_APB_PD_GPU_TOP_CFG, BIT_PD_GPU_TOP_FORCE_SHUTDOWN);
+		}
+
+		if(!gpu_dfs_ctx.gpu_suspended)
+		{
+			gpu_dfs_ctx.gpu_suspended=1;
+#ifdef CONFIG_COMMON_CLK
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_disable_unprepare(gpu_clk_src[i].clk_src);
+			}
+#else
+			for(i=0;i<gpu_clk_num;i++)
+			{
+				clk_disable(gpu_clk_src[i].clk_src);
+			}
+#endif
 		}
 		break;
 	};
@@ -513,223 +965,221 @@ void mali_platform_power_mode_change(int power_mode)
 #endif
 }
 
-static void gpu_dfs_func(struct work_struct *work)
+
+static inline void mali_set_div(int clock_div)
 {
-    gpu_dfs_change(false, false);
+	MALI_DEBUG_PRINT(3,("GPU_DFS clock_div %d\n",clock_div));
+	sci_glb_write(REG_GPU_APB_APB_CLK_CTRL,BITS_CLK_GPU_DIV(clock_div-1),BITS_CLK_GPU_DIV(3));
 }
 
+static inline void mali_set_freq(u32 gpu_freq)
+{
+	MALI_DEBUG_PRINT(3,("GPU_DFS gpu_freq select %u\n",gpu_freq));
+	sci_glb_write(REG_GPU_APB_APB_CLK_CTRL,BITS_CLK_GPU_SEL(gpu_freq),BITS_CLK_GPU_SEL(3));
+	return;
+}
+
+static void gpu_dfs_func(struct work_struct *work);
 static DECLARE_WORK(gpu_dfs_work, &gpu_dfs_func);
 
-static int freq_search(struct gpu_freq_info freq_list[], int len, int key)
+static void gpu_dfs_func(struct work_struct *work)
 {
-	int low=0, high=len-1, mid;
-
-	if(key < 0)
-		return -1;
-
-	while(low <= high)
-	{
-		mid = (low+high)/2;
-		if(key == freq_list[mid].freq)
-			return mid;
-		if(key < freq_list[mid].freq)
-			high = mid-1;
-		else
-			low = mid+1;
-	}
-	return -1;
-}
-
-static const struct gpu_freq_info* get_next_freq(const struct gpu_freq_info* min_freq, const struct gpu_freq_info* max_freq, int target)
-{
-	const struct gpu_freq_info* freq;
-	for(freq = min_freq; freq <= max_freq; freq++)
-	{
-		if(freq->up_threshold > target)
-			return freq;
-	}
-	return max_freq;
-}
-
-static void gpu_set_freq(bool is_rate_notify, bool is_clk_change)
-{
-#ifdef GPU_OVER_FREQ_512M
-	if (is_rate_notify)
-	{
-		gpu_dfs_ctx.is_clk_change = is_clk_change;
-		if ((gpu_dfs_ctx.is_clk_change) &&
-			(gpu_dfs_ctx.freq_cur->freq == gpu_dfs_ctx.freq_clk_nb->freq))
-		{
-			gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_clk_nb_prev;
-		}
-	}
-	else
-#endif
-	{
-		int max_index = -1, min_index = -1;
-
-	if (gpu_dfs_ctx.cur_load > 0) {
-		utilization = (gpu_dfs_ctx.cur_load * 100) / 256;
-	}
-
-		MALI_DEBUG_PRINT(3,("GPU_DFS gpu_boost_level:%d gpu_boost_sf_level:%d\n",gpu_boost_sf_level));
-
-		switch(gpu_boost_level)
-		{
-		case 10:
-			gpu_dfs_ctx.freq_max =
-			gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len-1];
-			break;
-
-		case 9:
-			gpu_dfs_ctx.freq_max =
-			gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_9;
-			break;
-
-		case 7:
-			gpu_dfs_ctx.freq_max =
-			gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_7;
-			break;
-
-		case 5:
-			gpu_dfs_ctx.freq_max =
-			gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_5;
-			break;
-
-		case 0:
-		default:
-			gpu_dfs_ctx.freq_max = gpu_dfs_ctx.freq_range_max;
-			gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_range_min;
-			break;
-		}
-
-		if ((0 == gpu_boost_level) && (0 < gpu_boost_sf_level))
-		{
-			gpu_dfs_ctx.freq_max =
-			gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len-1];
-		}
-		gpu_boost_level = 0;
-		gpu_boost_sf_level = 0;
-
-		//limit min freq
-		min_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_min_limit);
-		if (0 <= min_index)
-		{
-			gpu_dfs_ctx.freq_min = &gpu_dfs_ctx.freq_list[min_index];
-			if (gpu_dfs_ctx.freq_min->freq > gpu_dfs_ctx.freq_max->freq)
-			{
-				gpu_dfs_ctx.freq_max = gpu_dfs_ctx.freq_min;
-			}
-		}
-
-		//limit max freq
-		max_index = freq_search(gpu_dfs_ctx.freq_list, gpu_dfs_ctx.freq_list_len, gpu_freq_max_limit);
-		if (0 <= max_index)
-		{
-			gpu_dfs_ctx.freq_max = &gpu_dfs_ctx.freq_list[max_index];
-			if (gpu_dfs_ctx.freq_max->freq < gpu_dfs_ctx.freq_min->freq)
-			{
-				gpu_dfs_ctx.freq_min = gpu_dfs_ctx.freq_max;
-			}
-		}
-
-		if(gpu_dfs_ctx.cur_load >= (256 * up_threshold / 100))
-		{
-			gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_max;
-		}
-		else
-		{
-			int target_freq = gpu_dfs_ctx.freq_cur->freq * gpu_dfs_ctx.cur_load / 256;
-			gpu_dfs_ctx.freq_next = get_next_freq(gpu_dfs_ctx.freq_min, gpu_dfs_ctx.freq_max, target_freq);
-		}
-
-#ifdef GPU_OVER_FREQ_512M
-		if ((gpu_dfs_ctx.is_clk_change) &&
-			(gpu_dfs_ctx.freq_next->freq == gpu_dfs_ctx.freq_clk_nb->freq))
-			{
-				gpu_dfs_ctx.freq_next = gpu_dfs_ctx.freq_clk_nb_prev;
-			}
-#endif
-	}
-
-	MALI_DEBUG_PRINT(3,("GPU_DFS is_rate_notify %3d is_clk_change %3d cur_freq %6d-> next_freq %6d\n",
-		is_rate_notify,gpu_dfs_ctx.is_clk_change,gpu_dfs_ctx.freq_cur->freq, gpu_dfs_ctx.freq_next->freq));
-}
-
-static void gpu_dfs_change(bool is_rate_notify, bool is_clk_change)
-{
-	down(gpu_dfs_ctx.sem);
-
-	//set next freq
-	gpu_set_freq(is_rate_notify,is_clk_change);
-
-	if(gpu_dfs_ctx.gpu_power_on && gpu_dfs_ctx.gpu_clock_on)
-	{
-#if GPU_GLITCH_FREE_DFS
-		if(gpu_dfs_ctx.freq_next != gpu_dfs_ctx.freq_cur)
-		{
-			if(gpu_dfs_ctx.freq_next->clk_src != gpu_dfs_ctx.freq_cur->clk_src)
-			{
-				clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_next->clk_src);
-			}
-			if(gpu_dfs_ctx.freq_next->div != gpu_dfs_ctx.freq_cur->div)
-			{
-				mali_set_div(gpu_dfs_ctx.freq_next->div);
-			}
-
-			gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_next;
-
-			gpu_freq_cur = gpu_dfs_ctx.freq_cur->freq;
-
-		}
-#else
-		if(gpu_dfs_ctx.freq_next != gpu_dfs_ctx.freq_cur)
-		{
-			mali_dev_pause();
-
-			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
-			if(gpu_dfs_ctx.freq_next->clk_src != gpu_dfs_ctx.freq_cur->clk_src)
-			{
-				clk_set_parent(gpu_dfs_ctx.gpu_clock, gpu_dfs_ctx.freq_next->clk_src);
-			}
-			if(gpu_dfs_ctx.freq_next->div != gpu_dfs_ctx.freq_cur->div)
-			{
-				mali_set_div(gpu_dfs_ctx.freq_next->div);
-			}
-
-			gpu_dfs_ctx.freq_cur = gpu_dfs_ctx.freq_next;
-
-			gpu_freq_cur = gpu_dfs_ctx.freq_cur->freq;
-
-			clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
-			udelay(100);
-
-			mali_dev_resume();
-		}
-#endif
-	}
-
-	up(gpu_dfs_ctx.sem);
+	gpu_change_freq_div();
 }
 
 void mali_platform_utilization(struct mali_gpu_utilization_data *data)
 {
+	int max_freq_index=-1,min_freq_index=-1,target_freq=0,next_freq_index=0;
+	gpu_dfs_ctx.cur_load=data->utilization_gpu;
 	MALI_DEBUG_PRINT(3,("GPU_DFS mali_utilization  gpu:%d  gp:%d pp:%d\n",data->utilization_gpu,data->utilization_gp,data->utilization_pp));
+	MALI_DEBUG_PRINT(3,("GPU_DFS  gpu_level:%d\n",gpu_level));
 
-	gpu_dfs_ctx.cur_load = data->utilization_gpu;
-	queue_work(gpu_dfs_ctx.gpu_dfs_workqueue, &gpu_dfs_work);
-}
-
-bool mali_is_on(void)
-{
-	bool 	result = false;
-
-	if (gpu_dfs_ctx.gpu_power_on && gpu_dfs_ctx.gpu_clock_on)
+	switch(gpu_level)
 	{
-		result = true;
-	} else {
-		MALI_DEBUG_PRINT(5,("gpu_power_on = %d, gpu_clock_on = %d\n", gpu_dfs_ctx.gpu_power_on, gpu_dfs_ctx.gpu_clock_on));
+		case 10:
+			max_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_max_limit);
+			if(max_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.gpu_max_freq_p;
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.gpu_max_freq_p;
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+			}
+			gpu_level=1;
+			break;
+
+		case 9:
+			max_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_max_limit);
+			if(max_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.default_max_freq_p;
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.default_max_freq_p;
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+			}
+			gpu_level=1;
+			break;
+
+		case 7:
+			max_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_max_limit);
+			if(max_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[GPU_150M_FREQ_INDEX];
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[GPU_150M_FREQ_INDEX];
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+			}
+			gpu_level=1;
+			break;
+
+		case 5:
+			max_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_max_limit);
+			if(max_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.gpu_min_freq_p;
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.gpu_min_freq_p;
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+			}
+			gpu_level=1;
+			break;
+
+		case 1:
+		case 0:
+		default:
+			max_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_max_limit);
+			min_freq_index=freq_search(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.freq_list_len,gpufreq_min_limit);
+			if(max_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.default_max_freq_p;
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_max_freq_p=gpu_dfs_ctx.dfs_freq_list[max_freq_index];
+			}
+
+			if(min_freq_index<0)
+			{
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.default_min_freq_p;
+			}
+			else
+			{
+				gpu_dfs_ctx.dfs_min_freq_p=gpu_dfs_ctx.dfs_freq_list[min_freq_index];
+			}
+			break;
 	}
 
-	return (result);
+	// if the loading ratio is greater then 90%, switch the clock to the maximum
+	if(gpu_dfs_ctx.cur_load >= (256*UP_THRESHOLD))
+	{
+		gpu_dfs_ctx.next_freq_p=gpu_dfs_ctx.dfs_max_freq_p;
+	}
+	else
+	{
+		target_freq=gpu_dfs_ctx.cur_freq_p->freq*gpu_dfs_ctx.cur_load/256;
+		next_freq_index=get_next_freq(gpu_dfs_ctx.dfs_freq_list,gpu_dfs_ctx.dfs_min_freq_p,
+										gpu_dfs_ctx.dfs_max_freq_p,target_freq);
+		gpu_dfs_ctx.next_freq_p=gpu_dfs_ctx.dfs_freq_list[next_freq_index];
+
+	}
+	MALI_DEBUG_PRINT(3,("GPU_DFS gpu util %3d: target_freq:%6d cur_freq %6d-> next_freq %6d\n",
+		gpu_dfs_ctx.cur_load,target_freq,gpu_dfs_ctx.cur_freq_p->freq, gpu_dfs_ctx.next_freq_p->freq));
+	if(gpu_dfs_ctx.next_freq_p->freq!=gpu_dfs_ctx.cur_freq_p->freq)
+	{
+#if !GPU_GLITCH_FREE_DFS
+		if(gpu_dfs_ctx.gpu_dfs_workqueue)
+			queue_work(gpu_dfs_ctx.gpu_dfs_workqueue, &gpu_dfs_work);
+#else
+		if(gpu_dfs_ctx.next_freq_p->freq_select!=gpu_dfs_ctx.cur_freq_p->freq_select)
+		{
+			if(gpu_dfs_ctx.gpu_dfs_workqueue)
+				queue_work(gpu_dfs_ctx.gpu_dfs_workqueue, &gpu_dfs_work);
+		}
+		else if(gpu_dfs_ctx.next_freq_p->div_select!=gpu_dfs_ctx.cur_freq_p->div_select)
+		{
+			down(gpu_dfs_ctx.sem);
+			if(gpu_dfs_ctx.gpu_power_on&&gpu_dfs_ctx.gpu_clock_on)
+			{
+				mali_set_div(gpu_dfs_ctx.next_freq_p->div_select);
+				gpu_dfs_ctx.cur_freq_p=gpu_dfs_ctx.next_freq_p;
+			}
+			up(gpu_dfs_ctx.sem);
+		}
+#endif
+	}
+}
+
+static void gpufreq_table_show(char* buf)
+{
+	int i=0,len=0;
+
+	for(i=0;i<gpu_dfs_ctx.freq_list_len;i++)
+	{
+		len=sprintf(buf,"%2d  %6d\n",gpu_dfs_ctx.dfs_freq_list[i]->index,gpu_dfs_ctx.dfs_freq_list[i]->freq);
+		buf += len;
+	}
+}
+
+static void gpufreq_limit_init(void)
+{
+	gpufreq_table=(char*)kzalloc(256*sizeof(char), GFP_KERNEL);
+	gpufreq_table_show(gpufreq_table);
+}
+static void gpufreq_limit_uninit(void)
+{
+	kfree(gpufreq_table);
+	return;
+}
+
+static void gpu_change_freq_div(void)
+{
+	down(gpu_dfs_ctx.sem);
+	if(gpu_dfs_ctx.gpu_power_on&&gpu_dfs_ctx.gpu_clock_on)
+	{
+#if !GPU_GLITCH_FREE_DFS
+		mali_dev_pause();
+#endif
+		if(gpu_dfs_ctx.next_freq_p!=gpu_dfs_ctx.cur_freq_p)
+		{
+#ifdef CONFIG_COMMON_CLK
+			clk_disable_unprepare(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_disable(gpu_dfs_ctx.gpu_clock);
+#endif
+			if(gpu_dfs_ctx.next_freq_p->freq_select!=gpu_dfs_ctx.cur_freq_p->freq_select)
+			{
+				MALI_DEBUG_PRINT(3,("GPU_DFS set clk cur_freq %6d-> next_freq %6d next_freq clk_src 0x%p\n",
+					gpu_dfs_ctx.cur_freq_p->freq, gpu_dfs_ctx.next_freq_p->freq,gpu_dfs_ctx.next_freq_p->clk_src));
+				clk_set_parent(gpu_dfs_ctx.gpu_clock,gpu_dfs_ctx.next_freq_p->clk_src);
+			}
+			if(gpu_dfs_ctx.next_freq_p->div_select!=gpu_dfs_ctx.cur_freq_p->div_select)
+			{
+				mali_set_div(gpu_dfs_ctx.next_freq_p->div_select);
+			}
+			gpu_dfs_ctx.cur_freq_p=gpu_dfs_ctx.next_freq_p;
+			gpu_cur_freq=gpu_dfs_ctx.cur_freq_p->freq;
+#ifdef CONFIG_COMMON_CLK
+			clk_prepare_enable(gpu_dfs_ctx.gpu_clock);
+#else
+			clk_enable(gpu_dfs_ctx.gpu_clock);
+#endif
+			udelay(100);
+		}
+#if !GPU_GLITCH_FREE_DFS
+		mali_dev_resume();
+#endif
+	}
+	up(gpu_dfs_ctx.sem);
 }

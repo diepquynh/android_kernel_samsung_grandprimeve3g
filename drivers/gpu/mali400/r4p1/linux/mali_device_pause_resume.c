@@ -13,24 +13,44 @@
  * Implementation of the Mali pause/resume functionality
  */
 
+#include <linux/semaphore.h>
 #include <linux/module.h>
 #include <linux/mali/mali_utgard.h>
-#include "mali_pm.h"
+#include "mali_gp_scheduler.h"
+#include "mali_pp_scheduler.h"
+
+DEFINE_SEMAPHORE(pause_lock);
+
+void mali_pause_lock(void)
+{
+	down(&pause_lock);
+}
+
+void mali_pause_unlock(void)
+{
+	up(&pause_lock);
+}
+
 
 void mali_dev_pause(void)
 {
-	/*
-	 * Deactive all groups to prevent hardware being touched
-	 * during the period of mali device pausing
-	 */
-	mali_pm_os_suspend(MALI_FALSE);
+	mali_gp_scheduler_suspend();
+	mali_pp_scheduler_suspend();
+	mali_group_power_off(MALI_FALSE);
+
+	mali_pause_lock();
+	mali_l2_cache_pause_all(MALI_TRUE);
 }
 
 EXPORT_SYMBOL(mali_dev_pause);
 
 void mali_dev_resume(void)
 {
-	mali_pm_os_resume();
+	mali_l2_cache_pause_all(MALI_FALSE);
+	mali_pause_unlock();
+
+	mali_gp_scheduler_resume();
+	mali_pp_scheduler_resume();
 }
 
 EXPORT_SYMBOL(mali_dev_resume);

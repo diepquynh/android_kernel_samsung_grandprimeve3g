@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 ARM Limited. All rights reserved.
+ * Copyright (C) 2012-2014 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -13,7 +13,6 @@
 #include "mali_osk.h"
 #include "mali_kernel_common.h"
 #include "mali_timeline.h"
-#include "mali_executor.h"
 
 #include <linux/file.h>
 #include <linux/seq_file.h>
@@ -22,7 +21,6 @@
 struct mali_sync_pt {
 	struct sync_pt         sync_pt;
 	struct mali_sync_flag *flag;
-	struct sync_timeline *sync_tl;  /**< Sync timeline this pt is connected to. */
 };
 
 /**
@@ -36,23 +34,9 @@ struct mali_sync_flag {
 	struct kref           refcount; /**< Reference count. */
 };
 
-/**
- * Mali sync timeline is used to connect mali timeline to sync_timeline.
- * When fence timeout can print more detailed mali timeline system info.
- */
-struct mali_sync_timeline_container {
-	struct sync_timeline sync_timeline;
-	struct mali_timeline *timeline;
-};
-
 MALI_STATIC_INLINE struct mali_sync_pt *to_mali_sync_pt(struct sync_pt *pt)
 {
 	return container_of(pt, struct mali_sync_pt, sync_pt);
-}
-
-MALI_STATIC_INLINE struct mali_sync_timeline_container *to_mali_sync_tl_container(struct sync_timeline *sync_tl)
-{
-	return container_of(sync_tl, struct mali_sync_timeline_container, sync_timeline);
 }
 
 static struct sync_pt *timeline_dup(struct sync_pt *pt)
@@ -63,14 +47,13 @@ static struct sync_pt *timeline_dup(struct sync_pt *pt)
 	MALI_DEBUG_ASSERT_POINTER(pt);
 	mpt = to_mali_sync_pt(pt);
 
-	new_pt = sync_pt_create(mpt->sync_tl, sizeof(struct mali_sync_pt));
+	new_pt = sync_pt_create(pt->parent, sizeof(struct mali_sync_pt));
 	if (NULL == new_pt) return NULL;
 
 	new_mpt = to_mali_sync_pt(new_pt);
 
 	mali_sync_flag_get(mpt->flag);
 	new_mpt->flag = mpt->flag;
-	new_mpt->sync_tl = mpt->sync_tl;
 
 	return new_pt;
 }
@@ -124,7 +107,6 @@ static void timeline_release(struct sync_timeline *sync_timeline)
 	module_put(THIS_MODULE);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
 static void timeline_print_pt(struct seq_file *s, struct sync_pt *sync_pt)
 {
 	struct mali_sync_pt *mpt;
@@ -135,7 +117,7 @@ static void timeline_print_pt(struct seq_file *s, struct sync_pt *sync_pt)
 	mpt = to_mali_sync_pt(sync_pt);
 	if (mpt == NULL || mpt->flag == NULL)
 	{
-		MALI_DEBUG_PRINT(2, ("mali timeline NULL resource mpt: %p, mpt->flag: %p\n", (void *)mpt, (void *)(mpt->flag)));
+		MALI_DEBUG_PRINT(2, ("mali timeline NULL resource mpt: %p, mpt->flag: %p\n", (void *)mpt, (void *)(mpt?mpt->flag:0)));
 		return;
 	}
 
@@ -149,101 +131,6 @@ static void timeline_print_pt(struct seq_file *s, struct sync_pt *sync_pt)
 	}
 }
 
-static void timeline_print_obj(struct seq_file *s, struct sync_timeline *sync_tl)
-{
-	struct mali_sync_timeline_container *mali_sync_tl = NULL;
-	struct mali_timeline *mali_tl = NULL;
-
-	MALI_DEBUG_ASSERT_POINTER(sync_tl);
-
-	mali_sync_tl = to_mali_sync_tl_container(sync_tl);
-	MALI_DEBUG_ASSERT_POINTER(mali_sync_tl);
-
-	mali_tl = mali_sync_tl->timeline;
-
-	if (NULL != mali_tl) {
-		seq_printf(s, "oldest (%u) ", mali_tl->point_oldest);
-		seq_printf(s, "next (%u)", mali_tl->point_next);
-		seq_printf(s, "\n");
-
-#if defined(MALI_TIMELINE_DEBUG_FUNCTIONS)
-		{
-			u32 tid = _mali_osk_get_tid();
-			struct mali_timeline_system *system = mali_tl->system;
-
-			mali_spinlock_reentrant_wait(mali_tl->spinlock, tid);
-			if (!mali_tl->destroyed) {
-				mali_spinlock_reentrant_wait(system->spinlock, tid);
-				mali_timeline_debug_print_timeline(mali_tl, s);
-				mali_spinlock_reentrant_signal(system->spinlock, tid);
-			}
-			mali_spinlock_reentrant_signal(mali_tl->spinlock, tid);
-
-			/* dump job queue status and group running status */
-			mali_executor_status_dump();
-		}
-#endif
-	}
-}
-#else
-static void timeline_pt_value_str(struct sync_pt *pt, char *str, int size)
-{
-	struct mali_sync_pt *mpt;
-
-	MALI_DEBUG_ASSERT_POINTER(str);
-	MALI_DEBUG_ASSERT_POINTER(pt);
-
-	mpt = to_mali_sync_pt(pt);
-
-	/* It is possible this sync point is just under construct,
-	 * make sure the flag is valid before accessing it
-	*/
-	if (mpt->flag) {
-		_mali_osk_snprintf(str, size, "%u", mpt->flag->point);
-	} else {
-		_mali_osk_snprintf(str, size, "uninitialized");
-	}
-}
-
-static void timeline_value_str(struct sync_timeline *timeline, char *str, int size)
-{
-	struct mali_sync_timeline_container *mali_sync_tl = NULL;
-	struct mali_timeline *mali_tl = NULL;
-
-	MALI_DEBUG_ASSERT_POINTER(timeline);
-
-	mali_sync_tl = to_mali_sync_tl_container(timeline);
-	MALI_DEBUG_ASSERT_POINTER(mali_sync_tl);
-
-	mali_tl = mali_sync_tl->timeline;
-
-	if (NULL != mali_tl) {
-		_mali_osk_snprintf(str, size, "oldest (%u) ", mali_tl->point_oldest);
-		_mali_osk_snprintf(str, size, "next (%u)", mali_tl->point_next);
-		_mali_osk_snprintf(str, size, "\n");
-
-#if defined(MALI_TIMELINE_DEBUG_FUNCTIONS)
-		{
-			u32 tid = _mali_osk_get_tid();
-			struct mali_timeline_system *system = mali_tl->system;
-
-			mali_spinlock_reentrant_wait(mali_tl->spinlock, tid);
-			if (!mali_tl->destroyed) {
-				mali_spinlock_reentrant_wait(system->spinlock, tid);
-				mali_timeline_debug_direct_print_timeline(mali_tl);
-				mali_spinlock_reentrant_signal(system->spinlock, tid);
-			}
-			mali_spinlock_reentrant_signal(mali_tl->spinlock, tid);
-
-			/* dump job queue status and group running status */
-			mali_executor_status_dump();
-		}
-#endif
-	}
-}
-#endif
-
-
 static struct sync_timeline_ops mali_timeline_ops = {
 	.driver_name    = "Mali",
 	.dup            = timeline_dup,
@@ -251,25 +138,15 @@ static struct sync_timeline_ops mali_timeline_ops = {
 	.compare        = timeline_compare,
 	.free_pt        = timeline_free_pt,
 	.release_obj    = timeline_release,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
 	.print_pt       = timeline_print_pt,
-	.print_obj      = timeline_print_obj,
-#else
-	.pt_value_str = timeline_pt_value_str,
-	.timeline_value_str = timeline_value_str,
-#endif
 };
 
-struct sync_timeline *mali_sync_timeline_create(struct mali_timeline *timeline, const char *name)
+struct sync_timeline *mali_sync_timeline_create(const char *name)
 {
 	struct sync_timeline *sync_tl;
-	struct mali_sync_timeline_container *mali_sync_tl;
 
-	sync_tl = sync_timeline_create(&mali_timeline_ops, sizeof(struct mali_sync_timeline_container), name);
+	sync_tl = sync_timeline_create(&mali_timeline_ops, sizeof(struct sync_timeline), name);
 	if (NULL == sync_tl) return NULL;
-
-	mali_sync_tl = to_mali_sync_tl_container(sync_tl);
-	mali_sync_tl->timeline = timeline;
 
 	/* Grab a reference on the module to ensure the callbacks are present
 	 * as long some timeline exists. The reference is released when the
@@ -279,6 +156,12 @@ struct sync_timeline *mali_sync_timeline_create(struct mali_timeline *timeline, 
 	__module_get(THIS_MODULE);
 
 	return sync_tl;
+}
+
+mali_bool mali_sync_timeline_is_ours(struct sync_timeline *sync_tl)
+{
+	MALI_DEBUG_ASSERT_POINTER(sync_tl);
+	return (sync_tl->ops == &mali_timeline_ops) ? MALI_TRUE : MALI_FALSE;
 }
 
 s32 mali_sync_fence_fd_alloc(struct sync_fence *sync_fence)
@@ -407,7 +290,6 @@ static struct sync_pt *mali_sync_flag_create_pt(struct mali_sync_flag *flag)
 
 	mpt = to_mali_sync_pt(pt);
 	mpt->flag = flag;
-	mpt->sync_tl = flag->sync_tl;
 
 	return pt;
 }

@@ -8,9 +8,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MALI_BROADCAST_H__
-#define __MALI_BROADCAST_H__
-
 /*
  *  Interface for the broadcast unit on Mali-450.
  *
@@ -53,5 +50,3 @@ MALI_STATIC_INLINE void mali_bcast_enable(struct mali_bcast_unit *bcast_unit)
 {
 	mali_bcast_reset(bcast_unit);
 }
-
-#endif /* __MALI_BROADCAST_H__ */

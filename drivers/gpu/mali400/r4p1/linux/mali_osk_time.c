@@ -18,23 +18,22 @@
 #include <linux/time.h>
 #include <asm/delay.h>
 
-mali_bool _mali_osk_time_after_eq(unsigned long ticka, unsigned long tickb)
+int     _mali_osk_time_after(u32 ticka, u32 tickb)
 {
-	return time_after_eq(ticka, tickb) ?
-	       MALI_TRUE : MALI_FALSE;
+	return time_after((unsigned long)ticka, (unsigned long)tickb);
 }
 
-unsigned long _mali_osk_time_mstoticks(u32 ms)
+u32     _mali_osk_time_mstoticks(u32 ms)
 {
 	return msecs_to_jiffies(ms);
 }
 
-u32 _mali_osk_time_tickstoms(unsigned long ticks)
+u32     _mali_osk_time_tickstoms(u32 ticks)
 {
 	return jiffies_to_msecs(ticks);
 }
 
-unsigned long _mali_osk_time_tickcount(void)
+u32     _mali_osk_time_tickcount(void)
 {
 	return jiffies;
 }
@@ -48,12 +47,5 @@ u64 _mali_osk_time_get_ns(void)
 {
 	struct timespec tsval;
 	getnstimeofday(&tsval);
-	return (u64)timespec_to_ns(&tsval);
-}
-
-u64 _mali_osk_boot_time_get_ns(void)
-{
-	struct timespec tsval;
-	get_monotonic_boottime(&tsval);
 	return (u64)timespec_to_ns(&tsval);
 }

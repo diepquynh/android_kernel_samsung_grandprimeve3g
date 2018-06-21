@@ -20,7 +20,7 @@ MALI_STATIC_INLINE _mali_osk_errcode_t _mali_timestamp_reset(void)
 
 MALI_STATIC_INLINE u64 _mali_timestamp_get(void)
 {
-	return _mali_osk_boot_time_get_ns();
+	return _mali_osk_time_get_ns();
 }
 
 #endif /* __MALI_TIMESTAMP_H__ */

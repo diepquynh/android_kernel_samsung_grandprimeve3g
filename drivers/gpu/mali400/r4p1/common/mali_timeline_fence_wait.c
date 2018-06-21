@@ -101,11 +101,7 @@ static mali_bool mali_timeline_fence_wait_check_status(struct mali_timeline_syst
 	if (-1 != fence->sync_fd) {
 		sync_fence = sync_fence_fdget(fence->sync_fd);
 		if (likely(NULL != sync_fence)) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
-			if( 0 == sync_fence->status) {
-#else
-			if (0 == atomic_read(&sync_fence->status)) {
-#endif
+			if (0 == sync_fence->status) {
 				ret = MALI_FALSE;
 			}
 		} else {
@@ -163,9 +159,10 @@ mali_bool mali_timeline_fence_wait(struct mali_timeline_system *system, struct m
 
 	/* Wait for the tracker to be activated or time out. */
 	if (MALI_TIMELINE_FENCE_WAIT_TIMEOUT_NEVER == timeout) {
-		timeout = 3000;
+		_mali_osk_wait_queue_wait_event(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait);
+	} else {
+		_mali_osk_wait_queue_wait_event_timeout(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait, timeout);
 	}
-	_mali_osk_wait_queue_wait_event_timeout(system->wait_queue, mali_timeline_fence_wait_tracker_is_activated, (void *) wait, timeout);
 
 	ret = wait->activated;
 
