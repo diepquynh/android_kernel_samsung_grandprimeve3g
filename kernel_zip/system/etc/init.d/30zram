@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 # Swapoff all first
-if swap_files=$(grep "/" /proc/swaps | busybox awk '{print $1}'); then
+if swap_files=$(grep "/" /proc/swaps | grep "zram" | busybox awk '{print $1}'); then
 	for i in $swap_files; do
 		swapoff $i
 	done
