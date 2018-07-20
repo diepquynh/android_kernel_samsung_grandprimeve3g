@@ -2435,46 +2435,37 @@ static void bt541_ts_late_resume(struct early_suspend *h)
 	//info = container_of(h, struct bt541_ts_info, early_suspend);
 	struct capa_info *cap = &(info->cap_info);
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	if (!dt2w_switch) {
-#endif
-		if (info == NULL)
-			return;
-		zinitix_printk("late resume++\r\n");
-
-		down(&info->work_lock);
-		if (info->work_state != RESUME
-				&& info->work_state != EALRY_SUSPEND) {
-			zinitix_printk("invalid work proceedure (%d)\r\n",
-					info->work_state);
-			up(&info->work_lock);
-			return;
-		}
-#if 0
-		write_cmd(info->client, BT541_WAKEUP_CMD);
-		mdelay(1);
-#else
-		bt541_power_control(info, POWER_ON_SEQUENCE);
-#endif
-		info->work_state = RESUME;
-		if (mini_init_touch(info) == false)
-			goto fail_late_resume;
-
-		if (read_data(info->client, BT541_FIRMWARE_VERSION, (u8 *)&cap->fw_version, 2));
-		if (read_data(info->client, BT541_MINOR_FW_VERSION, (u8 *)&cap->fw_minor_version, 2));
-		if (read_data(info->client, BT541_DATA_VERSION_REG, (u8 *)&cap->reg_data_version, 2));
-		if (read_data(info->client, BT541_HW_ID, (u8 *)&cap->hw_id, 2));
-		if (read_data(info->client, BT541_VENDOR_ID, (u8 *)&cap->vendor_id, 2));
-		if (read_data(info->client, BT541_MODULE_ID, (u8 *)&cap->module_id, 2));
-
-		enable_irq(info->irq);
-		info->work_state = NOTHING;
-		up(&info->work_lock);
-		zinitix_printk("late resume--\n");
+	if (info == NULL)
 		return;
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	} /* dt2w_switch */
-#endif
+	zinitix_printk("late resume++\r\n");
+
+	down(&info->work_lock);
+	if (info->work_state != RESUME
+			&& info->work_state != EALRY_SUSPEND) {
+		zinitix_printk("invalid work proceedure (%d)\r\n",
+				info->work_state);
+		up(&info->work_lock);
+		return;
+	}
+
+	bt541_power_control(info, POWER_ON_SEQUENCE);
+
+	info->work_state = RESUME;
+	if (mini_init_touch(info) == false)
+		goto fail_late_resume;
+
+	if (read_data(info->client, BT541_FIRMWARE_VERSION, (u8 *)&cap->fw_version, 2));
+	if (read_data(info->client, BT541_MINOR_FW_VERSION, (u8 *)&cap->fw_minor_version, 2));
+	if (read_data(info->client, BT541_DATA_VERSION_REG, (u8 *)&cap->reg_data_version, 2));
+	if (read_data(info->client, BT541_HW_ID, (u8 *)&cap->hw_id, 2));
+	if (read_data(info->client, BT541_VENDOR_ID, (u8 *)&cap->vendor_id, 2));
+	if (read_data(info->client, BT541_MODULE_ID, (u8 *)&cap->module_id, 2));
+
+	enable_irq(info->irq);
+	info->work_state = NOTHING;
+	up(&info->work_lock);
+	zinitix_printk("late resume--\n");
+	return;
 
 fail_late_resume:
 	zinitix_printk("failed to late resume\n");
@@ -2495,7 +2486,6 @@ static void bt541_ts_early_suspend(struct early_suspend *h)
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
 	if (!dt2w_switch) {
 #endif
-
 		zinitix_printk("early suspend++\n");
 
 		disable_irq(info->irq);
@@ -2524,22 +2514,13 @@ static void bt541_ts_early_suspend(struct early_suspend *h)
 #endif
 #endif
 
-#if 0
-		write_reg(info->client, BT541_INT_ENABLE_FLAG, 0x0);
-
-		udelay(100);
-		if (write_cmd(info->client, BT541_SLEEP_CMD) != I2C_SUCCESS) {
-			zinitix_printk("failed to enter into sleep mode\n");
-			up(&info->work_lock);
-			return;
-		}
-#else
 		bt541_power_control(info, POWER_OFF);
-#endif
 		zinitix_printk("early suspend--\n");
 		up(&info->work_lock);
 		return;
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	} else {
+		clear_report_data(info);
 	} /* dt2w_switch */
 #endif
 
