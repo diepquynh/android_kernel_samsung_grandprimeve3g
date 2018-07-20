@@ -51,7 +51,7 @@
 #define GPU_OVER_FREQ_512M
 #endif
 
-#define GPU_GLITCH_FREE_DFS		0
+#define GPU_GLITCH_FREE_DFS		1
 
 #define __SPRD_GPU_TIMEOUT      (3*1000)
 
@@ -406,7 +406,7 @@ int mali_platform_device_init(struct platform_device *pdev)
 #endif
 
 	gpu_freq_max_limit = gpu_dfs_ctx.freq_list[gpu_dfs_ctx.freq_list_len - 1].freq;
-	gpu_freq_min_limit = gpu_dfs_ctx.freq_list[2].freq;
+	gpu_freq_min_limit = gpu_dfs_ctx.freq_list[0].freq;
 
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_DLY(1),0xff0000);
 	sci_glb_write(REG_PMU_APB_PD_GPU_TOP_CFG,BITS_PD_GPU_TOP_PWR_ON_SEQ_DLY(1),0xff00);
