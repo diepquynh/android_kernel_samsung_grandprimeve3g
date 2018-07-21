@@ -113,7 +113,6 @@ EXPORT_SYMBOL_GPL(ehci_cf_port_reset_rwsem);
 #define HUB_DEBOUNCE_STEP	  25
 #define HUB_DEBOUNCE_STABLE	 100
 
-static void hub_release(struct kref *kref);
 static int usb_reset_and_verify_device(struct usb_device *udev);
 
 static inline char *portspeed(struct usb_hub *hub, int portstatus)
@@ -138,10 +137,6 @@ struct usb_hub *usb_hub_to_struct_hub(struct usb_device *hdev)
 
 static int usb_device_supports_lpm(struct usb_device *udev)
 {
-	/* Some devices have trouble with LPM */
-	if (udev->quirks & USB_QUIRK_NO_LPM)
-		return 0;
-
 	/* USB 2.1 (and greater) devices indicate LPM support through
 	 * their USB 2.0 Extended Capabilities BOS descriptor.
 	 */
@@ -963,7 +958,11 @@ static int hub_port_disable(struct usb_hub *hub, int port1, int set_state)
  */
 static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
 {
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	dev_info(hub->intfdev, "logical disconnect on port %d\n", port1);
+#else
 	dev_dbg(hub->intfdev, "logical disconnect on port %d\n", port1);
+#endif
 	hub_port_disable(hub, port1, 1);
 
 	/* FIXME let caller ask to power down the port:
@@ -1025,20 +1024,10 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 	unsigned delay;
 
 	/* Continue a partial initialization */
-	if (type == HUB_INIT2 || type == HUB_INIT3) {
-		device_lock(hub->intfdev);
-
-		/* Was the hub disconnected while we were waiting? */
-		if (hub->disconnected) {
-			device_unlock(hub->intfdev);
-			kref_put(&hub->kref, hub_release);
-			return;
-		}
-		if (type == HUB_INIT2)
-			goto init2;
+	if (type == HUB_INIT2)
+		goto init2;
+	if (type == HUB_INIT3)
 		goto init3;
-	}
-	kref_get(&hub->kref);
 
 	/* The superspeed hub except for root hub has to use Hub Depth
 	 * value as an offset into the route string to locate the bits
@@ -1235,7 +1224,6 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 			PREPARE_DELAYED_WORK(&hub->init_work, hub_init_func3);
 			schedule_delayed_work(&hub->init_work,
 					msecs_to_jiffies(delay));
-			device_unlock(hub->intfdev);
 			return;		/* Continues at init3: below */
 		} else {
 			msleep(delay);
@@ -1256,11 +1244,6 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 	/* Allow autosuspend if it was suppressed */
 	if (type <= HUB_INIT3)
 		usb_autopm_put_interface_async(to_usb_interface(hub->intfdev));
-
-	if (type == HUB_INIT2 || type == HUB_INIT3)
-		device_unlock(hub->intfdev);
-
-	kref_put(&hub->kref, hub_release);
 }
 
 /* Implement the continuations for the delays above */
@@ -2579,15 +2562,8 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 		if (ret < 0)
 			return ret;
 
-		/*
-		 * The port state is unknown until the reset completes.
-		 *
-		 * On top of that, some chips may require additional time
-		 * to re-establish a connection after the reset is complete,
-		 * so also wait for the connection to be re-established.
-		 */
-		if (!(portstatus & USB_PORT_STAT_RESET) &&
-		    (portstatus & USB_PORT_STAT_CONNECTION))
+		/* The port state is unknown until the reset completes. */
+		if (!(portstatus & USB_PORT_STAT_RESET))
 			break;
 
 		/* switch to the long delay after two short delay failures */
@@ -3310,10 +3286,10 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 		dev_dbg(hub->intfdev, "can't resume port %d, status %d\n",
 				port1, status);
 	} else {
-		/* drive resume for USB_RESUME_TIMEOUT msec */
+		/* drive resume for at least 20 msec */
 		dev_dbg(&udev->dev, "usb %sresume\n",
 				(PMSG_IS_AUTO(msg) ? "auto-" : ""));
-		msleep(USB_RESUME_TIMEOUT);
+		msleep(25);
 
 		/* Virtual root hubs can trigger on GET_PORT_STATUS to
 		 * stop resume signaling.  Then finish the resume
@@ -4191,13 +4167,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 						r = -EPROTO;
 					break;
 				}
-				/*
-				 * Some devices time out if they are powered on
-				 * when already connected. They need a second
-				 * reset. But only on the first attempt,
-				 * lest we get into a time out/reset loop
-				 */
-				if (r == 0  || (r == -ETIMEDOUT && j == 0))
+				if (r == 0)
 					break;
 			}
 			udev->descriptor.bMaxPacketSize0 =
@@ -4323,8 +4293,6 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 		goto fail;
 	}
 
-	usb_detect_quirks(udev);
-
 	if (udev->wusb == 0 && le16_to_cpu(udev->descriptor.bcdUSB) >= 0x0201) {
 		retval = usb_get_bos_descriptor(udev);
 		if (!retval) {
@@ -4436,11 +4404,15 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev;
 	int status, i;
 	unsigned unit_load;
-
-	dev_dbg (hub_dev,
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	dev_info(hub_dev,
 		"port %d, status %04x, change %04x, %s\n",
 		port1, portstatus, portchange, portspeed(hub, portstatus));
-
+#else
+	dev_dbg(hub_dev,
+		"port %d, status %04x, change %04x, %s\n",
+		port1, portstatus, portchange, portspeed(hub, portstatus));
+#endif
 	if (hub->has_indicators) {
 		set_port_led(hub, port1, HUB_LED_AUTO);
 		hub->indicator[port1-1] = INDICATOR_AUTO;
@@ -4566,6 +4538,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 		if (status < 0)
 			goto loop;
 
+		usb_detect_quirks(udev);
 		if (udev->quirks & USB_QUIRK_DELAY_INIT)
 			msleep(1000);
 
@@ -5106,6 +5079,12 @@ static int descriptors_changed(struct usb_device *udev,
 	if (!changed && serial_len) {
 		length = usb_string(udev, udev->descriptor.iSerialNumber,
 				buf, serial_len);
+		if(length < 0)
+		{
+			dev_err(&udev->dev, "usb_string return error\n");
+			kfree(buf);
+			return 1;
+		}
 		if (length + 1 != serial_len) {
 			dev_dbg(&udev->dev, "serial string error %d\n",
 					length);
