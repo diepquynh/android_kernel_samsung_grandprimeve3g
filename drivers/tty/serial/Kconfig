@@ -7,6 +7,13 @@ if TTY
 menu "Serial drivers"
 	depends on HAS_IOMEM && GENERIC_HARDIRQS
 
+config SERIAL_EARLYCON
+	bool
+	help
+	  Support for early consoles with the earlycon parameter. This enables
+	  the console before standard serial driver is probed. The console is
+	  enabled when early_param is processed.
+
 source "drivers/tty/serial/8250/Kconfig"
 
 comment "Non-8250 serial port support"
@@ -1483,6 +1490,24 @@ config SERIAL_RP2_NR_UARTS
 	help
 	  If multiple cards are present, the default limit of 32 ports may
 	  need to be increased.
+
+config SERIAL_SPRD_UART
+	tristate "Spreadtrum UART support"
+	select SERIAL_CORE
+	help
+	  This driver supports the Spreadtrum UART port.
+
+config SERIAL_SPRD_UART_NR
+	int "Maximum number of sprd serial ports"
+	depends on SERIAL_SPRD_UART
+	default "4"
+
+config SERIAL_SPRD_UART_CONSOLE
+	bool "SPRD UART console support"
+	depends on SERIAL_SPRD_UART=y
+	select SERIAL_CORE_CONSOLE
+	help
+	  Enable UART1 port to be the system console.
 
 endmenu
 

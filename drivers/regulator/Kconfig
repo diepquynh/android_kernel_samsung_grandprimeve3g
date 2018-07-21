@@ -300,6 +300,12 @@ config REGULATOR_PCF50633
 	 Say Y here to support the voltage regulators and convertors
 	 on PCF50633
 
+config REGULATOR_RT5033
+	depends on MFD_RT5033
+	tristate "RT5033 LDO and Buck"
+	help
+	  Say y here to support the regulators found on the Richtek RT5033 I/F PMIC.
+
 config REGULATOR_RC5T583
 	tristate "RICOH RC5T583 Power regulators"
 	depends on MFD_RC5T583
@@ -513,6 +519,85 @@ config REGULATOR_AS3711
 	help
 	  This driver provides support for the voltage regulators on the
 	  AS3711 PMIC
+
+config REGULATOR_SPRD
+	tristate "Spreadtrum Power Regulators"
+	depends on ARCH_SC8825
+	default y if ARCH_SC8825
+	help
+	  This driver supports spreadtrum voltage regulator chips.
+
+config REGULATOR_SC2711
+	tristate "Spreadtrum PMIC for shark, also integrated audio codec"
+	depends on ARCH_SCX15
+	default y
+	help
+	  This driver supports spreadtrum voltage regulator chips.
+
+config REGULATOR_SC2713
+	tristate "Spreadtrum PMIC for shark, also integrated audio codec"
+	depends on (ARCH_SCX35 && !ARCH_SCX15 && !ARCH_SCX30G && !ARCH_SCX35L) || ARCH_SC7710 || ADIE_SC2713
+	default y
+	help
+	  This driver supports spreadtrum voltage regulator chips.
+
+config REGULATOR_SC2713S
+	tristate "Spreadtrum PMIC SC2713S regulator driver"
+	depends on ADIE_SC2713S
+	default y
+	help
+	  Say Y here to support the voltage regulators for sc2713s
+
+config REGULATOR_SC2723
+	tristate "Spreadtrum PMIC SC2723/SC2723S regulator driver"
+	depends on ADIE_SC2723 || ADIE_SC2723S
+	default y
+	help
+	  Say Y here to support the voltage regulators for sc2723/sc2723s
+
+config REGULATOR_CAL_DUMMY
+    bool "Regulator calibration is dummy"
+    depends on REGULATOR_SC2713S || REGULATOR_SC2713
+    default n
+    help
+        This option only for debug purpose
+
+config REGULATOR_ADC_DEBUG
+    bool "Regulator auxadc channel value debug"
+    depends on  REGULATOR_SC2713S || REGULATOR_SC2713 || REGULATOR_SC2711
+    default n
+    help
+        This option only for debug purpose
+
+config REGULATOR_SPRD_MAP
+	string "regulator map file name"
+	depends on REGULATOR_SPRD || REGULATOR_SC2713 || REGULATOR_SC2711
+	default "mach/__sc7710_regulator_map.h" if ARCH_SC7710
+	default "mach/chip_x35/__regulator_map.h" if ARCH_SCX35 && !ARCH_SCX15
+	default "mach/chip_x15/__regulator_map.h" if ARCH_SCX15
+	default "mach/__regulator_map.h"
+
+config REGULATOR_SPRD_MAP_V1
+	string "sc2713s/sc2723... regulator map file name"
+	depends on REGULATOR_SC2713S || REGULATOR_SC2723
+	default "mach/chip_x30g/__sc2713s_regulator_map.h" if ARCH_SCX30G && ADIE_SC2713S
+	default "mach/chip_x35/__sc2713s_regulator_map.h" if ARCH_SCX35 && ADIE_SC2713S
+	default "mach/chip_x35l/__sc2723_regulator_map.h" if ARCH_SCX35L && (ADIE_SC2723 || ADIE_SC2723S)
+        default "mach/chip_x20l/__sc2723_regulator_map.h" if ARCH_SCX20L && (ADIE_SC2723 || ADIE_SC2723S)
+	default "mach/__regulator_map.h"
+
+config REGULATOR_SUPPORT_CAMIO_1200MV
+        bool "Regulator support camio 1200mv voltage"
+        depends on REGULATOR_SC2713S
+        default n
+        help
+          Say Y here to support camio 1200mv voltage for sc2713s
+
+config REGULATOR_EXT_DCDC
+        bool "Regulator support external dcdc"
+        default n
+        help
+          Say Y here to support external dcdc
 
 endif
 

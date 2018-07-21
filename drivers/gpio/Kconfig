@@ -81,6 +81,9 @@ config GPIO_SYSFS
 	  Kernel drivers may also request that a particular GPIO be
 	  exported to userspace; this can be useful when debugging.
 
+config SEC_GPIO_DVS
+	tristate "setting Samsung GPIO debuggin and verification system"
+
 config GPIO_GENERIC
 	tristate
 
@@ -216,6 +219,15 @@ config GPIO_SPEAR_SPICS
 	help
 	  Say yes here to support ST SPEAr SPI Chip Select as GPIO device
 
+config GPIO_SPRD
+	tristate "SpreadTrum GPIO support"
+	select ARCH_HAVE_CUSTOM_GPIO_H
+	depends on GPIOLIB
+	help
+	  Say yes here to support the GPIO interface on ARM v7/8 based
+	  SpreadTrum chips.  Most of the pins on the SPRD can be
+	  selected for GPIO, and are controlled by this driver.
+	  
 config GPIO_STA2X11
 	bool "STA2x11/ConneXt GPIO support"
 	depends on MFD_STA2X11

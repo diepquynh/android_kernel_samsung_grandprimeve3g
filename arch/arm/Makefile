@@ -16,6 +16,7 @@ LDFLAGS		:=
 LDFLAGS_vmlinux	:=-p --no-undefined -X
 ifeq ($(CONFIG_CPU_ENDIAN_BE8),y)
 LDFLAGS_vmlinux	+= --be8
+LDFLAGS_MODULE	+= --be8
 endif
 
 OBJCOPYFLAGS	:=-O binary -R .comment -S
@@ -54,14 +55,6 @@ LD		+= -EL
 endif
 
 comma = ,
-
-#
-# The Scalar Replacement of Aggregates (SRA) optimization pass in GCC 4.9 and
-# later may result in code being generated that handles signed short and signed
-# char struct members incorrectly. So disable it.
-# (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65932)
-#
-KBUILD_CFLAGS	+= $(call cc-option,-fno-ipa-sra)
 
 # This selects which instruction set is used.
 # Note that GCC does not numerically define an architecture version
@@ -202,6 +195,7 @@ machine-$(CONFIG_PLAT_SPEAR)		+= spear
 machine-$(CONFIG_ARCH_VIRT)		+= virt
 machine-$(CONFIG_ARCH_ZYNQ)		+= zynq
 machine-$(CONFIG_ARCH_SUNXI)		+= sunxi
+machine-$(CONFIG_ARCH_SC)      += sc
 
 # Platform directory name.  This list is sorted alphanumerically
 # by CONFIG_* macro name.
@@ -272,6 +266,8 @@ libs-y				:= arch/arm/lib/ $(libs-y)
 # Default target when executing plain make
 ifeq ($(CONFIG_XIP_KERNEL),y)
 KBUILD_IMAGE := xipImage
+else ifeq ($(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE),y)
+KBUILD_IMAGE := zImage-dtb.$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAME)
 else
 KBUILD_IMAGE := zImage
 endif

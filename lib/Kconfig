@@ -213,6 +213,22 @@ config DECOMPRESS_LZO
 	select LZO_DECOMPRESS
 	tristate
 
+config LZO_SOFT_ALGO
+	tristate "Soft LZO Algo"
+	select LZO_COMPRESS
+	select LZO_DECOMPRESS
+	default y
+	help
+	Support for Soft LZO ALGO.
+
+config LZO_HW_ALGO
+	tristate "HW LZO Algo"
+	select LZO_COMPRESS
+	select LZO_DECOMPRESS
+	default n
+	help
+	Support for HW LZO ALGO.
+
 #
 # Generic allocator support is selected if needed
 #

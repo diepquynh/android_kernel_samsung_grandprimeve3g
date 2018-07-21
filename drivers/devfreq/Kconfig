@@ -63,6 +63,14 @@ config DEVFREQ_GOV_USERSPACE
 	  Otherwise, the governor does not change the frequnecy
 	  given at the initialization.
 
+config DEVFREQ_GOV_ONDEMAND
+	tristate "Ondemand"
+	help
+	  Chooses frequency based on the recent load on the device. Works
+	  similar as ONDEMAND governor of CPUFREQ does. A device with
+	  Simple-Ondemand should be able to provide busy/total counter
+	  values that imply the usage rate.
+	  Requests from user space and devices drivers can also tune frequency
 comment "DEVFREQ Drivers"
 
 config ARM_EXYNOS4_BUS_DEVFREQ
@@ -77,5 +85,55 @@ config ARM_EXYNOS4_BUS_DEVFREQ
 	  the operating frequencies and voltages with OPP support.
 	  To operate with optimal voltages, ASV support is required
 	  (CONFIG_EXYNOS_ASV).
+
+config SPRD_SCX35_DMC_FREQ
+	bool "Spreadtrum scx35 Memory Bus DMCFREQ Driver"
+	depends on ARCH_SCX35
+	select ARCH_HAS_OPP
+	select DEVFREQ_GOV_ONDEMAND
+	help
+	  This adds the DMCFREQ driver for Spreadtrum scx35 memory bus (vdd_core)
+	  It reads PPMU counters of memory controllers and adjusts
+	  the operating frequencies with OPP support.
+
+config SCX35_DMC_FREQ_AP
+       bool "Spreadtrum scx35 DDR DFS in AP side"
+       depends on ARCH_SCX35
+       help
+         This adds the DMCFREQ drive, DDR DFS run in AP side
+
+config SCX35_DMC_FREQ_CP0
+	bool "Spreadtrum scx35 DDR DFS in cp0 side"
+	depends on ARCH_SCX35
+	help
+          This adds the DMCFREQ drive, DDR DFS run in cp0.
+	  please make sure the cp0 is free.
+
+config SCX35_DMC_FREQ_CP1
+	bool "Spreadtrum scx35 DDR DFS in cp1 side"
+	depends on ARCH_SCX35
+	help
+          This adds the DMCFREQ drive, DDR DFS run in cp1.
+	  please make sure the cp1 is free.
+
+config SCX35_DMC_FREQ_CP2
+	bool "Spreadtrum scx35 DDR DFS in cp2 side"
+	depends on ARCH_SCX35
+	help
+          This adds the DMCFREQ drive, DDR DFS run in cp2.
+	  please make sure the cp2 is free.
+
+config SCX35_DMC_FREQ_DDR3
+	bool "Spreadtrum scx35 DDR DFS for ddr3 side"
+	depends on ARCH_SCX35
+	help
+          This adds the DMCFREQ drive, DDR DFS run for ddr3.
+	  please make sure the cp1 is free.
+
+config SPRD_SCX35_DMC_FREQ_DEBUG
+	bool "Spreadtrum scx35 Memory Bus DMCFREQ Driver debug"
+	depends on SPRD_SCX35_DMC_FREQ
+	help
+	  DMCFREQ driver for Spreadtrum scx35 memory bus debug.
 
 endif # PM_DEVFREQ

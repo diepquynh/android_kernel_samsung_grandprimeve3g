@@ -487,6 +487,24 @@ config SPI_NUC900
 	help
 	  SPI driver for Nuvoton NUC900 series ARM SoCs
 
+config SPI_SC8810
+	tristate "SC8810 SPI controller module support"
+	depends on (ARCH_SC8810)
+	help
+	  SPI driver for Spreadtrum SC8810 series ARM SoCs
+
+config SPI_SC8825
+	tristate "SC8825 SPI controller module support"
+	depends on (ARCH_SC8825)
+	help
+	  SPI driver for Spreadtrum TIGER series ARM SoCs
+
+config SPI_SCX35
+	tristate "SC8830 SPI controller module support"
+	depends on (ARCH_SCX35)
+	help
+	  SPI driver for Spreadtrum Shark series ARM SoCs
+
 #
 # Add new SPI master controllers in alphabetical order above this line
 #

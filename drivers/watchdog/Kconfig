@@ -391,6 +391,23 @@ config RETU_WATCHDOG
 	  To compile this driver as a module, choose M here: the
 	  module will be called retu_wdt.
 
+config SPRD_WATCHDOG_SYS
+	bool "Spreadtrum watchdog"
+	depends on ARCH_SCX35
+	help
+	  This is the driver for the hardware watchdog
+	  on Spreadtrum SCX35 chip.
+	  If you wish to have watchdog support enabled,
+          say Y, otherwise say N.
+
+config SPRD_WATCHDOG_SYS_FIQ
+	bool "Spreadtrum watchdog with fiq mode"
+	depends on SPRD_WATCHDOG_SYS
+	select FIQ_GLUE
+	default y
+	help
+	  This option will chose hardware watchdog interrupt mode to fiq.
+
 # AVR32 Architecture
 
 config AT32AP700X_WDT

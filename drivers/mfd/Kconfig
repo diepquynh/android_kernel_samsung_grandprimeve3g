@@ -18,6 +18,66 @@ config MFD_CS5535
 	  This is the core driver for CS5535/CS5536 MFD functions.  This is
           necessary for using the board's GPIO and MFGPT functionality.
 
+config MFD_SM5504
+	tristate "SiliconMitus SM5504 MUIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  Support SM5504 MUIC
+
+config MUIC_SUPPORT_RUSTPROOF
+	tristate "SUPPORT RUSTPROOF"
+	default n
+	help
+	  Close UART PATH
+
+config MUIC_SUPPORT_RUSTPROOF_INBATT
+	tristate "SUPPORT RUSTPROOF INBATT"
+	default n
+	help
+	  Close UART PATH
+
+config MUIC_SUPPORT_FACTORY
+	bool "SUPPORT FACTORY"
+	depends on MFD_RT8973 || MFD_SM5504 || EXTCON_SM5504
+	default n
+        help
+          Support for FACTORY
+
+config MUIC_FACTORY_EVENT
+	bool "MUIC_FACTORY_EVENT"
+	depends on SWITCH && MUIC_SUPPORT_FACTORY
+	default n
+        help
+          Support for SAMSUNG MUIC FACTORY
+
+config MFD_SM5701
+	tristate "Support for SiliconMitus SM5701 I/F PMIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  If you say yes to this option, support will be included for the
+	  SM5701 I/F PMIC chip.
+
+config MFD_SPRD_SM5701
+	tristate "Support for SiliconMitus SM5701 I/F PMIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  If you say yes to this option, support will be included for the
+	  SM5701 I/F PMIC chip.
+
+config MFD_RT8973
+	tristate "Richtek RT8973 MUIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  Support RT8973 MUIC
+
 config MFD_AS3711
 	bool "AMS AS3711"
 	select MFD_CORE
@@ -26,6 +86,30 @@ config MFD_AS3711
 	depends on I2C=y && GENERIC_HARDIRQS
 	help
 	  Support for the AS3711 PMIC from AMS
+
+config MFD_RT5033
+	tristate "Support for Richtek RT5033 I/F PMIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  If you say yes to this option, support will be included for the
+	  RT5033 I/F PMIC chip.
+
+config MFD_RT5033_EN_MRSTB
+	bool "Enable MRSTB function"
+	depends on MFD_RT5033
+	default y
+	help
+	  If you enable this function, you need to connect MRSTB to AP's GPIO,
+	  and then assign GPIO number in DTSI or board file
+
+config MFD_RT5033_USE_DT
+	bool "Use device tree"
+	depends on MFD_RT5033 && OF
+	default n
+	help
+	  Check this to support device tree.
 
 config PMIC_ADP5520
 	bool "Analog Devices ADP5520/01 MFD PMIC Core Support"
@@ -36,6 +120,15 @@ config PMIC_ADP5520
 	  the I2C driver and the core APIs _only_, you have to select
 	  individual components like LCD backlight, LEDs, GPIOs and Kepad
 	  under the corresponding menus.
+	  
+config MFD_LM3632
+	tristate "TI LM3632 Backlight with Bias Power and Flash Driver"
+	depends on I2C
+	select MFD_CORE
+	select REGMAP_I2C
+	help
+	  Say yes here to enable support for TI LM3632 chip.
+	  LM3632 consists of 2 strings backlight with 3 regulators for LCD bias
 
 config MFD_AAT2870_CORE
 	bool "AnalogicTech AAT2870"
@@ -1144,7 +1237,15 @@ config MCP_UCB1200_TS
 endmenu
 
 config VEXPRESS_CONFIG
-	bool
+	bool "ARM Versatile Express platform infrastructure"
+	depends on ARM || ARM64
 	help
 	  Platform configuration infrastructure for the ARM Ltd.
 	  Versatile Express.
+
+config VEXPRESS_SPC
+	bool "Versatile Express SPC driver support"
+	depends on ARM
+	depends on VEXPRESS_CONFIG
+	help
+	  Serial Power Controller driver for ARM Ltd. test chips.

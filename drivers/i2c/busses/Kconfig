@@ -768,6 +768,39 @@ config I2C_RCAR
 	  This driver can also be built as a module.  If so, the module
 	  will be called i2c-rcar.
 
+config I2C_SC8810
+	tristate "SC8810 I2C Driver"
+	depends on ARCH_SC8810
+	help
+	  Say Y here to include support for I2C controller in the
+	  Spreadtrum SC8810 based System-on-Chip devices.
+
+config I2C_RESUME_EARLY
+	bool "I2C host will resume from deepsleep before any driver"
+	help
+	  Say Y here to let i2c controller resume early than any driver from deepsleep
+
+config I2C_5_CLOCK_TREE_BUG
+	bool "i2c adapter5 clock is clk_i2c, not clk_i2c5"
+	help
+	  Say Y clock tree bug, i2c adapter above 5, the clock tree is wrong
+
+config I2C_SPRD
+	tristate "SPRD I2C Driver(polling)"
+	default y
+	help
+	  Say Y here to include support for I2C controller in the
+	  Spreadtrum SC88xx based System-on-Chip devices.
+
+comment "External I2C/SMBus adapter drivers"
+
+
+config I2C_SPRD_V1
+	tristate "SPRD I2C Driver(INT)"
+	help
+	  Say Y here to include support for I2C controller in the
+	  Spreadtrum SC88xx based System-on-Chip devices.
+
 comment "External I2C/SMBus adapter drivers"
 
 config I2C_DIOLAN_U2C
@@ -955,5 +988,11 @@ config SCx200_ACB
 
 	  This support is also available as a module.  If so, the module
 	  will be called scx200_acb.
+
+config I2C_SPRD_R6P0_DUTY
+	tristate "SPRD I2C Driver Add Duty Function"
+	default n
+	help
+	  Say Y i2c duty is adjustable.
 
 endmenu

@@ -597,6 +597,14 @@ config HID_SAMSUNG
 	---help---
 	Support for Samsung InfraRed remote control or keyboards.
 
+config HID_SYNAPTICS_BT
+	tristate "HID Synaptics"
+	depends on HID
+	default n
+	---help---
+	For a Bluetooth HID touchpad
+
+    
 config HID_SONY
 	tristate "Sony PS3 controller"
 	depends on USB_HID

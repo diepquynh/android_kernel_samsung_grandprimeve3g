@@ -55,5 +55,16 @@ obj-$(CONFIG_WL_TI)	+= ti/
 
 obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
+obj-$(CONFIG_BCMDHD)	+= bcmdhd/
+obj-$(CONFIG_BCM4343)  += bcmdhd/
+
+ifneq ($(CONFIG_BCM4343), )
+obj-$(CONFIG_ARCH_SC)+=bcmdhd/dhd_custom_sprd.o
+endif
+
 obj-$(CONFIG_BRCMFMAC)	+= brcm80211/
 obj-$(CONFIG_BRCMSMAC)	+= brcm80211/
+
+obj-$(CONFIG_SPRDWL)	+= sprdwl/
+obj-$(CONFIG_SC2331)	+= sc2331/
+obj-$(CONFIG_SC2331_MEM_ALLOC) += sc2331/sc2331_mem_alloc/

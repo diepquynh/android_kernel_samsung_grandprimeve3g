@@ -151,8 +151,38 @@ config LCD_HX8357
 endif # LCD_CLASS_DEVICE
 
 #
+# GENERIC PANEL
+#
+config LCD_GENERIC
+	bool "GENERIC PANEL support"
+	help
+	  Enable this to be able to choose the drivers for controlling the
+	  TFT-LCD and AMOLED on some platforms. This driver adds support for
+	  easy control of lcd, backlight, mdnie and tuning thru device tree.
+
+source "drivers/video/backlight/gen_panel/Kconfig"
+
+#
 # Backlight
 #
+
+config BACKLIGHT_SPRD_PWM
+	tristate "SPRD PWM Backlight Driver"
+	default n
+	help
+	  Say Y to enable the SPRD PWM backlight driver.
+
+config BACKLIGHT_SPRD
+	tristate "SPRD Backlight Driver (PWM mode and WHITE_LED mode)"
+	help
+	  Say Y to enable the SPRD backlight driver.
+
+config BACKLIGHT_SPRD_PWM_MODE
+	bool "SPRD Backlight use PWM mode"
+	depends on BACKLIGHT_SPRD
+	help
+	  Say Y to enable the SPRD backlight PWM mode.
+
 config BACKLIGHT_CLASS_DEVICE
         tristate "Lowlevel Backlight controls"
 	default m
@@ -375,6 +405,12 @@ config BACKLIGHT_LM3630
 	help
 	  This supports TI LM3630 Backlight Driver
 
+config BACKLIGHT_LM3632
+	tristate "Backlight driver for TI LM3632"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y to enable the backlight driver for TI LM3632.
+
 config BACKLIGHT_LM3639
 	tristate "Backlight Driver for LM3639"
 	depends on BACKLIGHT_CLASS_DEVICE && I2C
@@ -424,6 +460,41 @@ config BACKLIGHT_AS3711
 	help
 	  If you have an Austrian Microsystems AS3711 say Y to enable the
 	  backlight driver.
+
+config BACKLIGHT_KTD253B
+	tristate "Backlight driver for KTD253B"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  If you have a backlight driven by a KTD253B, say Y here to
+	  enable its driver.
+
+config BACKLIGHT_KTD2801
+	tristate "Backlight driver for KTD2801"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  If you have a backlight driven by a KTD2801, say Y here to
+	  enable its driver.
+
+config BACKLIGHT_KTD3102
+	tristate "Backlight driver for KTD3012"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  If you have a backlight driven by a KTD3012, say Y here to
+	  enable its driver.
+
+config BACKLIGHT_RT4502
+	tristate "Backlight driver for RT4502"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  If you have a backlight driven by a RT4502, say Y here to
+	  enable its driver.
+
+config BACKLIGHT_LCD_PANEL_CABC
+	tristate "Backlight driver for lcd panel inner CABC PWM"
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  If you have a backlight driven by a lcd panel inner CABC PWM, say Y here to
+	  enable its driver.
 
 endif # BACKLIGHT_CLASS_DEVICE
 

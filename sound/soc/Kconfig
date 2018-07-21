@@ -33,6 +33,14 @@ config SND_SOC_GENERIC_DMAENGINE_PCM
 	bool
 	select SND_SOC_DMAENGINE_PCM
 
+config SND_SOC_PM_DOWN_TIME
+	int "DAPM stream powerdown time (msecs)"
+	range 0 10000
+	default 0
+	help
+	  maybe need this delay for DAPM powerdown
+	  this delay time value, unit is MS.
+
 # All the supported SoCs
 source "sound/soc/atmel/Kconfig"
 source "sound/soc/au1x/Kconfig"
@@ -54,6 +62,7 @@ source "sound/soc/sh/Kconfig"
 source "sound/soc/tegra/Kconfig"
 source "sound/soc/txx9/Kconfig"
 source "sound/soc/ux500/Kconfig"
+source "sound/soc/sprd/Kconfig"
 
 # Supported codecs
 source "sound/soc/codecs/Kconfig"

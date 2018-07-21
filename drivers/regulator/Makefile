@@ -48,6 +48,8 @@ obj-$(CONFIG_REGULATOR_PALMAS) += palmas-regulator.o
 obj-$(CONFIG_REGULATOR_TPS51632) += tps51632-regulator.o
 obj-$(CONFIG_REGULATOR_PCAP) += pcap-regulator.o
 obj-$(CONFIG_REGULATOR_PCF50633) += pcf50633-regulator.o
+obj-$(CONFIG_REGULATOR_RT5033) 	+= rt5033_regulator.o
+
 obj-$(CONFIG_REGULATOR_RC5T583)  += rc5t583-regulator.o
 obj-$(CONFIG_REGULATOR_S2MPS11) += s2mps11.o
 obj-$(CONFIG_REGULATOR_S5M8767) += s5m8767.o
@@ -70,6 +72,19 @@ obj-$(CONFIG_REGULATOR_WM831X) += wm831x-ldo.o
 obj-$(CONFIG_REGULATOR_WM8350) += wm8350-regulator.o
 obj-$(CONFIG_REGULATOR_WM8400) += wm8400-regulator.o
 obj-$(CONFIG_REGULATOR_WM8994) += wm8994-regulator.o
-
+obj-$(CONFIG_REGULATOR_SPRD) += sprd-regulator.o
+obj-$(CONFIG_REGULATOR_SC2713) += sc2713-regulator.o
+ifeq ($(CONFIG_OF), y)
+obj-$(CONFIG_REGULATOR_SC2713S) += sc2713s-regulator_dt.o
+else
+obj-$(CONFIG_REGULATOR_SC2713S) += sc2713s-regulator.o
+endif
+obj-$(CONFIG_REGULATOR_SC2711) += sc2711-regulator.o
+ifeq ($(CONFIG_OF), y)
+obj-$(CONFIG_REGULATOR_SC2723) += sc2723-regulator_dt.o
+obj-$(CONFIG_REGULATOR_EXT_DCDC) += fan53555_regulator.o
+else
+obj-$(CONFIG_REGULATOR_SC2723) += sc2723-regulator.o
+endif
 
 ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG

@@ -220,4 +220,12 @@ config SND_AC97_POWER_SAVE_DEFAULT
 
 	  See SND_AC97_POWER_SAVE for more details.
 
+config SND_SPRD_SAUDIO
+	tristate "saudio driver in call mode based on sipc"
+	depends on SIPC
+	default N
+	help
+	  Say Y if you want to built in to kernel, Say M for ko module.
+	  SAudio for the SPREADTRUM chips with sipc for AP CP system.
+
 endif	# SND_DRIVERS

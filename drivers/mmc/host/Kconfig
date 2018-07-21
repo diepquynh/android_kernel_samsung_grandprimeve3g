@@ -239,6 +239,24 @@ config MMC_SDHCI_SPEAR
 
 	  If unsure, say N.
 
+
+config MMC_SDHCI_SPRD
+	tristate "Spreadtrum SD Host Controller support"
+	depends on MMC_SDHCI
+	help
+	  This selects the Secure Digital Host Controller Interface (SDHCI)
+	  often referrered to as the HSMMC block in some of the SPREADTRUM range
+	  of SoC
+
+	  If you have a controller with this interface, say Y or M here.
+
+	  If unsure, say N.
+
+config MMC_SDHOST
+	tristate "Spreadtrum new SDIO host Controller support"
+	help
+	  This selects the SDIO 3.0 controller in spreadtrum platform
+
 config MMC_SDHCI_S3C_DMA
 	bool "DMA support on S3C SDHCI"
 	depends on MMC_SDHCI_S3C
@@ -646,3 +664,7 @@ config MMC_REALTEK_PCI
 	help
 	  Say Y here to include driver code to support SD/MMC card interface
 	  of Realtek PCI-E card reader
+
+config  SC_FPGA_DEBUG_MMC
+	tristate "Debug fpga for mmc Driver"
+	help

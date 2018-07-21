@@ -359,4 +359,18 @@ config DMATEST
 	  Simple DMA test client. Say N unless you're debugging a
 	  DMA Device driver.
 
+config DMA_SPRD
+	tristate "SPRD DMA support"
+	select DMA_ENGINE
+	select SND_SOC_SPRD_AUDIO_DMA_ENGINE
+	default y
+	help
+	  Support the SPRD DMA engine.
+
+config AON_DMA_SPRD
+	bool "AON DMA support"
+	depends on DMA_SPRD
+	help
+	  Support the AON DMA engine found on sharkl64 SoCs.
+
 endif

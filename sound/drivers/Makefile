@@ -21,5 +21,6 @@ obj-$(CONFIG_SND_MTPAV) += snd-mtpav.o
 obj-$(CONFIG_SND_MTS64) += snd-mts64.o
 obj-$(CONFIG_SND_PORTMAN2X4) += snd-portman2x4.o
 obj-$(CONFIG_SND_ML403_AC97CR) += snd-ml403-ac97cr.o
+obj-$(CONFIG_SND_SPRD_SAUDIO)  += saudio.o
 
 obj-$(CONFIG_SND) += opl3/ opl4/ mpu401/ vx/ pcsp/

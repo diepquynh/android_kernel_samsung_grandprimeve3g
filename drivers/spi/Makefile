@@ -74,3 +74,7 @@ obj-$(CONFIG_SPI_TOPCLIFF_PCH)		+= spi-topcliff-pch.o
 obj-$(CONFIG_SPI_TXX9)			+= spi-txx9.o
 obj-$(CONFIG_SPI_XCOMM)		+= spi-xcomm.o
 obj-$(CONFIG_SPI_XILINX)		+= spi-xilinx.o
+obj-$(CONFIG_SPI_SC8810)       += spi_sc8810.o
+obj-$(CONFIG_SPI_SC8825)       += spi_sc8825.o
+obj-$(CONFIG_SPI_SCX35)        += sprd_spi_r4p0.o
+

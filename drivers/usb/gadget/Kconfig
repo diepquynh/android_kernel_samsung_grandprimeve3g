@@ -488,6 +488,23 @@ config USB_DUMMY_HCD
 
 endmenu
 
+config USB_GADGET_SPRD_DWC
+	boolean "SPREADTRUM USB2.0 Controller"
+	help
+	   Spreadtrum's usb controller is an integrated high speed
+	   USB 2.0 device controller(with dwc core).
+
+	   Say "y" to link the driver statically, or "m" to build a
+	   dynamically linked module called "dwc_otg" and force all
+	   gadget drivers to also be dynamically linked.
+
+config USB_SPRD_DWC
+	tristate
+	depends on USB_GADGET_SPRD_DWC
+	default USB_GADGET
+	select USB_GADGET_SELECTED
+	select USB_GADGET_DUALSPEED
+
 #
 # USB Gadget Drivers
 #
@@ -818,6 +835,42 @@ config USB_G_PRINTER
 	  For more information, see Documentation/usb/gadget_printer.txt
 	  which includes sample code for accessing the device file.
 
+config USB_G_ANDROID
+	boolean "Android Composite Gadget"
+	select USB_F_ACM
+	select USB_LIBCOMPOSITE
+	select USB_U_SERIAL
+	help
+	  The Android Composite Gadget supports multiple USB
+	  functions: adb, acm, mass storage, mtp, accessory
+	  and rndis.
+	  Each function can be configured and enabled/disabled
+	  dynamically from userspace through a sysfs interface.
+
+config USB_G_ANDROID_SAMSUNG_COMPOSITE
+	boolean "Samsung Composite function"
+	depends on USB_G_ANDROID
+	help
+		Provides SAMSUNG composite driver.
+		It also provides KIES connection and
+		Multi Configuration.
+		If you enable this option, android composite will be changed.
+
+config USB_ANDROID_SAMSUNG_MTP
+	boolean "Samsung MTP function"
+	depends on USB_G_ANDROID && !SEC_FACTORY
+	help
+	  Provides Media Transfer Protocol (MTP) support
+	  for samsung gadget driver.
+	  If you enable this option,
+	  google mtp will be changed to samsung mtp.
+
+config USB_ANDROID_RNDIS_DWORD_ALIGNED
+	boolean "Use double word aligned"
+	depends on USB_G_ANDROID
+	help
+		Provides dword aligned for DMA controller.
+
 if TTY
 
 config USB_CDC_COMPOSITE
@@ -972,4 +1025,30 @@ config USB_G_WEBCAM
 
 endchoice
 
+config USB_CORE_IP_293A
+	boolean "usb core ip version (synophsys)"
+        depends on USB_GADGET_SPRD_DWC
+
+	help
+	   the new ip version 293a, should write 0 to softdiscon bit.
+
+config SPRD_USB_DEVICE_ONLY
+        boolean "whether support USB otg"
+        depends on USB_GADGET_SPRD_DWC
+
+        help
+           the chip can only support device mode, do not support otg.
+
+config SHARK_PAD_HW_V102
+	boolean "usb pad hardware version"
+        depends on USB_GADGET_SPRD_DWC
+
+	help
+	   usb pad hardware version.
+
+config USB_INTERRUPT_BY_MUIC
+	boolean "Interrupt according to MUIC"
+		depends on USB_GADGET_SPRD_DWC
+	help
+		Support MUIC
 endif # USB_GADGET

@@ -5,6 +5,8 @@
 obj-$(CONFIG_SERIAL_CORE) += serial_core.o
 obj-$(CONFIG_SERIAL_21285) += 21285.o
 
+obj-$(CONFIG_SERIAL_EARLYCON) += earlycon.o
+
 # These Sparc drivers have to appear before others such as 8250
 # which share ttySx minor node space.  Otherwise console device
 # names change and other unplesantries.
@@ -85,3 +87,8 @@ obj-$(CONFIG_SERIAL_AR933X)   += ar933x_uart.o
 obj-$(CONFIG_SERIAL_EFM32_UART) += efm32-uart.o
 obj-$(CONFIG_SERIAL_ARC)	+= arc_uart.o
 obj-$(CONFIG_SERIAL_RP2)	+= rp2.o
+ifeq ($(CONFIG_OF),y)
+obj-$(CONFIG_SERIAL_SPRD_UART) += serial_sprd_dt.o
+else
+obj-$(CONFIG_SERIAL_SPRD_UART) += serial_sprd.o
+endif

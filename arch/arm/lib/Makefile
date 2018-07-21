@@ -40,6 +40,10 @@ else
   lib-y	+= io-readsw-armv4.o io-writesw-armv4.o
 endif
 
+ifeq ($(CONFIG_KSM_ASSEMBLY_MEMCMP),y)
+   lib-y	+= memcmpksm.o
+endif
+
 lib-$(CONFIG_ARCH_RPC)		+= ecard.o io-acorn.o floppydma.o
 lib-$(CONFIG_ARCH_SHARK)	+= io-shark.o
 
