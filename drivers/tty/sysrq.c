@@ -405,6 +405,8 @@ static struct sysrq_key_op sysrq_unrt_op = {
 	.enable_mask	= SYSRQ_ENABLE_RTNICE,
 };
 
+extern struct sysrq_key_op sysrq_show_blocked_group_op;
+
 /* Key Operations table and lock */
 static DEFINE_SPINLOCK(sysrq_key_table_lock);
 
@@ -460,7 +462,8 @@ static struct sysrq_key_op *sysrq_key_table[36] = {
 	&sysrq_showstate_blocked_op,	/* w */
 	/* x: May be registered on ppc/powerpc for xmon */
 	/* x: May be registered on sparc64 for global PMU dump */
-	NULL,				/* x */
+	/* x: On SPRD platform, used for dump blocked thread's group stack */
+	&sysrq_show_blocked_group_op,				/* x */
 	/* y: May be registered on sparc64 for global register dump */
 	NULL,				/* y */
 	&sysrq_ftrace_dump_op,		/* z */
@@ -881,8 +884,8 @@ static const struct input_device_id sysrq_ids[] = {
 	{
 		.flags = INPUT_DEVICE_ID_MATCH_EVBIT |
 				INPUT_DEVICE_ID_MATCH_KEYBIT,
-		.evbit = { [BIT_WORD(EV_KEY)] = BIT_MASK(EV_KEY) },
-		.keybit = { [BIT_WORD(KEY_LEFTALT)] = BIT_MASK(KEY_LEFTALT) },
+		.evbit = { BIT_MASK(EV_KEY) },
+		.keybit = { BIT_MASK(KEY_LEFTALT) },
 	},
 	{ },
 };
