@@ -178,6 +178,15 @@ struct usb_ep {
 	const struct usb_ss_ep_comp_descriptor	*comp_desc;
 };
 
+/**
+* for otg host GPIO use
+*/
+ struct sprd_usb_platform_data {
+        int gpio_boost;
+	int gpio_chgdet;
+	int gpio_otgdet;
+	int gpio_num;
+};
 /*-------------------------------------------------------------------------*/
 
 /**
