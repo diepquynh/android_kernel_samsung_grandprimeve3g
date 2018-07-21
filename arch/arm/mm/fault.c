@@ -26,6 +26,16 @@
 #include <asm/system_info.h>
 #include <asm/tlbflush.h>
 
+#if defined(CONFIG_SPRD_DEBUG)
+/* For saving Fault status */
+#include <soc/sprd/sprd_debug.h>
+#endif
+
+#if defined(CONFIG_SEC_DEBUG)
+/* For saving Fault status */
+#include <soc/sprd/sec_debug.h>
+#endif
+
 #include "fault.h"
 
 #ifdef CONFIG_MMU
@@ -137,6 +147,14 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	 */
 	if (fixup_exception(regs))
 		return;
+#if defined(CONFIG_SPRD_DEBUG)
+	/* For saving Fault status */
+	sprd_debug_save_pte((void *)regs, (int)current);
+#endif
+#if defined(CONFIG_SEC_DEBUG)
+        /* For saving Fault status */
+	sec_debug_save_pte((void *)regs, (int)current);
+#endif
 
 	/*
 	 * No handler, we'll have to terminate things with extreme prejudice.
@@ -163,6 +181,14 @@ __do_user_fault(struct task_struct *tsk, unsigned long addr,
 		struct pt_regs *regs)
 {
 	struct siginfo si;
+#if defined(CONFIG_SPRD_DEBUG)
+	/* For saving Fault status */
+	sprd_debug_save_pte((void *)regs, (int)current);
+#endif
+#if defined(CONFIG_SEC_DEBUG)
+        /* For saving Fault status */
+	sec_debug_save_pte((void *)regs, (int)current);
+#endif
 
 #ifdef CONFIG_DEBUG_USER
 	if (((user_debug & UDBG_SEGV) && (sig == SIGSEGV)) ||
@@ -274,10 +300,10 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		local_irq_enable();
 
 	/*
-	 * If we're in an interrupt or have no user
+	 * If we're in an interrupt, or have no irqs, or have no user
 	 * context, we must not take the fault..
 	 */
-	if (in_atomic() || !mm)
+	if (in_atomic() || irqs_disabled() || !mm)
 		goto no_context;
 
 	if (user_mode(regs))
@@ -449,8 +475,16 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
 
 	if (pud_none(*pud_k))
 		goto bad_area;
-	if (!pud_present(*pud))
+	if (!pud_present(*pud)) {
 		set_pud(pud, *pud_k);
+		/*
+		 * There is a small window during free_pgtables() where the
+		 * user *pud entry is 0 but the TLB has not been invalidated
+		 * and we get a level 2 (pmd) translation fault caused by the
+		 * intermediate TLB caching of the old level 1 (pud) entry.
+		 */
+		flush_tlb_kernel_page(addr);
+	}
 
 	pmd = pmd_offset(pud, addr);
 	pmd_k = pmd_offset(pud_k, addr);
@@ -473,8 +507,9 @@ do_translation_fault(unsigned long addr, unsigned int fsr,
 #endif
 	if (pmd_none(pmd_k[index]))
 		goto bad_area;
+	if (!pmd_present(pmd[index]))
+		copy_pmd(pmd, pmd_k);
 
-	copy_pmd(pmd, pmd_k);
 	return 0;
 
 bad_area:

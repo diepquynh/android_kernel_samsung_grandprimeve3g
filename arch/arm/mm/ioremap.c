@@ -295,11 +295,14 @@ void __iomem * __arm_ioremap_pfn_caller(unsigned long pfn,
 		}
 	}
 
+/*FIXME: added this macro for sipc issues*/
+#ifndef CONFIG_ION
 	/*
 	 * Don't allow RAM to be mapped - this causes problems with ARMv6+
 	 */
 	if (WARN_ON(pfn_valid(pfn)))
 		return NULL;
+#endif
 
 	area = get_vm_area_caller(size, VM_IOREMAP, caller);
  	if (!area)

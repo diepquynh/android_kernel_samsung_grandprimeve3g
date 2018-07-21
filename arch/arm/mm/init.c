@@ -36,6 +36,9 @@
 
 #include "mm.h"
 
+#ifdef CONFIG_SPRD_IQ
+    #define SPRD_IQ_SIZE SZ_128M
+#endif
 static unsigned long phys_initrd_start __initdata = 0;
 static unsigned long phys_initrd_size __initdata = 0;
 
@@ -76,7 +79,7 @@ static int __init parse_tag_initrd2(const struct tag *tag)
 __tagtable(ATAG_INITRD2, parse_tag_initrd2);
 
 #ifdef CONFIG_OF_FLATTREE
-void __init early_init_dt_setup_initrd_arch(unsigned long start, unsigned long end)
+void __init early_init_dt_setup_initrd_arch(u64 start, u64 end)
 {
 	phys_initrd_start = start;
 	phys_initrd_size = end - start;
@@ -334,6 +337,72 @@ phys_addr_t __init arm_memblock_steal(phys_addr_t size, phys_addr_t align)
 	return phys;
 }
 
+#ifdef CONFIG_SPRD_IQ
+static phys_addr_t s_iq_addr = 0xffffffff;
+int in_iqmode(void);
+
+int __init __sprd_iq_memblock(void)
+{
+	int i;
+	unsigned long size = SPRD_IQ_SIZE;
+	struct membank bank;
+
+	bool bfound = false;
+
+	if(!in_iqmode())return -EINVAL;
+
+	while(!bfound){
+		for(i = meminfo.nr_banks; i > 0; i--){
+			printk("sprd_iq high: %d, start %d, size %d \n", meminfo.bank[i-1].highmem, meminfo.bank[i-1].start,
+			meminfo.bank[i-1].size);
+			if(meminfo.bank[i-1].highmem || meminfo.bank[i-1].size < size)
+				continue;
+
+			bank.start = meminfo.bank[i-1].start;
+			bank.size = meminfo.bank[i-1].size;
+			while(bank.size - size > 0){
+				if (memblock_is_region_reserved(bank.start + bank.size - size, (int)size)) {
+					bank.size -= SZ_1M;
+				} else {
+					bfound = true;
+					break;
+				}
+			}
+
+			if(bfound)break;
+		}
+
+		if (!bfound) {
+			if (size > SZ_2M) {
+				size /= 2;
+				continue;
+			}
+			break;
+		}
+	}
+
+	printk("sprd_iq found size = %d , bank.size = %d \n", (int)size, bank.size);
+
+	if(bfound){
+		int err = memblock_reserve(bank.start + bank.size - size, size);
+		if(0 != err){
+			printk("sprd_iq memblock_reserve err =  %d \n", err);
+			return -ENOMEM;
+		} else {
+			s_iq_addr = bank.start + bank.size - size;
+			return 0;
+		}
+	}
+
+	return -ENOMEM;
+}
+
+phys_addr_t sprd_iq_addr(void)
+{
+	return s_iq_addr;
+}
+
+#endif
 void __init arm_memblock_init(struct meminfo *mi, struct machine_desc *mdesc)
 {
 	int i;
@@ -381,7 +450,12 @@ void __init arm_memblock_init(struct meminfo *mi, struct machine_desc *mdesc)
 	 * must come from DMA area inside low memory
 	 */
 	dma_contiguous_reserve(min(arm_dma_limit, arm_lowmem_limit));
-
+	/*reserve mem for iq if in iq mode */
+	#ifdef CONFIG_SPRD_IQ
+	if( 0 != __sprd_iq_memblock()){
+		printk("Fail to reserve mem for sprd iq.\n");
+	}
+	#endif
 	arm_memblock_steal_permitted = false;
 	memblock_allow_resize();
 	memblock_dump_all();

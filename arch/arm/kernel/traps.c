@@ -34,6 +34,7 @@
 #include <asm/unwind.h>
 #include <asm/tls.h>
 #include <asm/system_misc.h>
+#include <asm/opcodes.h>
 
 static const char *handler[]= {
 	"prefetch abort",
@@ -230,6 +231,10 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 #define S_ISA " ARM"
 #endif
 
+#ifdef CONFIG_SEC_DEBUG
+extern void sec_debug_backup_ctx(struct pt_regs*);
+extern unsigned int sec_debug_callstack_workaround;
+#endif
 static int __die(const char *str, int err, struct pt_regs *regs)
 {
 	struct task_struct *tsk = current;
@@ -246,12 +251,21 @@ static int __die(const char *str, int err, struct pt_regs *regs)
 
 	print_modules();
 	__show_regs(regs);
+#ifdef CONFIG_SEC_DEBUG
+	sec_debug_backup_ctx(regs);
+	sec_debug_callstack_workaround=0x12345678;
+#endif
 	printk(KERN_EMERG "Process %.*s (pid: %d, stack limit = 0x%p)\n",
 		TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), end_of_stack(tsk));
 
 	if (!user_mode(regs) || in_interrupt()) {
-		dump_mem(KERN_EMERG, "Stack: ", regs->ARM_sp,
-			 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
+		if(((unsigned long)regs->ARM_sp - (unsigned long)task_stack_page(tsk)) < THREAD_SIZE) {
+			dump_mem(KERN_EMERG, "Stack: ", regs->ARM_sp,
+				 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
+		} else {
+			dump_mem(KERN_EMERG, "Stack: ", (unsigned long)task_stack_page(tsk),
+				 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
+		}
 		dump_backtrace(regs, tsk);
 		dump_instr(KERN_EMERG, regs);
 	}
@@ -286,10 +300,18 @@ static unsigned long oops_begin(void)
 	return flags;
 }
 
+#ifdef CONFIG_SPRD_SYSDUMP /* TODO: jianjun.he */
+	extern void sysdump_enter(int enter_id, const char *reason, struct pt_regs *regs);
+#endif
 static void oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 {
+#ifdef CONFIG_SPRD_SYSDUMP /* TODO: jianjun.he */
+	sysdump_enter(1, "oops", regs);
+#endif
+#ifndef CONFIG_SEC_DEBUG
 	if (regs && kexec_should_crash(current))
 		crash_kexec(regs);
+#endif
 
 	bust_spinlocks(0);
 	die_owner = -1;
@@ -410,25 +432,28 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 	if (processor_mode(regs) == SVC_MODE) {
 #ifdef CONFIG_THUMB2_KERNEL
 		if (thumb_mode(regs)) {
-			instr = ((u16 *)pc)[0];
+			instr = __mem_to_opcode_thumb16(((u16 *)pc)[0]);
 			if (is_wide_instruction(instr)) {
-				instr <<= 16;
-				instr |= ((u16 *)pc)[1];
+				u16 inst2;
+				inst2 = __mem_to_opcode_thumb16(((u16 *)pc)[1]);
+				instr = __opcode_thumb32_compose(instr, inst2);
 			}
 		} else
 #endif
-			instr = *(u32 *) pc;
+			instr = __mem_to_opcode_arm(*(u32 *) pc);
 	} else if (thumb_mode(regs)) {
 		if (get_user(instr, (u16 __user *)pc))
 			goto die_sig;
+		instr = __mem_to_opcode_thumb16(instr);
 		if (is_wide_instruction(instr)) {
 			unsigned int instr2;
 			if (get_user(instr2, (u16 __user *)pc+1))
 				goto die_sig;
-			instr <<= 16;
-			instr |= instr2;
+			instr2 = __mem_to_opcode_thumb16(instr2);
+			instr = __opcode_thumb32_compose(instr, instr2);
 		}
 	} else if (get_user(instr, (u32 __user *)pc)) {
+		instr = __mem_to_opcode_arm(instr);
 		goto die_sig;
 	}
 
@@ -800,6 +825,13 @@ void abort(void)
 	panic("Oops failed to kill thread");
 }
 EXPORT_SYMBOL(abort);
+
+#if defined(CONFIG_SEC_DEBUG)
+void cp_abort(void *debug_info)
+{
+	panic("CP Crash : %s", debug_info);
+}
+#endif
 
 void __init trap_init(void)
 {

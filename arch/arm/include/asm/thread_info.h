@@ -127,6 +127,10 @@ extern int vfp_preserve_user_clear_hwstate(struct user_vfp __user *,
 					   struct user_vfp_exc __user *);
 extern int vfp_restore_user_hwstate(struct user_vfp __user *,
 				    struct user_vfp_exc __user *);
+#ifdef CONFIG_SPRD_MEM_POOL
+#include <mach/sprd_mem_pool.h>
+#endif
+
 #endif
 
 /*

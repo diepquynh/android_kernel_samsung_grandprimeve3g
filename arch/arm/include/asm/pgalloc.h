@@ -20,6 +20,11 @@
 
 #define check_pgt_cache()		do { } while (0)
 
+#ifdef CONFIG_SPRD_PAGERECORDER
+extern void free_pages_nopagedebug(unsigned long addr, unsigned int order);
+extern unsigned long __get_free_pages_nopagedebug(gfp_t gfp_mask, unsigned int order);
+#endif
+
 #ifdef CONFIG_MMU
 
 #define _PAGE_USER_TABLE	(PMD_TYPE_TABLE | PMD_BIT4 | PMD_DOMAIN(DOMAIN_USER))
@@ -35,7 +40,11 @@ static inline pmd_t *pmd_alloc_one(struct mm_struct *mm, unsigned long addr)
 static inline void pmd_free(struct mm_struct *mm, pmd_t *pmd)
 {
 	BUG_ON((unsigned long)pmd & (PAGE_SIZE-1));
+#ifndef CONFIG_SPRD_PAGERECORDER
 	free_page((unsigned long)pmd);
+#else
+	free_page_nopagedebug((unsigned long)pmd);
+#endif
 }
 
 static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
@@ -58,6 +67,10 @@ extern pgd_t *pgd_alloc(struct mm_struct *mm);
 extern void pgd_free(struct mm_struct *mm, pgd_t *pgd);
 
 #define PGALLOC_GFP	(GFP_KERNEL | __GFP_NOTRACK | __GFP_REPEAT | __GFP_ZERO)
+
+#ifdef CONFIG_SPRD_MEM_POOL
+#include <mach/sprd_mem_pool.h>
+#endif
 
 static inline void clean_pte_table(pte_t *pte)
 {
@@ -85,7 +98,12 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long addr)
 {
 	pte_t *pte;
 
+#ifndef CONFIG_SPRD_PAGERECORDER
 	pte = (pte_t *)__get_free_page(PGALLOC_GFP);
+#else
+	pte = (pte_t *)__get_free_page_nopagedebug(PGALLOC_GFP);
+#endif
+
 	if (pte)
 		clean_pte_table(pte);
 
@@ -100,7 +118,11 @@ pte_alloc_one(struct mm_struct *mm, unsigned long addr)
 #ifdef CONFIG_HIGHPTE
 	pte = alloc_pages(PGALLOC_GFP | __GFP_HIGHMEM, 0);
 #else
+#ifndef CONFIG_SPRD_PAGERECORDER
 	pte = alloc_pages(PGALLOC_GFP, 0);
+#else
+	pte = alloc_pages_nopagedebug(PGALLOC_GFP, 0);
+#endif
 #endif
 	if (pte) {
 		if (!PageHighMem(pte))
@@ -117,13 +139,21 @@ pte_alloc_one(struct mm_struct *mm, unsigned long addr)
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
 	if (pte)
+#ifndef CONFIG_SPRD_PAGERECORDER
 		free_page((unsigned long)pte);
+#else
+		free_page_nopagedebug((unsigned long)pte);
+#endif
 }
 
 static inline void pte_free(struct mm_struct *mm, pgtable_t pte)
 {
 	pgtable_page_dtor(pte);
+#ifndef CONFIG_SPRD_PAGERECORDER
 	__free_page(pte);
+#else
+	__free_page_nopagedebug(pte);
+#endif
 }
 
 static inline void __pmd_populate(pmd_t *pmdp, phys_addr_t pte,

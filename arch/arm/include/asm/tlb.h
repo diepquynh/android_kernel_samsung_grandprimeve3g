@@ -90,7 +90,11 @@ static inline void tlb_add_flush(struct mmu_gather *tlb, unsigned long addr)
 
 static inline void __tlb_alloc_page(struct mmu_gather *tlb)
 {
+#ifndef CONFIG_SPRD_PAGERECORDER
 	unsigned long addr = __get_free_pages(GFP_NOWAIT | __GFP_NOWARN, 0);
+#else
+	unsigned long addr = __get_free_pages_nopagedebug(GFP_NOWAIT | __GFP_NOWARN, 0);
+#endif
 
 	if (addr) {
 		tlb->pages = (void *)addr;
@@ -130,7 +134,11 @@ tlb_finish_mmu(struct mmu_gather *tlb, unsigned long start, unsigned long end)
 	check_pgt_cache();
 
 	if (tlb->pages != tlb->local)
+#ifndef CONFIG_SPRD_PAGERECORDER
 		free_pages((unsigned long)tlb->pages, 0);
+#else
+		free_pages_nopagedebug((unsigned long)tlb->pages, 0);
+#endif
 }
 
 /*
@@ -205,6 +213,12 @@ static inline void __pmd_free_tlb(struct mmu_gather *tlb, pmd_t *pmdp,
 	tlb_add_flush(tlb, addr);
 	tlb_remove_page(tlb, virt_to_page(pmdp));
 #endif
+}
+
+static inline void
+tlb_remove_pmd_tlb_entry(struct mmu_gather *tlb, pmd_t *pmdp, unsigned long addr)
+{
+	tlb_add_flush(tlb, addr);
 }
 
 #define pte_free_tlb(tlb, ptep, addr)	__pte_free_tlb(tlb, ptep, addr)
