@@ -2484,46 +2484,44 @@ static void bt541_ts_early_suspend(struct early_suspend *h)
 		return;
 
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	if (!dt2w_switch) {
-#endif
-		zinitix_printk("early suspend++\n");
-
-		disable_irq(info->irq);
-#if ESD_TIMER_INTERVAL
-		flush_work(&info->tmr_work);
-#endif
-
-		down(&info->work_lock);
-		if (info->work_state != NOTHING) {
-			zinitix_printk("invalid work proceedure (%d)\r\n",
-					info->work_state);
-			up(&info->work_lock);
-			enable_irq(info->irq);
-			return;
-		}
-		info->work_state = EALRY_SUSPEND;
-
-		zinitix_debug_msg("clear all reported points\r\n");
+	if (dt2w_switch) {
 		clear_report_data(info);
-
-#if ESD_TIMER_INTERVAL
-		/*write_reg(info->client, BT541_PERIODICAL_INTERRUPT_INTERVAL, 0);*/
-		esd_timer_stop(info);
-#if defined(TSP_VERBOSE_DEBUG)
-		dev_info(&info->client->dev, "Stopped esd timer\n");
-#endif
-#endif
-
-		bt541_power_control(info, POWER_OFF);
-		zinitix_printk("early suspend--\n");
-		up(&info->work_lock);
 		return;
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	} else {
-		clear_report_data(info);
-	} /* dt2w_switch */
+	}
 #endif
 
+	zinitix_printk("early suspend++\n");
+
+	disable_irq(info->irq);
+#if ESD_TIMER_INTERVAL
+	flush_work(&info->tmr_work);
+#endif
+
+	down(&info->work_lock);
+	if (info->work_state != NOTHING) {
+		zinitix_printk("invalid work proceedure (%d)\r\n",
+				info->work_state);
+		up(&info->work_lock);
+		enable_irq(info->irq);
+		return;
+	}
+	info->work_state = EALRY_SUSPEND;
+
+	zinitix_debug_msg("clear all reported points\r\n");
+	clear_report_data(info);
+
+#if ESD_TIMER_INTERVAL
+	/*write_reg(info->client, BT541_PERIODICAL_INTERRUPT_INTERVAL, 0);*/
+	esd_timer_stop(info);
+#if defined(TSP_VERBOSE_DEBUG)
+	dev_info(&info->client->dev, "Stopped esd timer\n");
+#endif
+#endif
+
+	bt541_power_control(info, POWER_OFF);
+	zinitix_printk("early suspend--\n");
+	up(&info->work_lock);
+	return;
 }
 #endif	/* CONFIG_HAS_EARLYSUSPEND */
 
