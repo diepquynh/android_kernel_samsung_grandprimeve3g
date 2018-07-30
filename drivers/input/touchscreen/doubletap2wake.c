@@ -158,10 +158,10 @@ static void detect_doubletap2wake(int x, int y, bool st)
         pr_info(LOGTAG"x,y(%4d,%4d) single:%s\n",
                 x, y, (single_touch) ? "true" : "false");
 #endif
-	if (x < 100 || x > 980)
+	if (x < 50 || x > 500)
         	return;
 
-	if (dt2w_switch < 2 && y < 1000)
+	if (dt2w_switch < 2 && y < 500)
         	return;
 
 	if ((single_touch) && (dt2w_switch > 0) && (exec_count) && (touch_cnt)) {
