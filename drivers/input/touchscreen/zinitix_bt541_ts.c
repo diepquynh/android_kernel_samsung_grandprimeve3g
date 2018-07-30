@@ -2437,6 +2437,13 @@ static void bt541_ts_late_resume(struct early_suspend *h)
 
 	if (info == NULL)
 		return;
+
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if (dt2w_switch > 0) {
+		return;
+	}
+#endif
+
 	zinitix_printk("late resume++\r\n");
 
 	down(&info->work_lock);
@@ -2484,7 +2491,7 @@ static void bt541_ts_early_suspend(struct early_suspend *h)
 		return;
 
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	if (dt2w_switch) {
+	if (dt2w_switch > 0) {
 		clear_report_data(info);
 		return;
 	}
